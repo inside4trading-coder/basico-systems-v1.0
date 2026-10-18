@@ -1,0 +1,30 @@
+/*
+ * Tokens de marca [B] SYSTEMS en valores literales.
+ * Extraídos de basicosystems@f551478b (src/index.css y
+ * src/components/landing/landing-bsystems.css). src/index.css los traduce a
+ * las variables HSL que consume shadcn/Tailwind.
+ */
+:root {
+  --bsys-blue: #0b37ff;
+  --bsys-ink: #0a0d12;
+  --bsys-surface: #fbfcfe;
+  --bsys-mist: #e2e8f0;
+  --bsys-blue-hover: #3d6bff;
+  --bsys-blue-100: #e8edff;
+  --bsys-blue-300: #b8c6ff;
+  --bsys-blue-700: #041a8c;
+  --bsys-blue-900: #020c42;
+  /* Solo para estados de alerta, nunca como color de marca. */
+  --bsys-alert: #f0509b;
+
+  --bsys-radius: 12px;
+  --bsys-radius-surface: 22px;
+
+  --bsys-font-display: "Chakra Petch", system-ui, sans-serif;
+  --bsys-font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --bsys-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --bsys-dur-in: 240ms;
+  --bsys-dur-out: 160ms;
+  --bsys-dur-shared: 400ms;
+}

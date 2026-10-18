@@ -1,0 +1,19 @@
+node_modules
+dist
+dist-ssr
+coverage
+*.log
+
+# Entorno: nunca se versiona. Copiar .env.example a .env.local.
+.env
+.env.*
+!.env.example
+
+# Supabase local
+supabase/.branches
+supabase/.temp
+
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
