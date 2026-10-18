@@ -32,6 +32,11 @@ mover cálculos sensibles a RPC → test → commit. `basicosystems` no se modif
 
 `npm run typecheck`, `npm run build`, `npm test`, y `npm run test:db` cuando haya Supabase local.
 
+Supabase: proyecto `basico-systems-v1` (ref `tmrjgboriwvfrmjpnmfq`, us-east-1). Migraciones en
+`supabase/migrations`, una por cambio, aplicadas con la CLI o el MCP; después, `get_advisors`
+(security y performance) sin avisos. Mientras no haya CI, el test de aislamiento se corre contra el
+proyecto dentro de una transacción que termina en excepción, para que nada quede escrito.
+
 ## Marca [B] SYSTEMS
 
 - Lockup `[B] SYSTEMS` con `src/components/BrandMark.tsx`; bajo ~150px de ancho, solo el isotipo `[B]`.
