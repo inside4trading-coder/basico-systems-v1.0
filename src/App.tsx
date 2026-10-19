@@ -1,28 +1,77 @@
+import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
-import BrandMark from "@/components/BrandMark";
+import { AuthProvider, useAuth } from "@/core/auth";
+import { TenantProvider, useTenant } from "@/core/tenant-context";
+import Login from "@/pages/Login";
+import SelectTenant from "@/pages/SelectTenant";
+import NoAccess from "@/pages/NoAccess";
+import Home from "@/pages/Home";
+import Team from "@/pages/Team";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
+});
 
-function Home() {
+function Loading() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background p-6">
-      <BrandMark className="text-5xl" />
-      <p className="mono-cap text-xs text-muted-foreground">v1.0 · fase 0</p>
+    <main className="flex min-h-screen items-center justify-center bg-background">
+      <p className="mono-cap text-xs text-muted-foreground">Cargando…</p>
     </main>
   );
+}
+
+/** Sesión, luego tenant elegido, luego tenant activo. Cada paso tiene su pantalla. */
+function RequireTenant({ children }: { children: ReactNode }) {
+  const { session, loading: authLoading } = useAuth();
+  const { memberships, active, loading, error } = useTenant();
+
+  if (authLoading) return <Loading />;
+  if (!session) return <Navigate to="/login" replace />;
+  if (loading) return <Loading />;
+  if (error) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background p-4">
+        <p className="text-sm text-destructive">No se pudo cargar tu cuenta. Recarga la página.</p>
+      </main>
+    );
+  }
+  if (memberships.length === 0) return <NoAccess reason="no-tenant" />;
+  if (!active) return <SelectTenant />;
+  if (active.tenant.status === "suspended") return <NoAccess reason="suspended" />;
+  return <>{children}</>;
 }
 
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="*" element={<Home />} />
-        </Routes>
-      </BrowserRouter>
-      <Toaster />
+      <AuthProvider>
+        <TenantProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route
+                path="/equipo"
+                element={
+                  <RequireTenant>
+                    <Team />
+                  </RequireTenant>
+                }
+              />
+              <Route
+                path="*"
+                element={
+                  <RequireTenant>
+                    <Home />
+                  </RequireTenant>
+                }
+              />
+            </Routes>
+          </BrowserRouter>
+          <Toaster />
+        </TenantProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

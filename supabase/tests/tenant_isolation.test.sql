@@ -60,6 +60,15 @@ select is_empty(
   'anon no tiene privilegios sobre tablas de tenant'
 );
 
+select is_empty(
+  $$ select p.proname
+     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.prosecdef
+       and (has_function_privilege('anon', p.oid, 'EXECUTE')
+            or has_function_privilege('authenticated', p.oid, 'EXECUTE')) $$,
+  'ninguna función SECURITY DEFINER de public la ejecutan anon ni authenticated'
+);
+
 -- ---------------------------------------------------------------------------
 -- 2. Datos de prueba (como postgres)
 -- ---------------------------------------------------------------------------
