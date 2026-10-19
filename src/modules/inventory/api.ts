@@ -194,6 +194,8 @@ export interface NewProductInput {
   brand: string;
   category: string;
   unit: string;
+  /** null = el impuesto por defecto del negocio. */
+  taxRateId: string | null;
   variants: NewVariantInput[];
 }
 
@@ -208,7 +210,12 @@ export function useCreateProduct() {
     mutationFn: async (input: NewProductInput) => {
       const { data: product, error: productError } = await supabase
         .from("products")
-        .insert({ name: input.name.trim(), brand: input.brand.trim() || null, category: input.category.trim() || null })
+        .insert({
+          name: input.name.trim(),
+          brand: input.brand.trim() || null,
+          category: input.category.trim() || null,
+          tax_rate_id: input.taxRateId,
+        })
         .select("id")
         .single();
       if (productError || !product) throw rpcError(productError);

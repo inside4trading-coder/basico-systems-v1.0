@@ -6,6 +6,7 @@ import { useAuth } from "@/core/auth";
 import { useTenant } from "@/core/tenant-context";
 import { canManageTeam, canSupervise, type TenantRole } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
+import { useCurrentRate } from "@/modules/settings/api";
 
 export const ROLE_LABELS: Record<TenantRole, string> = {
   owner: "Dueño",
@@ -25,6 +26,7 @@ const NAV: NavItem[] = [
   { to: "/inventario", label: "Inventario", visible: () => true },
   { to: "/control", label: "Control", visible: () => true },
   { to: "/sedes", label: "Sedes", visible: canSupervise },
+  { to: "/configuracion", label: "Configuración", visible: canSupervise },
   { to: "/equipo", label: "Equipo", visible: canManageTeam },
 ];
 
@@ -41,6 +43,7 @@ export default function AppShell({ children, wide = false }: { children: ReactNo
             <BrandMark className="text-xl" />
           </Link>
           <div className="flex flex-wrap items-center gap-2 text-sm">
+            <RateBadge />
             <span className="font-semibold">{active?.tenant.name}</span>
             {role && <span className="mono-cap text-[10px] text-muted-foreground">{ROLE_LABELS[role]}</span>}
             {memberships.length > 1 && (
@@ -74,5 +77,19 @@ export default function AppShell({ children, wide = false }: { children: ReactNo
       </header>
       <main className={cn("mx-auto space-y-6 p-4", wide ? "max-w-[1400px]" : "max-w-3xl")}>{children}</main>
     </div>
+  );
+}
+
+/** Tasa vigente siempre a la vista: el cajero cobra con ella. */
+function RateBadge() {
+  const { data: rate } = useCurrentRate();
+  if (!rate) return null;
+  return (
+    <span
+      className={cn("num rounded-md border px-2 py-0.5 text-xs", rate.stale ? "border-destructive text-destructive" : "text-muted-foreground")}
+      title={rate.stale ? "Tasa vieja" : `Rige desde ${rate.effective_date}`}
+    >
+      Tasa {rate.rate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+    </span>
   );
 }
