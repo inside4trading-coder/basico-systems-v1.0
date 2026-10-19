@@ -3,7 +3,7 @@ export type TenantStatus = "active" | "suspended";
 
 export interface Membership {
   role: TenantRole;
-  tenant: { id: string; name: string; slug: string; status: TenantStatus };
+  tenant: { id: string; name: string; slug: string; status: TenantStatus; base_currency: string };
 }
 
 /**
@@ -18,5 +18,15 @@ export function pickInitialTenant(memberships: Membership[], storedTenantId: str
 }
 
 export function canManageTeam(role: TenantRole | undefined): boolean {
+  return role === "owner" || role === "admin";
+}
+
+/** Crear y editar catálogo, registrar entradas, ajustes y traslados. */
+export function canEditCatalog(role: TenantRole | undefined): boolean {
+  return role === "owner" || role === "admin" || role === "manager";
+}
+
+/** Firmar ajustes y administrar sedes. */
+export function canSupervise(role: TenantRole | undefined): boolean {
   return role === "owner" || role === "admin";
 }

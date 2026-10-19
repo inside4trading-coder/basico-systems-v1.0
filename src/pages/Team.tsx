@@ -7,14 +7,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/core/supabase";
 import { useTenant } from "@/core/tenant-context";
 import { canManageTeam, type TenantRole } from "@/core/tenant-selection";
-import { AppHeader } from "./Home";
-
-const ROLE_LABELS: Record<TenantRole, string> = {
-  owner: "Dueño",
-  admin: "Administrador",
-  manager: "Encargado",
-  cajero: "Cajero",
-};
+import AppShell, { ROLE_LABELS } from "@/components/AppShell";
 
 type InvitableRole = Exclude<TenantRole, "owner">;
 
@@ -80,9 +73,7 @@ export default function Team() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <AppHeader />
-      <main className="mx-auto max-w-3xl space-y-6 p-4">
+    <AppShell>
         <h1 className="text-2xl">Equipo</h1>
 
         <form
@@ -125,7 +116,6 @@ export default function Team() {
           ))}
           {team.isError && <li className="px-4 py-3 text-sm text-destructive">No se pudo cargar el equipo.</li>}
         </ul>
-      </main>
-    </div>
+    </AppShell>
   );
 }
