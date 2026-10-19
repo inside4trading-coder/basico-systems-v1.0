@@ -1,6 +1,18 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { clearCaches, isNetworkError } from "./offline";
 import { supabase } from "./supabase";
+
+function storedSession(): Session | null {
+  try {
+    const key = Object.keys(localStorage).find((k) => /^sb-.+-auth-token$/.test(k));
+    const raw = key ? localStorage.getItem(key) : null;
+    const parsed = raw ? (JSON.parse(raw) as Session) : null;
+    return parsed?.user ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 interface AuthState {
   session: Session | null;
@@ -15,8 +27,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+    supabase.auth.getSession().then(({ data, error }) => {
+      // Sin red y con el token vencido, getSession no puede refrescarlo y
+      // devuelve null aunque la sesión siga guardada. Para no echar al cajero
+      // en un apagón se usa la guardada; al volver la red el cliente la
+      // refresca solo (o, si ya no vale, avisa con SIGNED_OUT).
+      setSession(data.session ?? (error && isNetworkError(error) ? storedSession() : null));
       setLoading(false);
     });
     const { data } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
@@ -24,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = async () => {
+    clearCaches();
     await supabase.auth.signOut();
   };
 

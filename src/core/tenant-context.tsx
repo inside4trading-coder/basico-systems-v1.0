@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "./supabase";
 import { useAuth } from "./auth";
+import { withOfflineCache } from "./offline";
 import { getActiveTenantId, setActiveTenantId } from "./tenant";
 import { pickInitialTenant, type Membership } from "./tenant-selection";
 
@@ -34,7 +35,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
   const query = useQuery({
     queryKey: ["memberships", userId],
-    queryFn: () => fetchMemberships(userId!),
+    // Con copia local: el POS tiene que poder arrancar en un apagón.
+    queryFn: withOfflineCache(`memberships:${userId}`, () => fetchMemberships(userId!)),
     enabled: Boolean(userId),
   });
   const memberships = useMemo(() => query.data ?? [], [query.data]);

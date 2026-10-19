@@ -86,7 +86,8 @@ ${header.locationName ? `<p class="center">${e(header.locationName)}${header.reg
 ${row(`<strong>${e(sale.number)}</strong>`, e(formatSaleDate(sale.sold_at)))}
 ${sale.customer_name ? row("Cliente", e(sale.customer_name)) : ""}
 ${sale.customer_doc ? row("Doc.", e(sale.customer_doc)) : ""}
-${sale.status !== "completed" ? `<p class="center"><strong>ANULADA</strong></p>` : ""}
+${sale.status === "voided" ? `<p class="center"><strong>ANULADA</strong></p>` : ""}
+${sale.status === "pending" ? `<p class="center"><strong>SIN CONEXIÓN</strong><br><small>Número provisional; se registra al volver la conexión.</small></p>` : ""}
 <hr>
 ${items}
 <hr>

@@ -14,14 +14,16 @@ import { useTenant } from "@/core/tenant-context";
 import { cn } from "@/lib/utils";
 import { useLocations } from "@/modules/inventory/api";
 import { usePaymentMethods } from "@/modules/settings/api";
+import { isNetworkError } from "@/core/offline";
 import {
   newIdempotencyKey,
-  searchForPos,
   useOpenSessions,
   useRegisterSale,
   useRegisters,
   type CashSession,
   type PosHit,
+  type RegisterSaleInput,
+  type SaleReceipt,
 } from "./api";
 import {
   addToCart,
@@ -40,6 +42,9 @@ import { CashMovementDialog, CloseSessionDialog } from "./CashDialogs";
 import OpenSessionScreen from "./OpenSessionScreen";
 import PaymentDialog, { type PaymentResult } from "./PaymentDialog";
 import ReceiptDialog from "./ReceiptDialog";
+import OfflineBar from "./offline/OfflineBar";
+import { buildLocalReceipt } from "./offline/localReceipt";
+import { useOfflinePos } from "./offline/useOfflinePos";
 import { useScanner } from "./useScanner";
 import { parseAmount, usePosMoney } from "./usePosMoney";
 
@@ -107,6 +112,8 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
   const { data: methods = [] } = usePaymentMethods();
   const { data: registers = [] } = useRegisters();
   const { data: locations = [] } = useLocations();
+  const offline = useOfflinePos(active?.tenant.id ?? "none", session.location_id);
+  const searchCatalog = offline.search;
   const register = registers.find((r) => r.id === session.register_id);
   const location = locations.find((l) => l.id === session.location_id);
 
@@ -121,7 +128,8 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
   const [paying, setPaying] = useState(false);
   const [moving, setMoving] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [receiptId, setReceiptId] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState<{ saleId: string } | { local: SaleReceipt } | null>(null);
+  const [localResults, setLocalResults] = useState(false);
   const idempotencyKey = useRef<string | null>(null);
   const sale = useRegisterSale();
 
@@ -158,7 +166,8 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
       if (!q) return setHits([]);
       setSearching(true);
       try {
-        const found = await searchForPos(q, session.location_id);
+        const { hits: found, local } = await searchCatalog(q);
+        setLocalResults(local);
         // Código exacto (lector o tecleado + Enter) con un solo resultado: directo al carrito.
         if (addExact && found.length === 1 && found[0].match_kind !== "texto") {
           add(found[0]);
@@ -174,7 +183,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
         setSearching(false);
       }
     },
-    [add, session.location_id],
+    [add, searchCatalog],
   );
 
   // Búsqueda mientras se escribe, con pausa para no consultar en cada tecla.
@@ -185,7 +194,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
     return () => clearTimeout(t);
   }, [query, runSearch]);
 
-  useScanner((code) => runSearch(code, true), !paying && !moving && !closing && !receiptId);
+  useScanner((code) => runSearch(code, true), !paying && !moving && !closing && !receipt);
 
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
@@ -200,34 +209,70 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
     setPaying(true);
   };
 
-  const confirm = (result: PaymentResult) => {
+  const finishSale = () => {
+    idempotencyKey.current = null;
+    setPaying(false);
+    setDraft(EMPTY_DRAFT);
+    setHits([]);
+  };
+
+  // Sin red (o si se cae al cobrar) la venta va a la cola con la hora del cobro
+  // y la misma clave: al sincronizar el servidor la registra una sola vez.
+  const queueOffline = async (input: RegisterSaleInput, result: PaymentResult) => {
+    const local = buildLocalReceipt({
+      key: input.idempotencyKey,
+      soldAt: input.soldAt!,
+      lines: draft.lines,
+      cartDiscount: totals.cartDiscount,
+      pricesIncludeTax,
+      payments: result.payments,
+      methods,
+      money: money!,
+      change: result.change,
+      customer: result.customer,
+      note: result.note,
+    });
+    await offline.queueSale({
+      key: input.idempotencyKey,
+      sessionId: session.id,
+      soldAt: input.soldAt!,
+      input,
+      receipt: local,
+      status: "pending",
+      attempts: 0,
+      error: null,
+    });
+    toast.warning("Venta guardada sin conexión", { description: "Se registra sola cuando vuelva la conexión." });
+    finishSale();
+    setReceipt({ local });
+  };
+
+  const confirm = async (result: PaymentResult) => {
     const key = idempotencyKey.current ?? newIdempotencyKey();
     idempotencyKey.current = key;
-    sale.mutate(
-      {
-        idempotencyKey: key,
-        sessionId: session.id,
-        items: draft.lines.map((l) => ({ variant_id: l.variantId, qty: l.qty, discount: l.discount })),
-        payments: result.payments.map((p) => ({ payment_method_id: p.methodId, amount: p.amount, reference: p.reference, bank: p.bank, extra: p.extra })),
-        cartDiscount: totals.cartDiscount,
-        change: result.change,
-        customer: result.customer,
-        note: result.note,
-      },
-      {
-        onSuccess: (res) => {
-          if (Math.abs(res.total - totals.total) >= 0.01) {
-            toast.warning(`El servidor calculó ${formatMoney(res.total, money!.baseCurrency)}`);
-          }
-          idempotencyKey.current = null;
-          setPaying(false);
-          setDraft(EMPTY_DRAFT);
-          setHits([]);
-          setReceiptId(res.sale_id);
-        },
-        onError: (err) => toast.error("No se registró la venta", { description: err.message }),
-      },
-    );
+    const input: RegisterSaleInput = {
+      idempotencyKey: key,
+      sessionId: session.id,
+      items: draft.lines.map((l) => ({ variant_id: l.variantId, qty: l.qty, discount: l.discount })),
+      payments: result.payments.map((p) => ({ payment_method_id: p.methodId, amount: p.amount, reference: p.reference, bank: p.bank, extra: p.extra })),
+      cartDiscount: totals.cartDiscount,
+      change: result.change,
+      customer: result.customer,
+      note: result.note,
+    };
+    const soldAt = new Date().toISOString();
+    if (!navigator.onLine) return queueOffline({ ...input, soldAt }, result);
+    try {
+      const res = await sale.mutateAsync(input);
+      if (Math.abs(res.total - totals.total) >= 0.01) {
+        toast.warning(`El servidor calculó ${formatMoney(res.total, money!.baseCurrency)}`);
+      }
+      finishSale();
+      setReceipt({ saleId: res.sale_id });
+    } catch (err) {
+      if (isNetworkError(err)) return queueOffline({ ...input, soldAt }, result);
+      toast.error("No se registró la venta", { description: (err as Error).message });
+    }
   };
 
   const base = money?.baseCurrency ?? active?.tenant.base_currency ?? "USD";
@@ -243,10 +288,10 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           <p className="text-xs text-muted-foreground">{location?.name}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={() => setMoving(true)}>
+          <Button size="sm" variant="outline" disabled={!offline.online} title={offline.online ? undefined : "Necesita conexión"} onClick={() => setMoving(true)}>
             Efectivo
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setClosing(true)}>
+          <Button size="sm" variant="outline" disabled={!offline.online} title={offline.online ? undefined : "Necesita conexión"} onClick={() => setClosing(true)}>
             Cerrar caja
           </Button>
           <Button size="sm" variant="ghost" onClick={onLeave}>
@@ -255,7 +300,9 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
         </div>
       </div>
 
-      {stale && (
+      <OfflineBar offline={offline} sessionId={session.id} />
+
+      {stale && offline.online && (
         <p role="alert" className="rounded-lg border border-destructive p-3 text-sm text-destructive">
           La tasa no está al día. Actualízala en Configuración antes de cobrar en bolívares.
         </p>
@@ -276,6 +323,9 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
             />
           </form>
           {searching && <p className="mono-cap text-xs text-muted-foreground">Buscando…</p>}
+          {!searching && localResults && hits.length > 0 && (
+            <p className="text-xs text-muted-foreground">Sin conexión: resultados del catálogo guardado en este equipo.</p>
+          )}
           <ul className="grid gap-2 sm:grid-cols-2">
             {hits.map((h) => (
               <li key={h.variant_id}>
@@ -371,10 +421,10 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
         <PaymentDialog open={paying} onOpenChange={setPaying} total={totals.total} money={money} methods={methods} busy={sale.isPending} onConfirm={confirm} />
       )}
       <ReceiptDialog
-        saleId={receiptId}
+        target={receipt}
         header={{ businessName: active?.tenant.name ?? "", locationName: location?.name, registerName: register?.name }}
         onClose={() => {
-          setReceiptId(null);
+          setReceipt(null);
           searchRef.current?.focus();
         }}
       />
@@ -382,6 +432,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
       <CloseSessionDialog
         sessionId={session.id}
         baseCurrency={base}
+        pendingSales={offline.queue.filter((q) => q.sessionId === session.id).length}
         open={closing}
         onOpenChange={setClosing}
         onClosed={() => {
