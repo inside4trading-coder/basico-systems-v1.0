@@ -1,10 +1,13 @@
 // Actualiza la tasa oficial USD/VES y EUR/VES en exchange_rates.
 //
-// Port de supabase/functions/sublime-bcv-rate (basicosystems@f551478b) con
-// dos cambios: primero se lee el BCV, que publica la "fecha valor" (el día
-// desde el que rige la tasa), y DolarAPI queda de respaldo; y aquí no hay
-// tasa manual: la tasa propia del negocio va en tenant_rates, que solo
-// escriben dueño y administrador (en Sublime cualquier usuario podía).
+// Port de supabase/functions/sublime-bcv-rate (basicosystems@f551478b):
+//   * Fuente principal: la página del BCV, que publica la "fecha valor" (el
+//     día desde el que rige la tasa). Su servidor envía mal la cadena de
+//     certificados, así que se le agrega el intermedio correcto
+//     (_shared/bcv-ca.ts) solo para esa petición.
+//   * Respaldo: DolarAPI, que replica la tasa oficial con la misma fecha valor.
+//   * Sin tasa manual aquí: la tasa propia del negocio va en tenant_rates y
+//     solo la escriben dueño y administrador (en Sublime cualquier usuario podía).
 //
 // La puede llamar cualquier usuario con sesión: solo lee fuentes públicas y
 // no recibe valores del cliente. Si ya se actualizó hace menos de 30 minutos,
@@ -12,6 +15,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2.99.3";
 import { caracasDate, parseBcvHtml, parseRate, type Rate } from "../_shared/bcv.ts";
+import { BCV_INTERMEDIATE_CA } from "../_shared/bcv-ca.ts";
 
 const BCV_URL = "https://www.bcv.org.ve/";
 const DOLARAPI = { USD: "https://ve.dolarapi.com/v1/dolares", EUR: "https://ve.dolarapi.com/v1/euros" };
@@ -38,8 +42,23 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}) {
   }
 }
 
+/** Cliente HTTP que confía además en el intermedio que el BCV no envía. */
+let bcvClientError: string | null = null;
+function bcvClient(): Deno.HttpClient | undefined {
+  try {
+    return Deno.createHttpClient({ caCerts: [BCV_INTERMEDIATE_CA] });
+  } catch (err) {
+    bcvClientError = (err as Error).message;
+    return undefined;
+  }
+}
+
 async function fromBcv(): Promise<Rate[]> {
-  const resp = await fetchWithTimeout(BCV_URL, { headers: { "user-agent": "Mozilla/5.0 (compatible; BasicoSystems/1.0)" } });
+  const client = bcvClient();
+  const resp = await fetchWithTimeout(BCV_URL, {
+    headers: { "user-agent": "Mozilla/5.0 (compatible; BasicoSystems/1.0)" },
+    ...(client ? { client } : {}),
+  } as RequestInit);
   if (!resp.ok) throw new Error(`BCV HTTP ${resp.status}`);
   return parseBcvHtml(await resp.text());
 }
@@ -91,7 +110,7 @@ Deno.serve(async (req) => {
       rates = await source();
       break;
     } catch (err) {
-      errors.push((err as Error).message);
+      errors.push((err as Error).message + (bcvClientError ? ` [cliente TLS: ${bcvClientError}]` : ""));
     }
   }
   if (rates.length === 0) return json(502, { ok: false, errors });

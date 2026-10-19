@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCreateProduct, type NewVariantInput } from "./api";
 import { parseOptions } from "./lib";
+import { useTaxRates } from "@/modules/settings/api";
 
 interface VariantDraft {
   options: string;
@@ -32,6 +33,8 @@ export default function NewProductDialog({ open, onOpenChange, currency }: { ope
   const [brand, setBrand] = useState("");
   const [category, setCategory] = useState("");
   const [unit, setUnit] = useState("unidad");
+  const [taxRateId, setTaxRateId] = useState("");
+  const { data: taxes = [] } = useTaxRates();
   const [variants, setVariants] = useState<VariantDraft[]>([emptyVariant()]);
   const multi = variants.length > 1;
 
@@ -40,6 +43,7 @@ export default function NewProductDialog({ open, onOpenChange, currency }: { ope
     setBrand("");
     setCategory("");
     setUnit("unidad");
+    setTaxRateId("");
     setVariants([emptyVariant()]);
   };
 
@@ -66,7 +70,7 @@ export default function NewProductDialog({ open, onOpenChange, currency }: { ope
     }
 
     create.mutate(
-      { name, brand, category, unit, variants: parsed },
+      { name, brand, category, unit, taxRateId: taxRateId || null, variants: parsed },
       {
         onSuccess: () => {
           toast.success("Producto creado");
@@ -101,6 +105,24 @@ export default function NewProductDialog({ open, onOpenChange, currency }: { ope
             <div className="space-y-1.5">
               <Label htmlFor="np-unit">Se vende por</Label>
               <Input id="np-unit" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="unidad, metro, kilo…" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="np-tax">Impuesto</Label>
+              <select
+                id="np-tax"
+                value={taxRateId}
+                onChange={(e) => setTaxRateId(e.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Por defecto{taxes.find((t) => t.is_default) ? ` (${taxes.find((t) => t.is_default)!.name})` : ""}</option>
+                {taxes
+                  .filter((t) => t.is_active && !t.is_default)
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} · {t.rate}%
+                    </option>
+                  ))}
+              </select>
             </div>
           </div>
 
