@@ -378,6 +378,8 @@ begin
     insert into public.receivable_imports (tenant_id, provider, file_name) values (t, 'Financiadora', 'aislamiento.xlsx');
     insert into public.pos_held_carts (tenant_id, location_id, label, payload, created_by)
       values (t, v_loc, 'Aislamiento', '{}', 'cccccccc-0000-0000-0000-000000000001');
+    insert into public.member_locations (tenant_id, user_id, location_id)
+      values (t, 'cccccccc-0000-0000-0000-000000000001', v_loc);
     insert into public.sale_returns (tenant_id, sale_id, number, location_id, reason, total)
       values (t, v_sale, 'ISO-D1', v_loc, 'Aislamiento', 0) returning id into v_ret;
     insert into public.sale_return_items (tenant_id, return_id, sale_item_id, variant_id, description, qty, amount)
