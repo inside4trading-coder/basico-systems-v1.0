@@ -28,6 +28,8 @@ const calm: AttentionInput = {
   unconvertedCurrencies: [],
   bankUnmatched: 0,
   bankPossible: 0,
+  receivableOverdueCount: 0,
+  receivableOverdueTotal: 0,
 };
 
 describe("requiere tu atención", () => {
@@ -60,6 +62,12 @@ describe("requiere tu atención", () => {
     expect(item).toMatchObject({ id: "bank", tone: "warning", target: "reconciliation" });
     expect(item.title).toBe("3 movimientos del banco por conciliar");
     expect(item.detail).toBe("2 sin identificar · 1 posible coincidencia");
+  });
+
+  it("cuotas por cobrar vencidas llevan a Por cobrar", () => {
+    const [item] = attentionItems({ ...calm, receivableOverdueCount: 2, receivableOverdueTotal: 85 });
+    expect(item).toMatchObject({ id: "receivable_overdue", tone: "warning", target: "receivables", title: "2 cuotas por cobrar vencidas" });
+    expect(item.detail).toContain("85");
   });
 
   it("montos que no se pudieron convertir", () => {

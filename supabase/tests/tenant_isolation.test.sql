@@ -296,6 +296,9 @@ declare
   v_inst uuid;
   v_mov uuid;
   v_batch uuid;
+  v_rcv uuid;
+  v_rinst uuid;
+  v_rcol uuid;
 begin
   foreach t in array array[
     'aaaaaaaa-1111-1111-1111-111111111111',
@@ -363,6 +366,15 @@ begin
       values (t, v_acc, 'aislamiento.csv') returning id into v_batch;
     insert into public.bank_statement_lines (tenant_id, account_id, batch_id, line_date, direction, amount, currency, identity_key)
       values (t, v_acc, v_batch, current_date, 'in', 1, 'USD', 'aislamiento');
+    insert into public.receivables (tenant_id, kind, customer_name, issued_on, currency, amount)
+      values (t, 'credit', 'Cliente aislamiento', current_date, 'USD', 10) returning id into v_rcv;
+    insert into public.receivable_installments (tenant_id, receivable_id, number, due_date, amount)
+      values (t, v_rcv, 1, current_date, 10) returning id into v_rinst;
+    insert into public.receivable_collections (tenant_id, receivable_id, kind, amount, occurred_on, movement_id)
+      values (t, v_rcv, 'cash', 1, current_date, v_mov) returning id into v_rcol;
+    insert into public.provider_ledger (tenant_id, provider, entry_date, kind, amount, currency)
+      values (t, 'Financiadora', current_date, 'adjustment', 1, 'USD');
+    insert into public.receivable_imports (tenant_id, provider, file_name) values (t, 'Financiadora', 'aislamiento.xlsx');
   end loop;
 end;
 $$;
