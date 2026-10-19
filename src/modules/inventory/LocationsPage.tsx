@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/core/tenant-context";
 import { canSupervise } from "@/core/tenant-selection";
 import { useLocations, useSaveLocation } from "./api";
+import { useRegisters, useSaveRegister } from "@/modules/pos/api";
 import type { Location } from "./lib";
 
 const TYPE_LABEL: Record<Location["type"], string> = {
@@ -116,7 +117,8 @@ export default function LocationsPage() {
           <li className="px-4 py-3 text-sm text-muted-foreground">Todavía no hay sedes.</li>
         )}
         {locations.map((l) => (
-          <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+          <li key={l.id} className="space-y-2 px-4 py-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="mono text-xs text-muted-foreground">{l.code}</span>
               <span className="font-semibold">{l.name}</span>
@@ -133,9 +135,70 @@ export default function LocationsPage() {
             >
               Editar
             </Button>
+            </div>
+            {l.sells_in_pos && <RegistersOf locationId={l.id} />}
           </li>
         ))}
       </ul>
     </AppShell>
+  );
+}
+
+/** Cajas de una sede que vende: cada una abre su propia sesión de caja. */
+function RegistersOf({ locationId }: { locationId: string }) {
+  const { data: registers = [] } = useRegisters();
+  const save = useSaveRegister();
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const mine = registers.filter((r) => r.location_id === locationId);
+
+  const add = (event: FormEvent) => {
+    event.preventDefault();
+    save.mutate(
+      { location_id: locationId, name: name.trim(), code },
+      {
+        onSuccess: () => {
+          setName("");
+          setCode("");
+          toast.success("Caja creada");
+        },
+        onError: (err) => toast.error("No se pudo crear la caja", { description: err.message }),
+      },
+    );
+  };
+
+  return (
+    <div className="space-y-2 rounded-lg bg-muted/40 p-3">
+      <p className="mono-cap text-[10px] text-muted-foreground">Cajas</p>
+      {mine.length === 0 && <p className="text-xs text-muted-foreground">Sin cajas: crea al menos una para vender.</p>}
+      <div className="flex flex-wrap gap-2">
+        {mine.map((r) => (
+          <label key={r.id} className="flex items-center gap-2 rounded-md border bg-card px-2 py-1 text-xs">
+            <span className="mono">{r.code}</span> {r.name}
+            <Switch
+              checked={r.is_active}
+              aria-label={`Activa ${r.name}`}
+              onCheckedChange={(v) => save.mutate({ id: r.id, is_active: v }, { onError: (err) => toast.error("No se pudo guardar", { description: err.message }) })}
+            />
+          </label>
+        ))}
+      </div>
+      <form onSubmit={add} className="flex flex-wrap items-end gap-2">
+        <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Caja 1" className="h-8 w-32 text-xs" aria-label="Nombre de la caja" />
+        <Input
+          required
+          maxLength={16}
+          pattern="[A-Za-z0-9][A-Za-z0-9\-]*"
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          placeholder="C1"
+          className="h-8 w-20 text-xs"
+          aria-label="Código de la caja"
+        />
+        <Button type="submit" size="sm" variant="outline" disabled={save.isPending}>
+          Agregar caja
+        </Button>
+      </form>
+    </div>
   );
 }
