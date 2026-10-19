@@ -47,6 +47,8 @@ export interface PaymentMethod {
   applies_igtf: boolean;
   is_active: boolean;
   position: number;
+  /** Cuenta de Administración donde entra lo cobrado; null si no se registra. */
+  account_id: string | null;
 }
 
 export interface TenantRateRow {

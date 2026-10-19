@@ -27,6 +27,7 @@ const NAV: NavItem[] = [
   { to: "/inventario", label: "Inventario", visible: () => true },
   { to: "/control", label: "Control", visible: () => true },
   { to: "/reportes", label: "Reportes", visible: canSeeReports },
+  { to: "/administracion", label: "Administración", visible: canSeeReports },
   { to: "/sedes", label: "Sedes", visible: canSupervise },
   { to: "/configuracion", label: "Configuración", visible: canSupervise },
   { to: "/equipo", label: "Equipo", visible: canManageTeam },

@@ -272,7 +272,9 @@ insert into auth.users (id, email, aud, role) values
 
 insert into public.tenant_members (tenant_id, user_id, role) values
   ('aaaaaaaa-1111-1111-1111-111111111111', 'cccccccc-0000-0000-0000-000000000001', 'admin'),
-  ('bbbbbbbb-1111-1111-1111-111111111111', 'cccccccc-0000-0000-0000-000000000001', 'cajero');
+  -- Encargado y no cajero: Administración (finance_*, obligations) solo la
+  -- leen owner, admin y manager, y aquí se comprueba que vea filas propias.
+  ('bbbbbbbb-1111-1111-1111-111111111111', 'cccccccc-0000-0000-0000-000000000001', 'manager');
 
 insert into public.tenant_entitlements (tenant_id, key, value) values
   ('aaaaaaaa-1111-1111-1111-111111111111', 'max_locations', '3');
@@ -289,6 +291,10 @@ declare
   v_sess uuid;
   v_sale uuid;
   v_pm public.payment_methods;
+  v_acc uuid;
+  v_obl uuid;
+  v_inst uuid;
+  v_mov uuid;
 begin
   foreach t in array array[
     'aaaaaaaa-1111-1111-1111-111111111111',
@@ -342,6 +348,14 @@ begin
       (tenant_id, sale_id, payment_method_id, method_code, method_name, currency, amount, amount_base)
       values (t, v_sale, v_pm.id, v_pm.code, v_pm.name, 'USD', 10, 10);
     insert into public.tenant_counters (tenant_id, key) values (t, 'iso_test');
+    insert into public.finance_accounts (tenant_id, name, currency)
+      values (t, 'Cuenta aislamiento', 'USD') returning id into v_acc;
+    insert into public.obligations (tenant_id, name, currency, frequency, start_date)
+      values (t, 'Obligación aislamiento', 'USD', 'once', current_date) returning id into v_obl;
+    insert into public.obligation_instances (tenant_id, obligation_id, due_date, currency)
+      values (t, v_obl, current_date, 'USD') returning id into v_inst;
+    insert into public.finance_movements (tenant_id, account_id, direction, kind, amount, currency, occurred_on, obligation_instance_id)
+      values (t, v_acc, 'out', 'obligation', 1, 'USD', current_date, v_inst) returning id into v_mov;
   end loop;
 end;
 $$;
