@@ -168,6 +168,13 @@ export function CloseSessionDialog({
                 <p className="mono-cap text-[10px] text-muted-foreground">Total vendido</p>
                 <p className="num text-xl font-bold">{formatMoney(Number(data.sales.total), baseCurrency)}</p>
               </div>
+              {((data.voided?.count ?? 0) > 0 || (data.returns?.count ?? 0) > 0) && (
+                <p className="col-span-2 text-xs text-muted-foreground">
+                  {data.voided?.count ? `Anuladas: ${data.voided.count} (${formatMoney(Number(data.voided.total), baseCurrency)})` : ""}
+                  {data.voided?.count && data.returns?.count ? " · " : ""}
+                  {data.returns?.count ? `Devoluciones: ${data.returns.count} (${formatMoney(Number(data.returns.total), baseCurrency)})` : ""}
+                </p>
+              )}
               {data.by_method.length > 0 && (
                 <ul className="col-span-2 space-y-1 text-xs">
                   {data.by_method.map((m) => (

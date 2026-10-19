@@ -64,6 +64,14 @@ export default function SalesReportView({ range, locationId, currency }: { range
         <Kpi label="Descuentos" value={money(s.discount)} current={s.discount} previous={p.discount} invert />
         <Kpi label="Impuesto" value={money(s.tax)} hint={s.igtf > 0 ? `IGTF percibido ${money(s.igtf)}` : undefined} />
       </div>
+      {((s.returns ?? 0) > 0 || (s.voided ?? 0) > 0) && (
+        <p className="text-xs text-muted-foreground">
+          {(s.returns ?? 0) > 0
+            ? `${s.returns} ${s.returns === 1 ? "devolución" : "devoluciones"} por ${money(Number(s.returns_total ?? 0))}: ventas menos devoluciones ${money(s.net - Number(s.returns_total ?? 0))}. `
+            : ""}
+          {(s.voided ?? 0) > 0 ? `${s.voided} ${s.voided === 1 ? "venta anulada" : "ventas anuladas"} (no cuentan).` : ""}
+        </p>
+      )}
       {s.offline > 0 && (
         <p className="text-xs text-muted-foreground">
           {s.offline} {s.offline === 1 ? "venta se cobró" : "ventas se cobraron"} sin conexión y se registraron después.
