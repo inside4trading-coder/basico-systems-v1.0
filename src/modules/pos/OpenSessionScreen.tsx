@@ -12,6 +12,7 @@ import { useTenant } from "@/core/tenant-context";
 import { canSupervise } from "@/core/tenant-selection";
 import { useLocations } from "@/modules/inventory/api";
 import { useOpenSession, useOpenSessions, useRegisters, type Register } from "./api";
+import { useAllowedLocations } from "@/core/locationAccess";
 import { currencySymbol } from "./cart";
 import { parseAmount, usePosMoney } from "./usePosMoney";
 
@@ -20,7 +21,8 @@ export default function OpenSessionScreen({ onSelect }: { onSelect: (sessionId: 
   const registers = useRegisters();
   const sessions = useOpenSessions();
   const { data: locations = [] } = useLocations();
-  const usable = (registers.data ?? []).filter((r) => r.is_active);
+  const allowed = useAllowedLocations();
+  const usable = (registers.data ?? []).filter((r) => r.is_active && (!allowed || allowed.has(r.location_id)));
 
   if (registers.isLoading || sessions.isLoading) {
     return <p className="mono-cap text-xs text-muted-foreground">Cargando cajas…</p>;
