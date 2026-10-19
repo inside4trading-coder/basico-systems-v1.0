@@ -26,6 +26,11 @@ export function canEditCatalog(role: TenantRole | undefined): boolean {
   return role === "owner" || role === "admin" || role === "manager";
 }
 
+/** Reportes y cierres: ven costos y márgenes. */
+export function canSeeReports(role: TenantRole | undefined): boolean {
+  return role === "owner" || role === "admin" || role === "manager";
+}
+
 /** Firmar ajustes y administrar sedes. */
 export function canSupervise(role: TenantRole | undefined): boolean {
   return role === "owner" || role === "admin";

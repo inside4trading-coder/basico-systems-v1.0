@@ -4,7 +4,7 @@ import BrandMark from "@/components/BrandMark";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/core/auth";
 import { useTenant } from "@/core/tenant-context";
-import { canManageTeam, canSupervise, type TenantRole } from "@/core/tenant-selection";
+import { canManageTeam, canSeeReports, canSupervise, type TenantRole } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
 import { useCurrentRate } from "@/modules/settings/api";
 
@@ -26,6 +26,7 @@ const NAV: NavItem[] = [
   { to: "/pos", label: "Vender", visible: () => true },
   { to: "/inventario", label: "Inventario", visible: () => true },
   { to: "/control", label: "Control", visible: () => true },
+  { to: "/reportes", label: "Reportes", visible: canSeeReports },
   { to: "/sedes", label: "Sedes", visible: canSupervise },
   { to: "/configuracion", label: "Configuración", visible: canSupervise },
   { to: "/equipo", label: "Equipo", visible: canManageTeam },
