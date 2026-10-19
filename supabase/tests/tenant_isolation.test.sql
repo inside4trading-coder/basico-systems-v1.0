@@ -299,6 +299,7 @@ declare
   v_rcv uuid;
   v_rinst uuid;
   v_rcol uuid;
+  v_ret uuid;
 begin
   foreach t in array array[
     'aaaaaaaa-1111-1111-1111-111111111111',
@@ -377,6 +378,10 @@ begin
     insert into public.receivable_imports (tenant_id, provider, file_name) values (t, 'Financiadora', 'aislamiento.xlsx');
     insert into public.pos_held_carts (tenant_id, location_id, label, payload, created_by)
       values (t, v_loc, 'Aislamiento', '{}', 'cccccccc-0000-0000-0000-000000000001');
+    insert into public.sale_returns (tenant_id, sale_id, number, location_id, reason, total)
+      values (t, v_sale, 'ISO-D1', v_loc, 'Aislamiento', 0) returning id into v_ret;
+    insert into public.sale_return_items (tenant_id, return_id, sale_item_id, variant_id, description, qty, amount)
+      select t, v_ret, i.id, i.variant_id, i.description, 1, 0 from public.sale_items i where i.sale_id = v_sale limit 1;
   end loop;
 end;
 $$;

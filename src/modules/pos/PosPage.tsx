@@ -44,6 +44,7 @@ import { notifyHoldError, useHeldCarts, useHoldCart, useResumeCart } from "./hel
 import OpenSessionScreen from "./OpenSessionScreen";
 import PaymentDialog, { type PaymentResult } from "./PaymentDialog";
 import ReceiptDialog from "./ReceiptDialog";
+import SalesSheet from "./sales/SalesSheet";
 import OfflineBar from "./offline/OfflineBar";
 import { buildLocalReceipt } from "./offline/localReceipt";
 import { useOfflinePos } from "./offline/useOfflinePos";
@@ -135,6 +136,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
   const held = useHeldCarts<CartDraft>(session.location_id, offline.online);
   const hold = useHoldCart(session.location_id);
   const resume = useResumeCart<CartDraft>(session.location_id);
+  const [history, setHistory] = useState(false);
   const [receipt, setReceipt] = useState<{ saleId: string } | { local: SaleReceipt } | null>(null);
   const [localResults, setLocalResults] = useState(false);
   const idempotencyKey = useRef<string | null>(null);
@@ -295,6 +297,9 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           <p className="text-xs text-muted-foreground">{location?.name}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" disabled={!offline.online} title={offline.online ? undefined : "Necesita conexión"} onClick={() => setHistory(true)}>
+            Ventas
+          </Button>
           <Button size="sm" variant="outline" disabled={!offline.online} title={offline.online ? undefined : "Necesita conexión"} onClick={() => setMoving(true)}>
             Efectivo
           </Button>
@@ -485,6 +490,17 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
             onError: notifyHoldError,
           })
         }
+      />
+      <SalesSheet
+        open={history}
+        onOpenChange={setHistory}
+        sessionId={session.id}
+        sessionOpen={session.status === "open"}
+        methods={methods}
+        onReprint={(saleId) => {
+          setHistory(false);
+          setReceipt({ saleId });
+        }}
       />
       <CashMovementDialog sessionId={session.id} currencies={currencies} open={moving} onOpenChange={setMoving} />
       <CloseSessionDialog

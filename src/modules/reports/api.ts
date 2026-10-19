@@ -21,6 +21,10 @@ export interface SalesKpis {
   lines_costed: number;
   net_costed: number;
   cost: number;
+  /** Devoluciones registradas en el periodo (restan de lo vendido) y ventas anuladas. */
+  returns?: number;
+  returns_total?: number;
+  voided?: number;
 }
 
 export interface SalesReport {
