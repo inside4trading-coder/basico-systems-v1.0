@@ -12,6 +12,8 @@ import Team from "@/pages/Team";
 import InventoryPage from "@/modules/inventory/InventoryPage";
 import ControlPage from "@/modules/inventory/ControlPage";
 import LocationsPage from "@/modules/inventory/LocationsPage";
+import ImportPage from "@/modules/inventory/ImportPage";
+import CatalogFieldsPage from "@/modules/inventory/CatalogFieldsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -75,6 +77,22 @@ export default function App() {
                 element={
                   <RequireTenant>
                     <ControlPage />
+                  </RequireTenant>
+                }
+              />
+              <Route
+                path="/inventario/importar"
+                element={
+                  <RequireTenant>
+                    <ImportPage />
+                  </RequireTenant>
+                }
+              />
+              <Route
+                path="/catalogo/campos"
+                element={
+                  <RequireTenant>
+                    <CatalogFieldsPage />
                   </RequireTenant>
                 }
               />
