@@ -1,6 +1,7 @@
 /**
  * Una línea del banco y qué hacer con ella: vincularla con un movimiento del
- * libro, registrarla como movimiento nuevo, ignorarla o reabrirla. Portado de
+ * libro, cobrar una cuenta por cobrar, registrarla como movimiento nuevo,
+ * ignorarla o reabrirla. Portado de
  * IdentifyDrawer (AdminReconcile.tsx, basicosystems@f551478b).
  */
 import { useState } from "react";
@@ -15,6 +16,7 @@ import { formatMoney } from "@/modules/pos/cart";
 import { catalogNames, useCatalog } from "../api";
 import { MOVEMENT_KIND_LABEL, formatDay } from "../lib";
 import SuggestInput from "../SuggestInput";
+import CollectionPanel from "./CollectionPanel";
 import { useCreateFromLine, useIgnoreLine, useLineCandidates, useLinkedMovement, useMatchLine, useReopenLine, type BankLine } from "./api";
 import { LINE_STATUS_LABEL } from "./labels";
 import { rankCandidates } from "./match";
@@ -30,7 +32,7 @@ export default function LineSheet({ line, onClose }: { line: BankLine | null; on
   const create = useCreateFromLine();
   const ignore = useIgnoreLine();
   const reopen = useReopenLine();
-  const [mode, setMode] = useState<"link" | "create" | "ignore">("link");
+  const [mode, setMode] = useState<"link" | "collect" | "create" | "ignore">("link");
   const [showAll, setShowAll] = useState(false);
   const [category, setCategory] = useState("");
   const [counterparty, setCounterparty] = useState("");
@@ -108,6 +110,7 @@ export default function LineSheet({ line, onClose }: { line: BankLine | null; on
                 {(
                   [
                     ["link", "Vincular"],
+                    ["collect", line.direction === "in" ? "Cobranza" : "Financiadora"],
                     ["create", line.direction === "in" ? "Registrar ingreso" : "Registrar egreso"],
                     ["ignore", "Ignorar"],
                   ] as const
@@ -166,6 +169,8 @@ export default function LineSheet({ line, onClose }: { line: BankLine | null; on
                   )}
                 </section>
               )}
+
+              {mode === "collect" && <CollectionPanel line={line} />}
 
               {mode === "create" && (
                 <section className="space-y-2">

@@ -315,3 +315,50 @@ export function useFeeMatches(accountId: string | null, rulesKey: string) {
 }
 
 export const useApplyFees = () => useLineRpc<{ p_account_id: string; p_apply: boolean }>("apply_bank_fee_rules");
+
+export interface ReceivableCandidate {
+  receivable_id: string;
+  kind: "credit" | "financing";
+  provider: string | null;
+  customer_name: string | null;
+  document: string | null;
+  external_ref: string | null;
+  currency: string;
+  pending: number;
+  next_number: number | null;
+  next_due: string | null;
+  next_pending: number | null;
+  /** Lo que cubre la línea en la moneda de la cuenta por cobrar (null si no hay tasa). */
+  applied: number | null;
+  match: "installment" | "balance" | null;
+}
+
+/** Cuentas por cobrar abiertas que podría estar pagando una entrada del banco. */
+export function useReceivableCandidates(line: BankLine | null) {
+  const tenant = useTenantKey();
+  return useQuery({
+    enabled: Boolean(line && line.direction === "in"),
+    queryKey: ["fin", tenant, "bank", "receivable-candidates", line?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("bank_receivable_candidates", { p_line_id: line!.id });
+      if (error) throw asError(error);
+      const res = data as { rate: number | null; items: ReceivableCandidate[] };
+      const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+      return {
+        rate: num(res.rate),
+        items: res.items.map((c) => ({
+          ...c,
+          pending: Number(c.pending),
+          next_pending: num(c.next_pending),
+          applied: num(c.applied),
+        })),
+      };
+    },
+  });
+}
+
+export const useCollectFromLine = () =>
+  useLineRpc<{ p_line_id: string; p_receivable_id: string; p_applied?: number | null; p_payer?: "customer" | "provider" }>(
+    "collect_receivable_from_bank_line",
+  );
+export const useSettleFromLine = () => useLineRpc<{ p_line_id: string; p_provider: string }>("settle_provider_from_bank_line");
