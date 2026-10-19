@@ -1,8 +1,10 @@
 # Basico Systems v1.0
 
 SaaS multi-tenant de POS, inventario, administración y reportes para PyMEs en Venezuela
-(bimoneda USD/VES con tasa BCV). El plan vivo está en `docs/PLAN.md`; el plan de arranque
-original, en `docs/plan-original.md`.
+(bimoneda USD/VES con tasa BCV).
+
+El repo es público. Plan, estrategia, clientes y hallazgos de seguridad viven en `docs/private/`
+(ignorada por git) y nunca se commitean ni se citan en commits, PRs o comentarios.
 
 ## Reglas que no se rompen
 

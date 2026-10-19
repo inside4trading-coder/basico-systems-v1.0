@@ -17,3 +17,6 @@ supabase/.temp
 !.vscode/extensions.json
 .idea
 .DS_Store
+
+# Documentos internos (estrategia, clientes, hallazgos del ERP): nunca al repo público.
+docs/private/

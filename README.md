@@ -2,7 +2,6 @@
 
 POS, inventario, administración y reportes para PyMEs en Venezuela, multi-tenant.
 
-- Plan: [`docs/PLAN.md`](docs/PLAN.md)
 - Reglas del proyecto y de marca: [`CLAUDE.md`](CLAUDE.md)
 
 ## Desarrollo
