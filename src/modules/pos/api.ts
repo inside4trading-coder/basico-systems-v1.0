@@ -6,6 +6,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/core/supabase";
 import { useTenant } from "@/core/tenant-context";
+import { withOfflineCache } from "@/core/offline";
 
 export interface Register {
   id: string;
@@ -69,6 +70,8 @@ export interface RegisterSaleInput {
   change?: { currency: string; amount: number } | null;
   customer?: { name?: string; doc?: string } | null;
   note?: string | null;
+  /** Solo ventas cobradas sin conexión: hora del cobro (ISO). */
+  soldAt?: string;
 }
 
 export interface RegisterSaleResult {
@@ -98,11 +101,11 @@ export function useRegisters() {
   const tenant = useTenantKey();
   return useQuery({
     queryKey: ["pos", tenant, "registers"],
-    queryFn: async () => {
+    queryFn: withOfflineCache(`registers:${tenant}`, async () => {
       const { data, error } = await supabase.from("registers").select("id, location_id, name, code, is_active").order("code");
       if (error) throw error;
       return (data ?? []) as Register[];
-    },
+    }),
   });
 }
 
@@ -124,11 +127,11 @@ export function useOpenSessions() {
   const tenant = useTenantKey();
   return useQuery({
     queryKey: ["pos", tenant, "open_sessions"],
-    queryFn: async () => {
+    queryFn: withOfflineCache(`open_sessions:${tenant}`, async () => {
       const { data, error } = await supabase.from("cash_sessions").select("*").eq("status", "open").order("opened_at");
       if (error) throw error;
       return (data ?? []) as CashSession[];
-    },
+    }),
   });
 }
 
@@ -196,6 +199,7 @@ export async function registerSale(input: RegisterSaleInput): Promise<RegisterSa
     p_change: input.change ?? null,
     p_customer: input.customer ?? null,
     p_note: input.note ?? null,
+    ...(input.soldAt ? { p_sold_at: input.soldAt } : {}),
   });
   if (error) throw asError(error);
   return data as RegisterSaleResult;

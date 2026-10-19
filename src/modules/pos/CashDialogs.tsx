@@ -96,12 +96,15 @@ export function CashMovementDialog({
 export function CloseSessionDialog({
   sessionId,
   baseCurrency,
+  pendingSales,
   open,
   onOpenChange,
   onClosed,
 }: {
   sessionId: string;
   baseCurrency: string;
+  /** Ventas de esta sesión cobradas sin conexión que aún no llegan al servidor. */
+  pendingSales: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onClosed: () => void;
@@ -147,7 +150,12 @@ export function CloseSessionDialog({
         <DialogHeader>
           <DialogTitle>{result ? "Caja cerrada" : "Cerrar caja"}</DialogTitle>
         </DialogHeader>
-        {!data ? (
+        {pendingSales > 0 && !result ? (
+          <p role="alert" className="rounded-lg border border-destructive p-3 text-sm text-destructive">
+            Hay {pendingSales} {pendingSales === 1 ? "venta" : "ventas"} sin conexión de esta caja que aún no se registran. Sincroniza o resuelve
+            las pendientes antes de cerrar: si no, el cierre no las contaría.
+          </p>
+        ) : !data ? (
           <p className="mono-cap text-xs text-muted-foreground">{summary.isError ? summary.error.message : "Cargando resumen…"}</p>
         ) : (
           <form onSubmit={submit} className="space-y-4">

@@ -7,6 +7,7 @@
  * cambio pasa por las RPC inventory_entry/adjust/transfer/sign.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { withOfflineCache } from "@/core/offline";
 import { supabase } from "@/core/supabase";
 import { useTenant } from "@/core/tenant-context";
 import type { Location, LookupResult, MovementRow, Product, ProductCode, Stock, Variant, VariantOptions } from "./lib";
@@ -50,7 +51,7 @@ export function useLocations() {
   const tenant = useTenantKey();
   return useQuery({
     queryKey: ["inv", tenant, "locations"],
-    queryFn: async () => {
+    queryFn: withOfflineCache(`locations:${tenant}`, async () => {
       const { data, error } = await supabase
         .from("locations")
         .select("*")
@@ -59,7 +60,7 @@ export function useLocations() {
         .order("name");
       if (error) throw error;
       return (data ?? []) as Location[];
-    },
+    }),
   });
 }
 

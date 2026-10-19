@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/core/supabase";
 import { useTenant } from "@/core/tenant-context";
+import { withOfflineCache } from "@/core/offline";
 
 export interface CurrentRate {
   rate: number;
@@ -74,12 +75,12 @@ export function useCurrentRate() {
   const tenant = useTenantKey();
   return useQuery({
     queryKey: ["cfg", tenant, "current_rate"],
-    queryFn: async () => {
+    queryFn: withOfflineCache(`rate:${tenant}`, async () => {
       const { data, error } = await supabase.rpc("current_rate");
       if (error) throw error;
       const row = (data ?? [])[0] as CurrentRate | undefined;
       return row ? { ...row, rate: Number(row.rate) } : null;
-    },
+    }),
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -101,7 +102,7 @@ export function useTenantSettings() {
   const tenant = useTenantKey();
   return useQuery({
     queryKey: ["cfg", tenant, "tenant"],
-    queryFn: async () => {
+    queryFn: withOfflineCache(`tenant:${tenant}`, async () => {
       const { data, error } = await supabase
         .from("tenants")
         .select("id, base_currency, local_currency, rate_source, is_special_taxpayer, prices_include_tax, igtf_rate")
@@ -109,7 +110,7 @@ export function useTenantSettings() {
         .single();
       if (error) throw error;
       return { ...data, igtf_rate: Number(data.igtf_rate) } as TenantSettings;
-    },
+    }),
   });
 }
 
@@ -190,11 +191,11 @@ export function usePaymentMethods() {
   const tenant = useTenantKey();
   return useQuery({
     queryKey: ["cfg", tenant, "payment_methods"],
-    queryFn: async () => {
+    queryFn: withOfflineCache(`payment_methods:${tenant}`, async () => {
       const { data, error } = await supabase.from("payment_methods").select("*").order("position");
       if (error) throw error;
       return (data ?? []) as PaymentMethod[];
-    },
+    }),
   });
 }
 
