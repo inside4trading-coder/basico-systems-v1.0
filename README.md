@@ -17,9 +17,14 @@ Verificación: `npm run typecheck && npm run build && npm test`.
 Base de datos local (requiere Docker):
 
 ```bash
-npx supabase db start   # Postgres con supabase/migrations aplicadas
-npm run test:db         # test de aislamiento pgTAP
+npx supabase start      # Supabase local completo (auth, API, Studio en :54323)
+npm run test:db         # tests pgTAP de supabase/tests
 ```
+
+Para que `npm run dev` use el Supabase local y no el de producción, crea
+`.env.development.local` (ignorado por git) con `VITE_SUPABASE_URL=http://127.0.0.1:54321`
+y la `PUBLISHABLE_KEY` que imprime `npx supabase status`. Los enlaces de acceso locales
+se leen en Mailpit (`http://127.0.0.1:54324`).
 
 CI (`.github/workflows/ci.yml`) corre las dos cosas en cada PR; `main` exige que pasen.
 

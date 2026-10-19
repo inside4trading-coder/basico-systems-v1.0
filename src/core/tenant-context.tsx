@@ -19,7 +19,7 @@ const TenantContext = createContext<TenantState | undefined>(undefined);
 async function fetchMemberships(userId: string): Promise<Membership[]> {
   const { data, error } = await supabase
     .from("tenant_members")
-    .select("role, tenant:tenants!inner(id, name, slug, status)")
+    .select("role, tenant:tenants!inner(id, name, slug, status, base_currency)")
     .eq("user_id", userId)
     .order("created_at");
   if (error) throw error;

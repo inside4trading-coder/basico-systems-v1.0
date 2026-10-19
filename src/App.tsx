@@ -9,6 +9,9 @@ import SelectTenant from "@/pages/SelectTenant";
 import NoAccess from "@/pages/NoAccess";
 import Home from "@/pages/Home";
 import Team from "@/pages/Team";
+import InventoryPage from "@/modules/inventory/InventoryPage";
+import ControlPage from "@/modules/inventory/ControlPage";
+import LocationsPage from "@/modules/inventory/LocationsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -56,6 +59,30 @@ export default function App() {
                 element={
                   <RequireTenant>
                     <Team />
+                  </RequireTenant>
+                }
+              />
+              <Route
+                path="/inventario"
+                element={
+                  <RequireTenant>
+                    <InventoryPage />
+                  </RequireTenant>
+                }
+              />
+              <Route
+                path="/control"
+                element={
+                  <RequireTenant>
+                    <ControlPage />
+                  </RequireTenant>
+                }
+              />
+              <Route
+                path="/sedes"
+                element={
+                  <RequireTenant>
+                    <LocationsPage />
                   </RequireTenant>
                 }
               />

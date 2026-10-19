@@ -60,13 +60,16 @@ select is_empty(
   'anon no tiene privilegios sobre tablas de tenant'
 );
 
+-- Una RPC SECURITY DEFINER expuesta a authenticated es una decisión
+-- deliberada: se marca con un comentario '@rpc …' y comprueba el rol dentro.
 select is_empty(
   $$ select p.proname
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public' and p.prosecdef
        and (has_function_privilege('anon', p.oid, 'EXECUTE')
-            or has_function_privilege('authenticated', p.oid, 'EXECUTE')) $$,
-  'ninguna función SECURITY DEFINER de public la ejecutan anon ni authenticated'
+            or (has_function_privilege('authenticated', p.oid, 'EXECUTE')
+                and coalesce(obj_description(p.oid, 'pg_proc'), '') !~ '^@rpc\M')) $$,
+  'funciones SECURITY DEFINER de public: nunca anon; authenticated solo si están marcadas @rpc'
 );
 
 -- ---------------------------------------------------------------------------

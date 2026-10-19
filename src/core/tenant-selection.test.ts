@@ -2,7 +2,7 @@ import { canManageTeam, pickInitialTenant, type Membership } from "./tenant-sele
 
 const m = (id: string, role: Membership["role"] = "owner"): Membership => ({
   role,
-  tenant: { id, name: `Tienda ${id}`, slug: `tienda-${id}`, status: "active" },
+  tenant: { id, name: `Tienda ${id}`, slug: `tienda-${id}`, status: "active", base_currency: "USD" },
 });
 
 describe("pickInitialTenant", () => {
