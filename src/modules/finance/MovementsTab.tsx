@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,10 +13,21 @@ import { downloadXlsx } from "@/modules/inventory/import/files";
 import { formatMoney } from "@/modules/pos/cart";
 import { parseAmount } from "@/modules/pos/usePosMoney";
 import { addDays, caracasToday } from "@/modules/reports/dates";
-import { useAccounts, useCreateMovement, useMovements, useTransfer, useVoidMovement, type FinanceAccount, type FinanceMovement } from "./api";
+import { catalogNames, useAccounts, useCatalog, useCreateMovement, useMovements, useTransfer, useVoidMovement, type FinanceAccount, type FinanceMovement } from "./api";
 import { MOVEMENT_KIND_LABEL, formatDay, signedAmount } from "./lib";
+import SuggestInput from "./SuggestInput";
 
 const ALL = "all";
+
+type DirectionFilter = "all" | "in" | "out" | "transfer";
+const DIRECTION_FILTER_LABEL: Record<DirectionFilter, string> = { all: "Todos", in: "Ingresos", out: "Egresos", transfer: "Transferencias" };
+
+/** Ingresos y egresos excluyen las transferencias entre cuentas, como el resumen. */
+function matchesDirection(m: FinanceMovement, filter: DirectionFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "transfer") return m.kind === "transfer";
+  return m.kind !== "transfer" && m.direction === filter;
+}
 
 export default function MovementsTab() {
   const { active } = useTenant();
@@ -28,14 +39,31 @@ export default function MovementsTab() {
   const { data: movements = [], isLoading, error } = useMovements({ accountId: accountId === ALL ? null : accountId, from, to });
   const [dialog, setDialog] = useState<"in" | "out" | "transfer" | null>(null);
   const [voiding, setVoiding] = useState<FinanceMovement | null>(null);
+  const [direction, setDirection] = useState<DirectionFilter>("all");
+  const [category, setCategory] = useState(ALL);
+  const [query, setQuery] = useState("");
   const byId = new Map(accounts.map((a) => [a.id, a]));
   const usable = accounts.filter((a) => a.is_active);
+  const categories = useMemo(() => [...new Set(movements.map((m) => m.category).filter((c): c is string => Boolean(c)))].sort(), [movements]);
+  const needle = query.trim().toLowerCase();
+  const shown = movements.filter(
+    (m) =>
+      matchesDirection(m, direction) &&
+      (category === ALL || m.category === category) &&
+      (!needle || [m.note, m.category, m.counterparty, m.reference].some((v) => v?.toLowerCase().includes(needle))),
+  );
+  const totals = new Map<string, { in: number; out: number }>();
+  for (const m of shown) {
+    if (m.voided_at) continue;
+    const t = totals.get(m.currency) ?? { in: 0, out: 0 };
+    totals.set(m.currency, { ...t, [m.direction]: t[m.direction] + m.amount });
+  }
 
   const exportRows = () =>
     downloadXlsx(
       `movimientos_${from}_${to}.xlsx`,
       ["Fecha", "Cuenta", "Tipo", "Entrada", "Salida", "Moneda", "Categoría", "Contraparte", "Referencia", "Nota", "Anulado"],
-      movements.map((m) => [
+      shown.map((m) => [
         m.occurred_on,
         byId.get(m.account_id)?.name ?? "",
         MOVEMENT_KIND_LABEL[m.kind],
@@ -79,19 +107,65 @@ export default function MovementsTab() {
           <Button size="sm" variant="outline" disabled={usable.length < 2} onClick={() => setDialog("transfer")}>
             Transferir
           </Button>
-          <Button size="sm" variant="outline" disabled={movements.length === 0} onClick={exportRows}>
+          <Button size="sm" variant="outline" disabled={shown.length === 0} onClick={exportRows}>
             Excel
           </Button>
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-1" role="group" aria-label="Tipo">
+          {(Object.keys(DIRECTION_FILTER_LABEL) as DirectionFilter[]).map((d) => (
+            <Button key={d} size="sm" variant={direction === d ? "default" : "outline"} onClick={() => setDirection(d)} aria-pressed={direction === d}>
+              {DIRECTION_FILTER_LABEL[d]}
+            </Button>
+          ))}
+        </div>
+        <Select value={category} onValueChange={setCategory}>
+          <SelectTrigger className="h-9 w-48" aria-label="Categoría">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Todas las categorías</SelectItem>
+            {categories.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
+          type="search"
+          aria-label="Buscar"
+          placeholder="Buscar descripción, contraparte o referencia"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="h-9 min-w-0 flex-1 basis-56"
+        />
+      </div>
+
+      {totals.size > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {[...totals.entries()].map(([currency, t]) => (
+            <div key={currency} className="rounded-xl border bg-card px-3 py-2 text-xs">
+              <span className="mono mr-2 text-muted-foreground">{currency}</span>
+              <span className="num">
+                +{formatMoney(t.in, currency)} · −{formatMoney(t.out, currency)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {usable.length === 0 && <p className="text-sm text-muted-foreground">Crea una cuenta en la pestaña Cuentas para registrar movimientos.</p>}
       {isLoading && <p className="mono-cap text-xs text-muted-foreground">Cargando…</p>}
       {error && <p className="text-sm text-destructive">No se pudo cargar: {error.message}</p>}
-      {!isLoading && movements.length === 0 && usable.length > 0 && <p className="text-sm text-muted-foreground">Sin movimientos en el periodo.</p>}
+      {!isLoading && shown.length === 0 && usable.length > 0 && (
+        <p className="text-sm text-muted-foreground">{movements.length === 0 ? "Sin movimientos en el periodo." : "Ningún movimiento coincide con los filtros."}</p>
+      )}
 
       <ul className="space-y-2">
-        {movements.map((m) => (
+        {shown.map((m) => (
           <li key={m.id} className={cn("flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card p-3", m.voided_at && "opacity-60")}>
             <div className="min-w-0">
               <div className="font-semibold">
@@ -153,6 +227,7 @@ function AccountSelect({ id, accounts, value, onChange, label }: { id: string; a
 
 function MovementDialog({ direction, accounts, onClose }: { direction: "in" | "out"; accounts: FinanceAccount[]; onClose: () => void }) {
   const create = useCreateMovement();
+  const { data: catalog = [] } = useCatalog();
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(caracasToday());
@@ -199,11 +274,17 @@ function MovementDialog({ direction, accounts, onClose }: { direction: "in" | "o
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label htmlFor="mv-category">Categoría</Label>
-              <Input id="mv-category" value={category} onChange={(e) => setCategory(e.target.value)} placeholder={direction === "in" ? "Ventas, préstamo…" : "Servicios, nómina…"} />
+              <SuggestInput
+                id="mv-category"
+                value={category}
+                onChange={setCategory}
+                options={catalogNames(catalog, "category", direction)}
+                placeholder={direction === "in" ? "Ventas, préstamo…" : "Servicios, nómina…"}
+              />
             </div>
             <div className="space-y-1">
               <Label htmlFor="mv-counterparty">{direction === "in" ? "De quién" : "A quién"}</Label>
-              <Input id="mv-counterparty" value={counterparty} onChange={(e) => setCounterparty(e.target.value)} />
+              <SuggestInput id="mv-counterparty" value={counterparty} onChange={setCounterparty} options={catalogNames(catalog, "counterparty")} />
             </div>
           </div>
           <div className="space-y-1">
@@ -223,10 +304,10 @@ function MovementDialog({ direction, accounts, onClose }: { direction: "in" | "o
   );
 }
 
-function TransferDialog({ accounts, onClose }: { accounts: FinanceAccount[]; onClose: () => void }) {
+export function TransferDialog({ accounts, initialFromId, onClose }: { accounts: FinanceAccount[]; initialFromId?: string; onClose: () => void }) {
   const transfer = useTransfer();
-  const [fromId, setFromId] = useState(accounts[0]?.id ?? "");
-  const [toId, setToId] = useState(accounts[1]?.id ?? "");
+  const [fromId, setFromId] = useState(initialFromId ?? accounts[0]?.id ?? "");
+  const [toId, setToId] = useState(accounts.find((a) => a.id !== (initialFromId ?? accounts[0]?.id))?.id ?? "");
   const [amountOut, setAmountOut] = useState("");
   const [amountIn, setAmountIn] = useState("");
   const [date, setDate] = useState(caracasToday());

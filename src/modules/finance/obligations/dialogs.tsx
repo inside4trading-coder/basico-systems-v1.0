@@ -17,7 +17,9 @@ import { parseAmount } from "@/modules/pos/usePosMoney";
 import { caracasToday } from "@/modules/reports/dates";
 import { useCurrentRate, useTenantSettings } from "@/modules/settings/api";
 import {
+  catalogNames,
   useAddInstance,
+  useCatalog,
   usePayInstance,
   useSaveObligation,
   useSkipInstance,
@@ -28,6 +30,7 @@ import {
   type ObligationInstance,
 } from "../api";
 import { FREQUENCY_LABEL, IMPORTANCE_LABEL, formatDay, remaining, type Frequency, type Importance } from "../lib";
+import SuggestInput from "../SuggestInput";
 import { ACCEPTED_PROOFS, pickProofs } from "./proofs";
 
 function useCurrencies(): string[] {
@@ -39,6 +42,7 @@ function useCurrencies(): string[] {
 export function ObligationDialog({ obligation, accounts, onClose }: { obligation: Obligation | null; accounts: FinanceAccount[]; onClose: () => void }) {
   const currencies = useCurrencies();
   const save = useSaveObligation();
+  const { data: catalog = [] } = useCatalog();
   const [name, setName] = useState(obligation?.name ?? "");
   const [category, setCategory] = useState(obligation?.category ?? "");
   const [counterparty, setCounterparty] = useState(obligation?.counterparty ?? "");
@@ -99,11 +103,11 @@ export function ObligationDialog({ obligation, accounts, onClose }: { obligation
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label htmlFor="ob-category">Categoría</Label>
-              <Input id="ob-category" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Alquiler, impuestos…" />
+              <SuggestInput id="ob-category" value={category} onChange={setCategory} options={catalogNames(catalog, "category", "out")} placeholder="Alquiler, impuestos…" />
             </div>
             <div className="space-y-1">
               <Label htmlFor="ob-counterparty">A quién se paga</Label>
-              <Input id="ob-counterparty" value={counterparty} onChange={(e) => setCounterparty(e.target.value)} />
+              <SuggestInput id="ob-counterparty" value={counterparty} onChange={setCounterparty} options={catalogNames(catalog, "counterparty")} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">

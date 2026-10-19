@@ -3,7 +3,7 @@
  * obligaciones. El libro se escribe solo por RPC (supabase/migrations/
  * 20261026000000_finance.sql); cuentas y obligaciones, directo con RLS.
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/core/supabase";
 import { useTenant } from "@/core/tenant-context";
 import { getActiveTenantId } from "@/core/tenant";
@@ -88,12 +88,6 @@ export interface ObligationEvent {
   created_at: string;
 }
 
-export interface FinanceSummary {
-  accounts: { id: string; name: string; kind: AccountKind; currency: string; is_active: boolean; balance: number; last_movement_on: string | null }[];
-  overdue: { count: number; by_currency: Record<string, number> };
-  upcoming: { id: string; obligation_id: string; name: string; due_date: string; amount: number | null; currency: string; importance: Importance; status: InstanceStatus }[];
-}
-
 function useTenantKey() {
   const { active } = useTenant();
   return active?.tenant.id ?? "none";
@@ -110,24 +104,128 @@ function useInvalidateFinance() {
   return () => qc.invalidateQueries({ queryKey: ["fin"] });
 }
 
-export function useFinanceSummary() {
+export interface TreasuryAccount {
+  id: string;
+  name: string;
+  kind: AccountKind;
+  currency: string;
+  is_active: boolean;
+  balance: number;
+  /** null: moneda sin conversión a la base (sin tasa u otra moneda). */
+  balance_base: number | null;
+  period_in: number;
+  period_out: number;
+  last_movement_on: string | null;
+}
+
+export interface CategoryTotal {
+  category: string;
+  amount: number;
+}
+
+export interface TreasurySummary {
+  base_currency: string;
+  local_currency: string | null;
+  from: string | null;
+  to: string;
+  rate: { rate: number; effective_date: string; source: string } | null;
+  accounts: TreasuryAccount[];
+  liquidity: { total: number; available: number; unconverted: string[] };
+  period: {
+    income: number;
+    expense: number;
+    unconverted: number;
+    movements: number;
+    by_currency: { currency: string; income: number | null; expense: number | null }[];
+    income_by_category: CategoryTotal[];
+    expense_by_category: CategoryTotal[];
+  };
+  payable: { count: number; total: number; variable: number; overdue_count: number; overdue_total: number; due_soon: number };
+  recent: Pick<FinanceMovement, "id" | "account_id" | "direction" | "kind" | "amount" | "currency" | "occurred_on" | "category" | "counterparty" | "note">[];
+}
+
+const toNum = (v: unknown) => Number(v ?? 0);
+
+export function useTreasurySummary(from: string | null, to: string) {
   const tenant = useTenantKey();
   return useQuery({
-    queryKey: ["fin", tenant, "summary"],
+    queryKey: ["fin", tenant, "treasury", from, to],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       // Las cuotas se generan en el servidor; al abrir se completan las que falten.
       const refresh = await supabase.rpc("refresh_obligations");
       if (refresh.error) throw asError(refresh.error);
-      const { data, error } = await supabase.rpc("finance_summary");
+      const { data, error } = await supabase.rpc("treasury_summary", { p_from: from, p_to: to });
       if (error) throw asError(error);
-      const s = data as FinanceSummary;
+      const s = data as TreasurySummary;
+      const cats = (list: CategoryTotal[]) => list.map((c) => ({ ...c, amount: toNum(c.amount) }));
       return {
         ...s,
-        accounts: s.accounts.map((a) => ({ ...a, balance: Number(a.balance) })),
-        upcoming: s.upcoming.map((u) => ({ ...u, amount: num(u.amount) })),
-      } as FinanceSummary;
+        rate: s.rate ? { ...s.rate, rate: toNum(s.rate.rate) } : null,
+        accounts: s.accounts.map((a) => ({
+          ...a,
+          balance: toNum(a.balance),
+          balance_base: num(a.balance_base),
+          period_in: toNum(a.period_in),
+          period_out: toNum(a.period_out),
+        })),
+        liquidity: { ...s.liquidity, total: toNum(s.liquidity.total), available: toNum(s.liquidity.available) },
+        period: {
+          ...s.period,
+          income: toNum(s.period.income),
+          expense: toNum(s.period.expense),
+          by_currency: s.period.by_currency.map((c) => ({ ...c, income: num(c.income), expense: num(c.expense) })),
+          income_by_category: cats(s.period.income_by_category),
+          expense_by_category: cats(s.period.expense_by_category),
+        },
+        payable: { ...s.payable, total: toNum(s.payable.total), overdue_total: toNum(s.payable.overdue_total) },
+        recent: s.recent.map((m) => ({ ...m, amount: toNum(m.amount) })),
+      } as TreasurySummary;
     },
   });
+}
+
+export type CatalogKind = "category" | "counterparty";
+
+export interface CatalogItem {
+  id: string;
+  kind: CatalogKind;
+  name: string;
+  direction: "in" | "out" | null;
+  is_active: boolean;
+}
+
+export function useCatalog() {
+  const tenant = useTenantKey();
+  return useQuery({
+    queryKey: ["fin", tenant, "catalog"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("finance_catalog_items").select("id, kind, name, direction, is_active").order("name");
+      if (error) throw asError(error);
+      return (data ?? []) as CatalogItem[];
+    },
+  });
+}
+
+export function useSaveCatalogItem() {
+  const invalidate = useInvalidateFinance();
+  return useMutation({
+    mutationFn: async (input: { id?: string; kind: CatalogKind; name: string; direction: "in" | "out" | null; is_active?: boolean }) => {
+      const fields = { name: input.name.trim(), direction: input.kind === "category" ? input.direction : null, is_active: input.is_active ?? true };
+      const { error } = input.id
+        ? await supabase.from("finance_catalog_items").update(fields).eq("id", input.id)
+        : await supabase.from("finance_catalog_items").insert({ ...fields, kind: input.kind });
+      if (error) throw new Error(error.code === "23505" ? "Ya existe con ese nombre" : (error.message ?? "Error desconocido"));
+    },
+    onSuccess: invalidate,
+  });
+}
+
+/** Nombres activos para sugerir al escribir; las categorías, según sean de ingreso o egreso. */
+export function catalogNames(items: CatalogItem[], kind: CatalogKind, direction?: "in" | "out"): string[] {
+  return items
+    .filter((i) => i.kind === kind && i.is_active && (!direction || i.direction === null || i.direction === direction))
+    .map((i) => i.name);
 }
 
 export function useAccounts() {
@@ -168,9 +266,10 @@ export interface MovementFilters {
   to: string;
 }
 
-export function useMovements(filters: MovementFilters) {
+export function useMovements(filters: MovementFilters, enabled = true) {
   const tenant = useTenantKey();
   return useQuery({
+    enabled,
     queryKey: ["fin", tenant, "movements", filters],
     queryFn: async () => {
       let q = supabase
