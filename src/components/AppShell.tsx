@@ -23,6 +23,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: "/", label: "Inicio", visible: () => true },
+  { to: "/pos", label: "Vender", visible: () => true },
   { to: "/inventario", label: "Inventario", visible: () => true },
   { to: "/control", label: "Control", visible: () => true },
   { to: "/sedes", label: "Sedes", visible: canSupervise },
