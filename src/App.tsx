@@ -16,6 +16,7 @@ import ImportPage from "@/modules/inventory/ImportPage";
 import CatalogFieldsPage from "@/modules/inventory/CatalogFieldsPage";
 import SettingsPage from "@/modules/settings/SettingsPage";
 import PosPage from "@/modules/pos/PosPage";
+import ReportsPage from "@/modules/reports/ReportsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -103,6 +104,14 @@ export default function App() {
                 element={
                   <RequireTenant>
                     <PosPage />
+                  </RequireTenant>
+                }
+              />
+              <Route
+                path="/reportes"
+                element={
+                  <RequireTenant>
+                    <ReportsPage />
                   </RequireTenant>
                 }
               />
