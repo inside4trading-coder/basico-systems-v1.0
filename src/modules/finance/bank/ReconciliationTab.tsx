@@ -17,6 +17,7 @@ import { formatMoney } from "@/modules/pos/cart";
 import { useAccounts } from "../api";
 import { formatDay } from "../lib";
 import { useAutoreconcile, useBankBatches, useBankLines, useBankProfiles, useImportStatement, type BankLine, type BankProfile, type LineStatus } from "./api";
+import FeesPanel from "./FeesPanel";
 import { LINE_STATUS_LABEL } from "./labels";
 import LineSheet from "./LineSheet";
 import { parseBankTable, readBankFile, type BankParseResult } from "./parse";
@@ -117,7 +118,7 @@ export default function ReconciliationTab() {
       {
         onSuccess: (r) => {
           toast.success(`${n(r.inserted, "línea nueva", "líneas nuevas")} · ${r.duplicates} ya estaban · ${r.errors} con error`, {
-            description: outcome(r),
+            description: `${outcome(r)}${r.fees ? ` · ${n(r.fees, "comisión registrada", "comisiones registradas")}` : ""}`,
             duration: 8000,
           });
           setPreview(null);
@@ -331,6 +332,8 @@ export default function ReconciliationTab() {
           </li>
         ))}
       </ul>
+
+      {accountId && account && <FeesPanel accountId={accountId} currency={account.currency} lines={lines} />}
 
       {batches.length > 0 && (
         <section className="space-y-2 rounded-xl border bg-card p-4">
