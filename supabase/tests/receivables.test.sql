@@ -235,7 +235,7 @@ select results_eq(
 );
 
 reset role;
-update public.sales set status = 'voided' where id = 'aaaaaaaa-8888-8888-8888-888888888881';
+update public.sales set status = 'voided', voided_at = now(), void_reason = 'Prueba' where id = 'aaaaaaaa-8888-8888-8888-888888888881';
 set local role authenticated;
 select is(
   (select status from public.receivables where sale_id = 'aaaaaaaa-8888-8888-8888-888888888881'), 'cancelled',

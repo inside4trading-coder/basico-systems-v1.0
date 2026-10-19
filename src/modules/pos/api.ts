@@ -43,6 +43,8 @@ export interface SessionSummary {
   closed_at: string | null;
   cash: CashLine[];
   sales: { count: number; total: number; discount: number; tax: number; igtf: number };
+  voided?: { count: number; total: number };
+  returns?: { count: number; total: number };
   by_method: { method: string; currency: string; amount: number; amount_base: number }[];
 }
 
