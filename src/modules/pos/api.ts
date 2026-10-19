@@ -211,3 +211,127 @@ export function useRegisterSale() {
     },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Búsqueda para el carrito y venta guardada (recibo)
+// ---------------------------------------------------------------------------
+
+export interface PosHit {
+  variant_id: string;
+  product_id: string;
+  product_name: string;
+  options: Record<string, string>;
+  brand: string | null;
+  sku: string | null;
+  price: number | null;
+  unit: string;
+  match_kind: string;
+  available: number;
+  tax_rate: number;
+}
+
+/**
+ * catalog_lookup más lo que el carrito necesita para la vista previa:
+ * disponible en la sede de la caja y tasa de impuesto del producto.
+ */
+export async function searchForPos(query: string, locationId: string): Promise<PosHit[]> {
+  const { data, error } = await supabase.rpc("catalog_lookup", { p_query: query, p_limit: 30 });
+  if (error) throw asError(error);
+  const hits = (data ?? []) as Omit<PosHit, "available" | "tax_rate">[];
+  if (hits.length === 0) return [];
+
+  const variantIds = hits.map((h) => h.variant_id);
+  const productIds = [...new Set(hits.map((h) => h.product_id))];
+  const [stocks, products, taxes] = await Promise.all([
+    supabase.from("stocks").select("variant_id, available").eq("location_id", locationId).in("variant_id", variantIds),
+    supabase.from("products").select("id, tax_rate_id").in("id", productIds),
+    supabase.from("tax_rates").select("id, rate, is_default"),
+  ]);
+  if (stocks.error) throw asError(stocks.error);
+  if (products.error) throw asError(products.error);
+  if (taxes.error) throw asError(taxes.error);
+
+  const available = new Map((stocks.data ?? []).map((s) => [s.variant_id as string, Number(s.available)]));
+  const taxById = new Map((taxes.data ?? []).map((t) => [t.id as string, Number(t.rate)]));
+  const defaultTax = Number((taxes.data ?? []).find((t) => t.is_default)?.rate ?? 0);
+  const taxOfProduct = new Map(
+    (products.data ?? []).map((p) => [p.id as string, p.tax_rate_id ? (taxById.get(p.tax_rate_id) ?? defaultTax) : defaultTax]),
+  );
+
+  return hits.map((h) => ({
+    ...h,
+    price: h.price === null ? null : Number(h.price),
+    available: available.get(h.variant_id) ?? 0,
+    tax_rate: taxOfProduct.get(h.product_id) ?? defaultTax,
+  }));
+}
+
+export interface SaleReceipt {
+  id: string;
+  number: string;
+  status: string;
+  sold_at: string;
+  base_currency: string;
+  local_currency: string | null;
+  rate: number | null;
+  prices_include_tax: boolean;
+  subtotal: number;
+  discount_total: number;
+  tax_total: number;
+  total: number;
+  igtf_total: number;
+  paid_total: number;
+  change_total: number;
+  customer_name: string | null;
+  customer_doc: string | null;
+  note: string | null;
+  items: { line: number; description: string; sku: string | null; qty: number; unit_price: number; discount: number; tax_rate: number; line_total: number }[];
+  payments: { method_name: string; currency: string; amount: number; amount_base: number; igtf_base: number; reference: string | null; bank: string | null }[];
+}
+
+const num = (v: unknown) => (v === null || v === undefined ? 0 : Number(v));
+
+/** El recibo sale de la venta guardada, nunca del carrito. */
+export async function fetchSaleReceipt(saleId: string): Promise<SaleReceipt> {
+  const { data, error } = await supabase
+    .from("sales")
+    .select(
+      "id, number, status, sold_at, base_currency, local_currency, rate, prices_include_tax, subtotal, discount_total, tax_total, total, igtf_total, paid_total, change_total, customer_name, customer_doc, note, sale_items(line, description, sku, qty, unit_price, discount, tax_rate, line_total), sale_payments(method_name, currency, amount, amount_base, igtf_base, reference, bank)",
+    )
+    .eq("id", saleId)
+    .single();
+  if (error) throw asError(error);
+  const row = data as Record<string, unknown> & { sale_items: Record<string, unknown>[]; sale_payments: Record<string, unknown>[] };
+  return {
+    ...(row as unknown as SaleReceipt),
+    rate: row.rate === null ? null : Number(row.rate),
+    subtotal: num(row.subtotal),
+    discount_total: num(row.discount_total),
+    tax_total: num(row.tax_total),
+    total: num(row.total),
+    igtf_total: num(row.igtf_total),
+    paid_total: num(row.paid_total),
+    change_total: num(row.change_total),
+    items: row.sale_items
+      .map((i) => ({
+        line: num(i.line),
+        description: String(i.description),
+        sku: (i.sku as string | null) ?? null,
+        qty: num(i.qty),
+        unit_price: num(i.unit_price),
+        discount: num(i.discount),
+        tax_rate: num(i.tax_rate),
+        line_total: num(i.line_total),
+      }))
+      .sort((a, b) => a.line - b.line),
+    payments: row.sale_payments.map((p) => ({
+      method_name: String(p.method_name),
+      currency: String(p.currency),
+      amount: num(p.amount),
+      amount_base: num(p.amount_base),
+      igtf_base: num(p.igtf_base),
+      reference: (p.reference as string | null) ?? null,
+      bank: (p.bank as string | null) ?? null,
+    })),
+  };
+}
