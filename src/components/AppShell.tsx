@@ -3,6 +3,8 @@ import { Link, NavLink } from "react-router-dom";
 import BrandMark from "@/components/BrandMark";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/core/auth";
+import type { ModuleKey } from "@/core/entitlements";
+import { useEntitlements } from "@/core/useEntitlements";
 import { useTenant } from "@/core/tenant-context";
 import { canManageTeam, canSeeReports, canSupervise, type TenantRole } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
@@ -20,15 +22,17 @@ interface NavItem {
   to: string;
   label: string;
   visible: (role: TenantRole | undefined) => boolean;
+  /** Módulo del plan que tiene que estar incluido. */
+  module?: ModuleKey;
 }
 
 const NAV: NavItem[] = [
   { to: "/", label: "Inicio", visible: () => true },
-  { to: "/pos", label: "Vender", visible: () => true },
-  { to: "/inventario", label: "Inventario", visible: () => true },
-  { to: "/control", label: "Control", visible: () => true },
-  { to: "/reportes", label: "Reportes", visible: canSeeReports },
-  { to: "/administracion", label: "Administración", visible: canSeeReports },
+  { to: "/pos", label: "Vender", visible: () => true, module: "pos" },
+  { to: "/inventario", label: "Inventario", visible: () => true, module: "inventario" },
+  { to: "/control", label: "Control", visible: () => true, module: "inventario" },
+  { to: "/reportes", label: "Reportes", visible: canSeeReports, module: "reportes" },
+  { to: "/administracion", label: "Administración", visible: canSeeReports, module: "administracion" },
   { to: "/sedes", label: "Sedes", visible: canSupervise },
   { to: "/configuracion", label: "Configuración", visible: canSupervise },
   { to: "/equipo", label: "Equipo", visible: canManageTeam },
@@ -38,6 +42,7 @@ export default function AppShell({ children, wide = false }: { children: ReactNo
   const { session, signOut } = useAuth();
   const { active, memberships, clearTenant } = useTenant();
   const role = active?.role;
+  const entitlements = useEntitlements();
   useRateAutoSync();
 
   return (
@@ -63,7 +68,7 @@ export default function AppShell({ children, wide = false }: { children: ReactNo
           </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-2" aria-label="Secciones">
-          {NAV.filter((item) => item.visible(role)).map((item) => (
+          {NAV.filter((item) => item.visible(role) && (!item.module || entitlements[item.module])).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

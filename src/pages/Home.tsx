@@ -30,7 +30,6 @@ export default function Home() {
           </Button>
         </div>
       )}
-      <p className="text-sm text-muted-foreground">El POS llega en la siguiente fase.</p>
     </AppShell>
   );
 }

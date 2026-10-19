@@ -54,3 +54,16 @@ export function resolveEntitlements(rows: EntitlementRow[], now: Date = new Date
 
   return resolved as Entitlements;
 }
+
+export type ModuleKey = "pos" | "inventario" | "administracion" | "reportes" | "fichaje" | "estudio" | "cashea";
+
+/** Nombre de cada módulo para la pantalla (mismos textos que los errores de la base). */
+export const MODULE_LABELS: Record<ModuleKey, string> = {
+  pos: "Punto de venta",
+  inventario: "Inventario",
+  administracion: "Administración",
+  reportes: "Reportes",
+  fichaje: "Fichaje",
+  estudio: "Studio",
+  cashea: "Cashea",
+};

@@ -5,6 +5,7 @@ import writeXlsxFile, { type SheetData } from "write-excel-file/browser";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/core/supabase";
 import { useTenant } from "@/core/tenant-context";
+import { useEntitlements } from "@/core/useEntitlements";
 import { caracasToday } from "@/modules/reports/dates";
 import { EXPORT_SHEETS, MAX_ROWS_PER_SHEET, PAGE_SIZE, exportFileName, toTable } from "./exportData";
 
@@ -23,6 +24,7 @@ async function readAll(table: string, order: string[]): Promise<{ rows: Record<s
 
 export default function ExportSection() {
   const { active } = useTenant();
+  const { can_export: canExport } = useEntitlements();
   const [progress, setProgress] = useState<string | null>(null);
 
   const run = async () => {
@@ -61,9 +63,13 @@ export default function ExportSection() {
           son tuyos.
         </p>
       </div>
-      <Button onClick={run} disabled={progress !== null}>
-        {progress ? `Leyendo ${progress}` : "Descargar Excel"}
-      </Button>
+      {canExport ? (
+        <Button onClick={run} disabled={progress !== null}>
+          {progress ? `Leyendo ${progress}` : "Descargar Excel"}
+        </Button>
+      ) : (
+        <p className="text-sm text-muted-foreground">La exportación no está incluida en el plan del negocio. Escríbenos para activarla.</p>
+      )}
     </section>
   );
 }
