@@ -110,6 +110,16 @@ export default function InventoryPage() {
             <Link to="/control">Entradas y ajustes</Link>
           </Button>
           {editable && (
+            <>
+              <Button variant="outline" asChild>
+                <Link to="/inventario/importar">Importar / Exportar</Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link to="/catalogo/campos">Campos</Link>
+              </Button>
+            </>
+          )}
+          {editable && (
             <Button onClick={() => setCreating(true)} disabled={activeLocations.length === 0}>
               <Plus /> Nuevo producto
             </Button>
