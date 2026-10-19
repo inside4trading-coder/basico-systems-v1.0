@@ -11,6 +11,10 @@ insert into auth.users (id, email, aud, role) values
   ('aaaaaaaa-0000-0000-0000-000000000003', 'encargado-a@test.local', 'authenticated', 'authenticated'),
   ('aaaaaaaa-0000-0000-0000-000000000004', 'encargado2-a@test.local', 'authenticated', 'authenticated');
 insert into public.tenants (id, name, slug) values ('aaaaaaaa-1111-1111-1111-111111111111', 'Tienda A', 'tienda-a');
+-- Plan con más sedes, cajas y usuarios que el básico (excepción de plataforma).
+insert into public.tenant_entitlements (tenant_id, key, value)
+select t.id, k, '10'::jsonb from public.tenants t, unnest(array['max_locations', 'max_registers', 'max_users']) k
+on conflict do nothing;
 insert into public.tenant_members (tenant_id, user_id, role) values
   ('aaaaaaaa-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', 'owner'),
   ('aaaaaaaa-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000003', 'manager'),

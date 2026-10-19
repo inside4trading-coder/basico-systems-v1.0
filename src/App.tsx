@@ -19,6 +19,7 @@ import PosPage from "@/modules/pos/PosPage";
 import ReportsPage from "@/modules/reports/ReportsPage";
 import FinancePage from "@/modules/finance/FinancePage";
 import ObligationDetailPage from "@/modules/finance/obligations/ObligationDetailPage";
+import ModuleGate from "@/components/ModuleGate";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -73,7 +74,9 @@ export default function App() {
                 path="/inventario"
                 element={
                   <RequireTenant>
-                    <InventoryPage />
+                    <ModuleGate module="inventario">
+                      <InventoryPage />
+                    </ModuleGate>
                   </RequireTenant>
                 }
               />
@@ -81,7 +84,9 @@ export default function App() {
                 path="/control"
                 element={
                   <RequireTenant>
-                    <ControlPage />
+                    <ModuleGate module="inventario">
+                      <ControlPage />
+                    </ModuleGate>
                   </RequireTenant>
                 }
               />
@@ -89,7 +94,9 @@ export default function App() {
                 path="/inventario/importar"
                 element={
                   <RequireTenant>
-                    <ImportPage />
+                    <ModuleGate module="inventario">
+                      <ImportPage />
+                    </ModuleGate>
                   </RequireTenant>
                 }
               />
@@ -105,7 +112,9 @@ export default function App() {
                 path="/pos"
                 element={
                   <RequireTenant>
-                    <PosPage />
+                    <ModuleGate module="pos">
+                      <PosPage />
+                    </ModuleGate>
                   </RequireTenant>
                 }
               />
@@ -113,7 +122,9 @@ export default function App() {
                 path="/reportes"
                 element={
                   <RequireTenant>
-                    <ReportsPage />
+                    <ModuleGate module="reportes">
+                      <ReportsPage />
+                    </ModuleGate>
                   </RequireTenant>
                 }
               />
@@ -121,7 +132,9 @@ export default function App() {
                 path="/administracion"
                 element={
                   <RequireTenant>
-                    <FinancePage />
+                    <ModuleGate module="administracion">
+                      <FinancePage />
+                    </ModuleGate>
                   </RequireTenant>
                 }
               />
@@ -129,7 +142,9 @@ export default function App() {
                 path="/administracion/obligaciones/:id"
                 element={
                   <RequireTenant>
-                    <ObligationDetailPage />
+                    <ModuleGate module="administracion">
+                      <ObligationDetailPage />
+                    </ModuleGate>
                   </RequireTenant>
                 }
               />
