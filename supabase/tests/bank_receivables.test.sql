@@ -1,4 +1,4 @@
--- Cobranza contra el banco: cuotas de clientes y liquidaciones con la financiadora.
+-- Cobranza contra el banco: cuotas de clientes pagadas por pago móvil o transferencia.
 
 begin;
 create extension if not exists pgtap with schema extensions;
@@ -98,18 +98,6 @@ select throws_ok(
   'no cobra más de lo que falta'
 );
 
-select lives_ok(
-  $$ select public.settle_provider_from_bank_line((select id from line_ids where row_number = 5), 'Cashea') $$,
-  'el pago a Cashea se liquida desde la línea'
-);
-select results_eq(
-  $$ select l.status, p.provider, p.kind, p.amount, p.document
-     from public.bank_statement_lines l join public.provider_ledger p on p.movement_id = l.movement_id
-     where l.row_number = 5 $$,
-  $$ values ('matched'::text, 'Cashea'::text, 'settlement'::text, 500.00::numeric, '704'::text) $$,
-  'queda en la cuenta corriente con la referencia del banco'
-);
-
 select is(
   public.reopen_bank_line((select id from line_ids where row_number = 2)), 'unmatched',
   'desvincular el cobro'
@@ -120,12 +108,6 @@ select results_eq(
   $$ values (0.00::numeric, 0) $$,
   'anula el cobro y la cuota vuelve a quedar pendiente'
 );
-select public.reopen_bank_line((select id from line_ids where row_number = 5));
-select is(
-  (select count(*)::int from public.provider_ledger where voided_at is null and kind = 'settlement'), 0,
-  'y desvincular la liquidación la anula'
-);
-
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000002","role":"authenticated"}', true);
 select throws_ok(
   $$ select public.bank_receivable_candidates((select id from line_ids where row_number = 2)) $$,

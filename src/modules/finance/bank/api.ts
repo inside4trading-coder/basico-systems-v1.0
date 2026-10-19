@@ -361,4 +361,3 @@ export const useCollectFromLine = () =>
   useLineRpc<{ p_line_id: string; p_receivable_id: string; p_applied?: number | null; p_payer?: "customer" | "provider" }>(
     "collect_receivable_from_bank_line",
   );
-export const useSettleFromLine = () => useLineRpc<{ p_line_id: string; p_provider: string }>("settle_provider_from_bank_line");

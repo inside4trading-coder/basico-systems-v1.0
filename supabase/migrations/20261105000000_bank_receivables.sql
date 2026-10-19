@@ -1,18 +1,15 @@
 -- Conciliación de cobranza (Cashea y crédito) contra el banco.
 --
 -- Portado de CasheaBankRecoveryDrawer (AdminCashea.tsx, basicosystems@f551478b).
--- Los clientes pagan sus cuotas por pago móvil o transferencia, y la
--- financiadora liquida coberturas o cobra servicios por el banco. Desde una
--- línea abierta del estado de cuenta:
+-- Los clientes pagan sus cuotas por pago móvil o transferencia. Desde una
+-- línea abierta (entrada) del estado de cuenta:
 --   * bank_receivable_candidates: cuentas por cobrar abiertas cuya próxima
 --     cuota (o el saldo) coincide con el monto, convertido con la tasa del día
 --     de la línea.
 --   * collect_receivable_from_bank_line: registra el cobro con la fecha, el
 --     monto y la referencia del banco, y deja la línea conciliada.
---   * settle_provider_from_bank_line: lo mismo para una liquidación con la
---     financiadora (entrada o salida).
--- Desvincular la línea anula el movimiento, y con él el cobro o la
--- liquidación (triggers existentes).
+-- Desvincular la línea anula el movimiento, y con él el cobro (triggers
+-- existentes).
 
 -- Monto en otra moneda del negocio con la tasa dada (base <-> local).
 create or replace function app.convert_amount(p_amount numeric, p_from text, p_to text, p_base text, p_local text, p_rate numeric)
@@ -153,31 +150,6 @@ $$;
 revoke all on function app.collect_receivable_from_bank_line(uuid, uuid, numeric, text) from public;
 grant execute on function app.collect_receivable_from_bank_line(uuid, uuid, numeric, text) to authenticated;
 
-create or replace function app.settle_provider_from_bank_line(p_line_id uuid, p_provider text)
-returns uuid
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  v_tenant uuid := app.finance_tenant();
-  l public.bank_statement_lines := app.bank_line_for_write(v_tenant, p_line_id);
-  v_id uuid;
-begin
-  if l.status not in ('unmatched', 'possible') then
-    raise exception 'La línea ya está conciliada o ignorada' using errcode = 'check_violation';
-  end if;
-  v_id := app.settle_provider(p_provider, l.account_id, l.direction, l.amount, l.line_date, coalesce(l.reference, l.operation_number));
-  update public.bank_statement_lines
-  set status = 'matched', movement_id = (select movement_id from public.provider_ledger where id = v_id),
-      match_kind = 'created', matched_by = auth.uid(), matched_at = now()
-  where id = l.id;
-  return v_id;
-end;
-$$;
-revoke all on function app.settle_provider_from_bank_line(uuid, text) from public;
-grant execute on function app.settle_provider_from_bank_line(uuid, text) to authenticated;
-
 create function public.bank_receivable_candidates(p_line_id uuid)
 returns jsonb language sql stable security invoker set search_path = '' as $$ select app.bank_receivable_candidates(p_line_id) $$;
 revoke all on function public.bank_receivable_candidates(uuid) from public, anon;
@@ -187,8 +159,3 @@ create function public.collect_receivable_from_bank_line(p_line_id uuid, p_recei
 returns uuid language sql security invoker set search_path = '' as $$ select app.collect_receivable_from_bank_line(p_line_id, p_receivable_id, p_applied, p_payer) $$;
 revoke all on function public.collect_receivable_from_bank_line(uuid, uuid, numeric, text) from public, anon;
 grant execute on function public.collect_receivable_from_bank_line(uuid, uuid, numeric, text) to authenticated;
-
-create function public.settle_provider_from_bank_line(p_line_id uuid, p_provider text)
-returns uuid language sql security invoker set search_path = '' as $$ select app.settle_provider_from_bank_line(p_line_id, p_provider) $$;
-revoke all on function public.settle_provider_from_bank_line(uuid, text) from public, anon;
-grant execute on function public.settle_provider_from_bank_line(uuid, text) to authenticated;

@@ -110,7 +110,7 @@ export default function LineSheet({ line, onClose }: { line: BankLine | null; on
                 {(
                   [
                     ["link", "Vincular"],
-                    ["collect", line.direction === "in" ? "Cobranza" : "Financiadora"],
+                    ...(line.direction === "in" ? ([["collect", "Cobranza"]] as const) : []),
                     ["create", line.direction === "in" ? "Registrar ingreso" : "Registrar egreso"],
                     ["ignore", "Ignorar"],
                   ] as const
