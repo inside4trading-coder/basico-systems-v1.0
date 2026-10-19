@@ -57,6 +57,8 @@ export interface ImportResult {
   duplicates: number;
   errors: number;
   auto_matched: number;
+  /** Comisiones registradas solas por las frases de la cuenta. */
+  fees?: number;
   possible: number;
   unmatched: number;
 }
@@ -237,3 +239,79 @@ export const useCreateFromLine = () =>
   useLineRpc<{ p_line_id: string; p_category: string | null; p_counterparty: string | null; p_note: string | null }>("create_movement_from_bank_line");
 export const useIgnoreLine = () => useLineRpc<{ p_line_id: string; p_reason: string }>("ignore_bank_line");
 export const useReopenLine = () => useLineRpc<{ p_line_id: string }>("reopen_bank_line");
+
+export interface FeeRule {
+  id: string;
+  account_id: string;
+  phrase: string;
+  match: "starts" | "contains";
+  fee_type: string;
+  is_active: boolean;
+}
+
+export interface FeeMatch {
+  line_id: string;
+  date: string;
+  amount: number;
+  description: string | null;
+  fee_type: string;
+  phrase: string;
+}
+
+export function useFeeRules(accountId: string | null) {
+  const tenant = useTenantKey();
+  return useQuery({
+    enabled: Boolean(accountId),
+    queryKey: ["fin", tenant, "bank", "fee_rules", accountId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("bank_fee_rules")
+        .select("id, account_id, phrase, match, fee_type, is_active")
+        .eq("account_id", accountId)
+        .order("created_at");
+      if (error) throw asError(error);
+      return (data ?? []) as FeeRule[];
+    },
+  });
+}
+
+export function useSaveFeeRule() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: async (input: Partial<FeeRule> & { account_id: string; id?: string }) => {
+      const { id, account_id, ...fields } = input;
+      const { error } = id
+        ? await supabase.from("bank_fee_rules").update(fields).eq("id", id)
+        : await supabase.from("bank_fee_rules").insert({ ...fields, account_id });
+      if (error) throw new Error(error.code === "23505" ? "Esa frase ya está en la cuenta" : (error.message ?? "Error desconocido"));
+    },
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteFeeRule() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("bank_fee_rules").delete().eq("id", id);
+      if (error) throw asError(error);
+    },
+    onSuccess: invalidate,
+  });
+}
+
+/** Qué salidas abiertas coinciden con las frases (sin registrar nada). */
+export function useFeeMatches(accountId: string | null, rulesKey: string) {
+  const tenant = useTenantKey();
+  return useQuery({
+    enabled: Boolean(accountId),
+    queryKey: ["fin", tenant, "bank", "fee_matches", accountId, rulesKey],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("apply_bank_fee_rules", { p_account_id: accountId, p_apply: false });
+      if (error) throw asError(error);
+      return ((data as { items: FeeMatch[] }).items ?? []).map((i) => ({ ...i, amount: Number(i.amount) }));
+    },
+  });
+}
+
+export const useApplyFees = () => useLineRpc<{ p_account_id: string; p_apply: boolean }>("apply_bank_fee_rules");
