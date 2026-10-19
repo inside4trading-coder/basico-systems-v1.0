@@ -13,6 +13,7 @@ import { caracasToday } from "@/modules/reports/dates";
 import { useCurrentRate, usePaymentMethods } from "@/modules/settings/api";
 import AccountSheet from "./AccountSheet";
 import { useBankPending } from "./bank/api";
+import { useReceivablesSummary } from "./receivables/api";
 import { useTreasurySummary, type CategoryTotal, type TreasuryAccount } from "./api";
 import { ACCOUNT_KIND_LABEL, MOVEMENT_KIND_LABEL, formatDay } from "./lib";
 import { TREASURY_PERIOD_LABEL, attentionItems, shareOf, treasuryRange, type AttentionTarget, type TreasuryPeriod } from "./treasury";
@@ -33,6 +34,7 @@ export default function SummaryTab({ onNavigate }: { onNavigate: (tab: FinanceTa
   const { data: rate } = useCurrentRate();
   const { data: methods = [] } = usePaymentMethods();
   const { data: bank } = useBankPending();
+  const { data: receivables } = useReceivablesSummary();
   const [openId, setOpenId] = useState<string | null>(null);
 
   if (isLoading) return <p className="mono-cap text-xs text-muted-foreground">Cargando…</p>;
@@ -49,12 +51,15 @@ export default function SummaryTab({ onNavigate }: { onNavigate: (tab: FinanceTa
     overdueTotal: data.payable.overdue_total,
     dueSoon: data.payable.due_soon,
     negativeAccounts: data.accounts.filter((a) => a.is_active && a.balance < 0).map((a) => a.name),
-    unlinkedMethods: data.accounts.length > 0 ? methods.filter((m) => m.is_active && !m.account_id).length : 0,
+    // Las financiadoras (bnpl) no van a una cuenta: sus ventas quedan en Por cobrar.
+    unlinkedMethods: data.accounts.length > 0 ? methods.filter((m) => m.is_active && !m.account_id && m.kind !== "bnpl").length : 0,
     rate: !data.local_currency ? "ok" : !data.rate ? "missing" : rate?.stale ? "stale" : "ok",
     unconvertedMovements: data.period.unconverted,
     unconvertedCurrencies: data.liquidity.unconverted,
     bankUnmatched: bank?.unmatched ?? 0,
     bankPossible: bank?.possible ?? 0,
+    receivableOverdueCount: receivables?.overdue_count ?? 0,
+    receivableOverdueTotal: receivables?.overdue_total ?? 0,
   });
   const periodHint = range.from === null ? "Desde el inicio" : range.from === range.to ? formatDay(range.to) : `${formatDay(range.from)} – ${formatDay(range.to)}`;
 
@@ -75,7 +80,7 @@ export default function SummaryTab({ onNavigate }: { onNavigate: (tab: FinanceTa
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
         <Kpi label="Liquidez" value={formatMoney(data.liquidity.total, base)} hint="Todas las cuentas" strong />
         <Kpi label="Disponible" value={formatMoney(data.liquidity.available, base)} hint="Cuentas activas" />
         <Kpi label="Ingresos" value={formatMoney(data.period.income, base)} hint={periodHint} />
@@ -86,6 +91,14 @@ export default function SummaryTab({ onNavigate }: { onNavigate: (tab: FinanceTa
           value={formatMoney(data.payable.total, base)}
           hint={`Vencido y a 30 días · ${data.payable.count} ${data.payable.count === 1 ? "cuota" : "cuotas"}${data.payable.variable ? `, ${data.payable.variable} variable` : ""}`}
           onClick={() => onNavigate("obligations")}
+        />
+        <Kpi
+          label="Por cobrar"
+          value={formatMoney(receivables?.total ?? 0, base)}
+          hint={`${receivables?.open ?? 0} ${receivables?.open === 1 ? "abierta" : "abiertas"}${
+            receivables?.overdue_count ? ` · ${receivables.overdue_count} ${receivables.overdue_count === 1 ? "vencida" : "vencidas"}` : ""
+          }`}
+          onClick={() => onNavigate("receivables")}
         />
       </div>
       <p className="text-xs text-muted-foreground">

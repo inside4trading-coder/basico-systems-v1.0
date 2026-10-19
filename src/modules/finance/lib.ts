@@ -6,7 +6,7 @@
 
 export type AccountKind = "bank" | "cash" | "wallet" | "processor" | "other";
 export type Frequency = "once" | "weekly" | "biweekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
-export type MovementKind = "manual" | "transfer" | "sale" | "cash_close" | "obligation";
+export type MovementKind = "manual" | "transfer" | "sale" | "cash_close" | "obligation" | "receivable" | "provider";
 export type Importance = "critical" | "high" | "medium" | "low";
 export type ObligationStatus = "active" | "paused" | "cancelled";
 export type InstanceStatus = "pending" | "partial" | "paid" | "skipped" | "void";
@@ -36,6 +36,8 @@ export const MOVEMENT_KIND_LABEL: Record<MovementKind, string> = {
   sale: "Venta POS",
   cash_close: "Cierre de caja",
   obligation: "Obligación",
+  receivable: "Cobranza",
+  provider: "Financiadora",
 };
 
 export const IMPORTANCE_LABEL: Record<Importance, string> = {

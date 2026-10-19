@@ -1,0 +1,410 @@
+/**
+ * Por cobrar: créditos a clientes y ventas con financiadoras, carga del
+ * reporte de la financiadora y su cuenta corriente. Portado de
+ * SublimeAdminReceivables (AdminCashea.tsx, basicosystems@f551478b).
+ */
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useTenant } from "@/core/tenant-context";
+import { canSupervise } from "@/core/tenant-selection";
+import { cn } from "@/lib/utils";
+import { hashFile } from "@/modules/inventory/import/files";
+import { formatMoney } from "@/modules/pos/cart";
+import { caracasToday } from "@/modules/reports/dates";
+import { usePaymentMethods, useTenantSettings } from "@/modules/settings/api";
+import { useAccounts } from "../api";
+import { readBankFile } from "../bank/parse";
+import { formatDay } from "../lib";
+import { useImportFinancing, useProviderLedger, useReceivables, useReceivablesSummary, useVoidProviderEntry, type Receivable } from "./api";
+import { NewCreditDialog, ProviderInvoiceDialog, SettleDialog } from "./dialogs";
+import { parseFinancingTable, type FinancingRow } from "./financingFile";
+import { installmentLeft, nextDue } from "./lib";
+import ReceivableSheet from "./ReceivableSheet";
+
+type Filter = "open" | "overdue" | "credit" | "financing" | "paid" | "cancelled" | "all";
+const FILTER_LABEL: Record<Filter, string> = {
+  open: "Abiertas",
+  overdue: "Vencidas",
+  credit: "Crédito",
+  financing: "Financiadoras",
+  paid: "Cobradas",
+  cancelled: "Canceladas",
+  all: "Todas",
+};
+
+const LEDGER_LABEL = { coverage: "Cobertura de cuota", service_invoice: "Factura de servicios", settlement: "Liquidación", adjustment: "Ajuste" } as const;
+
+function isOverdue(r: Receivable, today: string) {
+  return r.status === "open" && r.installments.some((i) => i.due_date < today && installmentLeft(i) > 0.005);
+}
+
+function matches(r: Receivable, f: Filter, today: string) {
+  switch (f) {
+    case "open":
+      return r.status === "open";
+    case "overdue":
+      return isOverdue(r, today);
+    case "credit":
+      return r.status === "open" && r.kind === "credit";
+    case "financing":
+      return r.status === "open" && r.kind === "financing";
+    case "paid":
+      return r.status === "paid";
+    case "cancelled":
+      return r.status === "cancelled";
+    case "all":
+      return true;
+  }
+}
+
+interface Preview {
+  fileName: string;
+  hash: string;
+  rows: FinancingRow[];
+  skipped: number;
+}
+
+export default function ReceivablesTab() {
+  const { active } = useTenant();
+  const supervisor = canSupervise(active?.role);
+  const today = caracasToday();
+  const { data: receivables = [], isLoading, error } = useReceivables();
+  const { data: summary } = useReceivablesSummary();
+  const { data: ledger = [] } = useProviderLedger();
+  const { data: accounts = [] } = useAccounts();
+  const { data: methods = [] } = usePaymentMethods();
+  const { data: settings } = useTenantSettings();
+  const importFinancing = useImportFinancing();
+  const voidEntry = useVoidProviderEntry();
+  const usable = accounts.filter((a) => a.is_active);
+  const base = settings?.base_currency ?? "USD";
+
+  const providers = useMemo(() => {
+    const names = new Set<string>();
+    methods.filter((m) => m.kind === "bnpl").forEach((m) => names.add(m.name));
+    receivables.forEach((r) => r.provider && names.add(r.provider));
+    ledger.forEach((e) => names.add(e.provider));
+    return [...names].sort();
+  }, [methods, receivables, ledger]);
+
+  const [filter, setFilter] = useState<Filter>("open");
+  const [query, setQuery] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [provider, setProvider] = useState<string | null>(null);
+  const importProvider = provider ?? providers[0] ?? "";
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [reading, setReading] = useState(false);
+  const [lastIssues, setLastIssues] = useState<{ row: number; reason: string }[]>([]);
+  const [ledgerDialog, setLedgerDialog] = useState<{ provider: string; currency: string; kind: "entry" | "settle"; balance: number } | null>(null);
+
+  const counts = useMemo(() => {
+    const c = {} as Record<Filter, number>;
+    (Object.keys(FILTER_LABEL) as Filter[]).forEach((f) => (c[f] = receivables.filter((r) => matches(r, f, today)).length));
+    return c;
+  }, [receivables, today]);
+  const needle = query.trim().toLowerCase();
+  const shown = receivables.filter(
+    (r) =>
+      matches(r, filter, today) &&
+      (!needle || [r.customer_name, r.document, r.external_ref, r.provider].some((v) => v?.toLowerCase().includes(needle))),
+  );
+  const opened = receivables.find((r) => r.id === openId) ?? null;
+
+  const balances = summary?.providers ?? [];
+  const providerCards = [...new Set([...balances.map((b) => b.provider), ...providers.filter((p) => receivables.some((r) => r.provider === p))])];
+
+  const pickFile = async (file: File) => {
+    setReading(true);
+    try {
+      const { rows, skipped } = parseFinancingTable(await readBankFile(file));
+      setPreview({ fileName: file.name, hash: await hashFile(file), rows, skipped });
+    } catch (err) {
+      toast.error("No se pudo leer el archivo", { description: (err as Error).message });
+      setPreview(null);
+    } finally {
+      setReading(false);
+    }
+  };
+
+  const confirmImport = () => {
+    if (!preview || !importProvider) return;
+    importFinancing.mutate(
+      { p_provider: importProvider, p_file_name: preview.fileName, p_file_hash: preview.hash, p_rows: preview.rows.map((r) => ({ ...r, currency: base })) },
+      {
+        onSuccess: (r) => {
+          toast.success(`${r.created} nuevas · ${r.updated} actualizadas · ${r.linked} vinculadas a ventas del POS`, {
+            description: r.issues.length ? `${r.issues.length} filas con avisos` : undefined,
+          });
+          setLastIssues(r.issues);
+          setPreview(null);
+        },
+        onError: (err) => toast.error("No se pudo cargar", { description: err.message }),
+      },
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Kpi label="Por cobrar" value={formatMoney(summary?.total ?? 0, base)} hint={`${summary?.open ?? 0} ${summary?.open === 1 ? "abierta" : "abiertas"}`} strong />
+        <Kpi
+          label="Vencido"
+          value={formatMoney(summary?.overdue_total ?? 0, base)}
+          hint={`${summary?.overdue_count ?? 0} ${summary?.overdue_count === 1 ? "cuota" : "cuotas"}`}
+          negative={(summary?.overdue_count ?? 0) > 0}
+        />
+        <Kpi label="Crédito a clientes" value={formatMoney(summary?.credit_total ?? 0, base)} />
+        <Kpi label="Con financiadoras" value={formatMoney(summary?.financing_total ?? 0, base)} />
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" onClick={() => setCreating(true)}>
+          Nuevo crédito
+        </Button>
+      </div>
+
+      <section className="space-y-3 rounded-xl border bg-card p-4">
+        <div>
+          <h2 className="text-sm">Cargar reporte de la financiadora</h2>
+          <p className="text-xs text-muted-foreground">
+            El reporte de órdenes (Excel o CSV) trae n.º de orden, cuotas y estados. Se une con las ventas del POS cobradas con ese método por número de venta o de
+            orden; las que no estén se crean.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="space-y-1">
+            <Label htmlFor="fin-provider">Financiadora</Label>
+            {providers.length > 0 ? (
+              <Select value={importProvider} onValueChange={setProvider}>
+                <SelectTrigger id="fin-provider" className="h-10 w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {providers.map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {p}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input id="fin-provider" className="h-10 w-48" value={provider ?? ""} onChange={(e) => setProvider(e.target.value)} placeholder="Nombre" />
+            )}
+          </div>
+          <Label
+            className={cn(
+              "inline-flex h-10 cursor-pointer items-center justify-center rounded-md border px-4 text-sm font-medium hover:bg-accent",
+              (!importProvider || reading) && "pointer-events-none opacity-50",
+            )}
+          >
+            {reading ? "Leyendo…" : "Elegir archivo"}
+            <input
+              type="file"
+              className="sr-only"
+              accept=".xlsx,.csv,.xls"
+              disabled={!importProvider || reading}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) void pickFile(f);
+              }}
+            />
+          </Label>
+        </div>
+        {preview && (
+          <div className="space-y-2 rounded-lg border p-3 text-xs">
+            <p className="text-sm font-semibold">{preview.fileName}</p>
+            <p>
+              {preview.rows.length} órdenes · {preview.rows.reduce((a, r) => a + r.installments.length, 0)} cuotas
+              {preview.skipped ? ` · ${preview.skipped} filas sin orden ni factura` : ""}
+            </p>
+            <ul className="divide-y rounded border">
+              {preview.rows.slice(0, 5).map((r, i) => (
+                <li key={i} className="flex justify-between gap-2 p-2">
+                  <span className="min-w-0 truncate">
+                    Orden {r.external_ref ?? "—"} · {r.document ?? "sin factura"} · {r.customer_name ?? "—"}
+                  </span>
+                  <span className="shrink-0">{r.installments.length} cuotas</span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex gap-2">
+              <Button size="sm" disabled={preview.rows.length === 0 || importFinancing.isPending} onClick={confirmImport}>
+                Cargar en {importProvider}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setPreview(null)}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+        {lastIssues.length > 0 && (
+          <ul className="max-h-32 space-y-0.5 overflow-y-auto text-xs text-muted-foreground">
+            {lastIssues.map((i, k) => (
+              <li key={k}>
+                Fila {i.row}: {i.reason}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-1" role="group" aria-label="Estado">
+          {(Object.keys(FILTER_LABEL) as Filter[]).map((f) => (
+            <Button key={f} size="sm" variant={filter === f ? "default" : "outline"} onClick={() => setFilter(f)} aria-pressed={filter === f}>
+              {FILTER_LABEL[f]} ({counts[f]})
+            </Button>
+          ))}
+        </div>
+        <Input
+          type="search"
+          aria-label="Buscar por cobrar"
+          placeholder="Cliente, venta u orden"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="h-9 min-w-0 flex-1 basis-48"
+        />
+      </div>
+
+      {isLoading && <p className="mono-cap text-xs text-muted-foreground">Cargando…</p>}
+      {error && <p className="text-sm text-destructive">No se pudo cargar: {error.message}</p>}
+      {!isLoading && shown.length === 0 && <p className="text-sm text-muted-foreground">Nada en este filtro.</p>}
+      <ul className="space-y-2">
+        {shown.map((r) => {
+          const next = nextDue(r.installments);
+          const late = isOverdue(r, today);
+          return (
+            <li key={r.id}>
+              <button
+                type="button"
+                onClick={() => setOpenId(r.id)}
+                className={cn("flex w-full items-center justify-between gap-2 rounded-xl border bg-card p-3 text-left hover:bg-accent", late && "border-destructive/50")}
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{r.customer_name ?? "Sin cliente"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {r.kind === "credit" ? "Crédito" : r.provider}
+                    {r.document ? ` · ${r.document}` : ""}
+                    {r.external_ref ? ` · orden ${r.external_ref}` : ""} · {formatDay(r.issued_on)}
+                  </p>
+                  {r.status === "open" && next && (
+                    <p className={cn("text-xs", late ? "font-semibold text-destructive" : "text-muted-foreground")}>
+                      {late ? "Vencida desde" : "Próxima cuota"} {formatDay(next.due_date)}
+                    </p>
+                  )}
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="num font-semibold">{formatMoney(r.status === "open" ? r.amount - r.collected : r.amount, r.currency)}</span>
+                  {r.status !== "open" && <Badge variant="secondary">{r.status === "paid" ? "Cobrada" : "Cancelada"}</Badge>}
+                </div>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      {providerCards.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-sm">Cuenta corriente con financiadoras</h2>
+          <p className="text-xs text-muted-foreground">
+            Lo que cubren de clientes morosos queda a tu favor; sus facturas de servicios, en contra. Se liquida con una transferencia.
+          </p>
+          <div className="grid gap-3 md:grid-cols-2">
+            {providerCards.map((p) => {
+              const rows = balances.filter((b) => b.provider === p);
+              const main = rows[0] ?? { provider: p, currency: base, balance: 0 };
+              const entries = ledger.filter((e) => e.provider === p).slice(0, 8);
+              return (
+                <div key={p} className="space-y-2 rounded-xl border bg-card p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold">{p}</p>
+                      {(rows.length ? rows : [main]).map((b) => (
+                        <p key={b.currency} className={cn("num text-lg font-bold", b.balance < 0 && "text-destructive")}>
+                          {formatMoney(b.balance, b.currency)}
+                        </p>
+                      ))}
+                      <p className="text-xs text-muted-foreground">{main.balance >= 0 ? "A tu favor" : "Le debes"}</p>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <Button size="sm" variant="outline" onClick={() => setLedgerDialog({ provider: p, currency: main.currency, kind: "entry", balance: main.balance })}>
+                        Factura o ajuste
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setLedgerDialog({ provider: p, currency: main.currency, kind: "settle", balance: main.balance })}>
+                        Liquidar
+                      </Button>
+                    </div>
+                  </div>
+                  <ul className="divide-y text-xs">
+                    {entries.map((e) => (
+                      <li key={e.id} className={cn("flex items-center justify-between gap-2 py-1.5", e.voided_at && "opacity-60")}>
+                        <span className={cn("min-w-0 truncate", e.voided_at && "line-through")}>
+                          {formatDay(e.entry_date)} · {LEDGER_LABEL[e.kind]}
+                          {e.document ? ` · ${e.document}` : ""}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1">
+                          <span className="num">{formatMoney(e.amount, e.currency)}</span>
+                          {supervisor && !e.voided_at && e.kind !== "coverage" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-1.5 text-xs"
+                              disabled={voidEntry.isPending}
+                              onClick={() => {
+                                const reason = window.prompt("Motivo para anular");
+                                if (!reason?.trim()) return;
+                                voidEntry.mutate(
+                                  { p_entry_id: e.id, p_reason: reason },
+                                  { onSuccess: () => toast.success("Anulado"), onError: (err) => toast.error("No se pudo anular", { description: err.message }) },
+                                );
+                              }}
+                            >
+                              Anular
+                            </Button>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                    {entries.length === 0 && <li className="py-1.5 text-muted-foreground">Sin movimientos.</li>}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {creating && <NewCreditDialog onClose={() => setCreating(false)} />}
+      {ledgerDialog?.kind === "entry" && (
+        <ProviderInvoiceDialog provider={ledgerDialog.provider} currency={ledgerDialog.currency} onClose={() => setLedgerDialog(null)} />
+      )}
+      {ledgerDialog?.kind === "settle" && (
+        <SettleDialog
+          provider={ledgerDialog.provider}
+          balance={ledgerDialog.balance}
+          currency={ledgerDialog.currency}
+          accounts={usable.filter((a) => a.currency === ledgerDialog.currency)}
+          onClose={() => setLedgerDialog(null)}
+        />
+      )}
+      <ReceivableSheet key={opened?.id} receivable={opened} accounts={usable} onClose={() => setOpenId(null)} />
+    </div>
+  );
+}
+
+function Kpi({ label, value, hint, strong, negative }: { label: string; value: string; hint?: string; strong?: boolean; negative?: boolean }) {
+  return (
+    <div className={cn("min-w-0 rounded-xl border bg-card p-3", strong && "border-primary/40")}>
+      <p className="mono-cap text-[10px] text-muted-foreground">{label}</p>
+      <p className={cn("num text-lg font-bold leading-tight", negative && "text-destructive")}>{value}</p>
+      {hint && <p className="truncate text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}

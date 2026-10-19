@@ -77,11 +77,11 @@ export default function AccountsTab() {
           <h2 className="text-sm">Cobros del POS</h2>
           <p className="text-xs text-muted-foreground">
             Elige a qué cuenta entra cada método. Pago móvil, punto, transferencia y similares entran al vender. El efectivo entra al cerrar la caja: lo contado
-            menos el fondo.
+            menos el fondo. Lo vendido con una financiadora (Cashea u otra) no entra a una cuenta: queda en Por cobrar.
           </p>
           <ul className="divide-y">
             {methods
-              .filter((m) => m.is_active)
+              .filter((m) => m.is_active && m.kind !== "bnpl")
               .map((m) => {
                 const options = accounts.filter((a) => a.currency === m.currency && a.is_active);
                 const current = m.account_id;

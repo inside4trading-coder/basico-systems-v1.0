@@ -52,9 +52,12 @@ export interface AttentionInput {
   /** Líneas del banco sin identificar y con posible coincidencia. */
   bankUnmatched: number;
   bankPossible: number;
+  /** Cuotas por cobrar vencidas y cuánto suman (moneda base). */
+  receivableOverdueCount: number;
+  receivableOverdueTotal: number;
 }
 
-export type AttentionTarget = "obligations" | "accounts" | "movements" | "reconciliation" | "settings";
+export type AttentionTarget = "obligations" | "receivables" | "accounts" | "movements" | "reconciliation" | "settings";
 
 export interface AttentionItem {
   id: string;
@@ -77,6 +80,15 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
       title: `${plural(input.overdueCount, "cuota vencida", "cuotas vencidas")} sin pagar`,
       detail: input.overdueTotal > 0 ? `Faltan ${formatMoney(input.overdueTotal, input.baseCurrency)}` : "Monto variable",
       target: "obligations",
+    });
+  }
+  if (input.receivableOverdueCount > 0) {
+    items.push({
+      id: "receivable_overdue",
+      tone: "warning",
+      title: `${plural(input.receivableOverdueCount, "cuota por cobrar vencida", "cuotas por cobrar vencidas")}`,
+      detail: `Por cobrar ${formatMoney(input.receivableOverdueTotal, input.baseCurrency)}`,
+      target: "receivables",
     });
   }
   if (input.negativeAccounts.length > 0) {
