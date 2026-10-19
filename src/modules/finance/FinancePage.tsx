@@ -1,34 +1,40 @@
 /**
- * Administración: saldos, libro de movimientos, obligaciones y cuentas.
- * Portado de src/pages/sublime/admin/SublimeAdminScreens.tsx
+ * Administración: resumen de tesorería, libro de movimientos, obligaciones,
+ * cuentas y catálogo. Portado de src/pages/sublime/admin/SublimeAdminScreens.tsx
  * (basicosystems@f551478b).
  */
+import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import AppShell from "@/components/AppShell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTenant } from "@/core/tenant-context";
 import { canSeeReports } from "@/core/tenant-selection";
 import AccountsTab from "./AccountsTab";
+import CatalogTab from "./CatalogTab";
 import MovementsTab from "./MovementsTab";
 import ObligationsTab from "./obligations/ObligationsTab";
-import SummaryTab from "./SummaryTab";
+import SummaryTab, { type FinanceTab } from "./SummaryTab";
+
+type Tab = "summary" | FinanceTab | "catalog";
 
 export default function FinancePage() {
   const { active } = useTenant();
+  const [tab, setTab] = useState<Tab>("summary");
   if (!canSeeReports(active?.role)) return <Navigate to="/" replace />;
 
   return (
     <AppShell wide>
       <h1 className="text-2xl">Administración</h1>
-      <Tabs defaultValue="summary" className="space-y-4">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="space-y-4">
         <TabsList className="h-auto flex-wrap">
           <TabsTrigger value="summary">Resumen</TabsTrigger>
           <TabsTrigger value="movements">Movimientos</TabsTrigger>
           <TabsTrigger value="obligations">Obligaciones</TabsTrigger>
           <TabsTrigger value="accounts">Cuentas</TabsTrigger>
+          <TabsTrigger value="catalog">Categorías</TabsTrigger>
         </TabsList>
         <TabsContent value="summary">
-          <SummaryTab />
+          <SummaryTab onNavigate={setTab} />
         </TabsContent>
         <TabsContent value="movements">
           <MovementsTab />
@@ -38,6 +44,9 @@ export default function FinancePage() {
         </TabsContent>
         <TabsContent value="accounts">
           <AccountsTab />
+        </TabsContent>
+        <TabsContent value="catalog">
+          <CatalogTab />
         </TabsContent>
       </Tabs>
     </AppShell>
