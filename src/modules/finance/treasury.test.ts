@@ -26,6 +26,8 @@ const calm: AttentionInput = {
   rate: "ok",
   unconvertedMovements: 0,
   unconvertedCurrencies: [],
+  bankUnmatched: 0,
+  bankPossible: 0,
 };
 
 describe("requiere tu atención", () => {
@@ -51,6 +53,13 @@ describe("requiere tu atención", () => {
   it("sin tasa no se puede convertir: aviso fuerte", () => {
     const [item] = attentionItems({ ...calm, rate: "missing" });
     expect(item).toMatchObject({ id: "rate", tone: "critical", target: "settings" });
+  });
+
+  it("líneas del banco por conciliar llevan a la conciliación", () => {
+    const [item] = attentionItems({ ...calm, bankUnmatched: 2, bankPossible: 1 });
+    expect(item).toMatchObject({ id: "bank", tone: "warning", target: "reconciliation" });
+    expect(item.title).toBe("3 movimientos del banco por conciliar");
+    expect(item.detail).toBe("2 sin identificar · 1 posible coincidencia");
   });
 
   it("montos que no se pudieron convertir", () => {
