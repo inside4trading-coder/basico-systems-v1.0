@@ -39,6 +39,8 @@ import {
   type CartLine,
 } from "./cart";
 import { CashMovementDialog, CloseSessionDialog } from "./CashDialogs";
+import { HeldListDialog, HoldDialog } from "./HeldCarts";
+import { notifyHoldError, useHeldCarts, useHoldCart, useResumeCart } from "./heldApi";
 import OpenSessionScreen from "./OpenSessionScreen";
 import PaymentDialog, { type PaymentResult } from "./PaymentDialog";
 import ReceiptDialog from "./ReceiptDialog";
@@ -129,6 +131,11 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
   const [paying, setPaying] = useState(false);
   const [moving, setMoving] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [holding, setHolding] = useState(false);
+  const [heldOpen, setHeldOpen] = useState(false);
+  const held = useHeldCarts<CartDraft>(session.location_id, offline.online);
+  const hold = useHoldCart(session.location_id);
+  const resume = useResumeCart<CartDraft>(session.location_id);
   const [history, setHistory] = useState(false);
   const [receipt, setReceipt] = useState<{ saleId: string } | { local: SaleReceipt } | null>(null);
   const [localResults, setLocalResults] = useState(false);
@@ -360,13 +367,23 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
         </section>
 
         <section className="space-y-3 rounded-xl border bg-card p-3 lg:sticky lg:top-4 lg:self-start" aria-label="Carrito">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-1">
             <h2 className="text-base">Carrito</h2>
-            {draft.lines.length > 0 && (
-              <Button size="sm" variant="ghost" onClick={() => setDraft(EMPTY_DRAFT)}>
-                Vaciar
+            <div className="flex flex-wrap gap-1">
+              <Button size="sm" variant="outline" disabled={!offline.online} onClick={() => setHeldOpen(true)}>
+                En espera{held.data?.length ? ` (${held.data.length})` : ""}
               </Button>
-            )}
+              {draft.lines.length > 0 && (
+                <>
+                  <Button size="sm" variant="outline" disabled={!offline.online} onClick={() => setHolding(true)}>
+                    Apartar
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setDraft(EMPTY_DRAFT)}>
+                    Vaciar
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
           {draft.lines.length === 0 && <p className="text-sm text-muted-foreground">Escanea o busca un producto para empezar.</p>}
           <ul className="space-y-2">
@@ -432,6 +449,47 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           setReceipt(null);
           searchRef.current?.focus();
         }}
+      />
+      {holding && (
+        <HoldDialog
+          open
+          onOpenChange={setHolding}
+          defaultLabel=""
+          busy={hold.isPending}
+          onConfirm={(label) =>
+            hold.mutate(
+              { label, payload: draft, items: draft.lines.length, total: totals.total },
+              {
+                onSuccess: () => {
+                  toast.success(`Carrito de ${label} en espera`);
+                  setHolding(false);
+                  setDraft(EMPTY_DRAFT);
+                  setHits([]);
+                  searchRef.current?.focus();
+                },
+                onError: notifyHoldError,
+              },
+            )
+          }
+        />
+      )}
+      <HeldListDialog
+        open={heldOpen}
+        onOpenChange={setHeldOpen}
+        carts={held.data ?? []}
+        currency={base}
+        busy={resume.isPending}
+        cartHasLines={draft.lines.length > 0}
+        onResume={(c) =>
+          resume.mutate(c.id, {
+            onSuccess: (payload) => {
+              setDraft({ ...EMPTY_DRAFT, ...payload });
+              setHeldOpen(false);
+              toast.success(`Retomado el carrito de ${c.label}`);
+            },
+            onError: notifyHoldError,
+          })
+        }
       />
       <SalesSheet
         open={history}
