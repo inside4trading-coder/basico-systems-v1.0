@@ -295,6 +295,7 @@ declare
   v_obl uuid;
   v_inst uuid;
   v_mov uuid;
+  v_batch uuid;
 begin
   foreach t in array array[
     'aaaaaaaa-1111-1111-1111-111111111111',
@@ -356,6 +357,12 @@ begin
       values (t, v_obl, current_date, 'USD') returning id into v_inst;
     insert into public.finance_movements (tenant_id, account_id, direction, kind, amount, currency, occurred_on, obligation_instance_id)
       values (t, v_acc, 'out', 'obligation', 1, 'USD', current_date, v_inst) returning id into v_mov;
+    insert into public.bank_import_profiles (tenant_id, account_id, name, col_date, col_amount)
+      values (t, v_acc, 'Perfil aislamiento', 'A', 'B');
+    insert into public.bank_import_batches (tenant_id, account_id, file_name)
+      values (t, v_acc, 'aislamiento.csv') returning id into v_batch;
+    insert into public.bank_statement_lines (tenant_id, account_id, batch_id, line_date, direction, amount, currency, identity_key)
+      values (t, v_acc, v_batch, current_date, 'in', 1, 'USD', 'aislamiento');
   end loop;
 end;
 $$;

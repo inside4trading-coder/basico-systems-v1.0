@@ -1,6 +1,6 @@
 /**
  * Administración: resumen de tesorería, libro de movimientos, obligaciones,
- * cuentas y catálogo. Portado de src/pages/sublime/admin/SublimeAdminScreens.tsx
+ * conciliación bancaria, cuentas y catálogo. Portado de src/pages/sublime/admin/SublimeAdminScreens.tsx
  * (basicosystems@f551478b).
  */
 import { useState } from "react";
@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTenant } from "@/core/tenant-context";
 import { canSeeReports } from "@/core/tenant-selection";
 import AccountsTab from "./AccountsTab";
+import ReconciliationTab from "./bank/ReconciliationTab";
 import CatalogTab from "./CatalogTab";
 import MovementsTab from "./MovementsTab";
 import ObligationsTab from "./obligations/ObligationsTab";
@@ -30,6 +31,7 @@ export default function FinancePage() {
           <TabsTrigger value="summary">Resumen</TabsTrigger>
           <TabsTrigger value="movements">Movimientos</TabsTrigger>
           <TabsTrigger value="obligations">Obligaciones</TabsTrigger>
+          <TabsTrigger value="reconciliation">Conciliación</TabsTrigger>
           <TabsTrigger value="accounts">Cuentas</TabsTrigger>
           <TabsTrigger value="catalog">Categorías</TabsTrigger>
         </TabsList>
@@ -41,6 +43,9 @@ export default function FinancePage() {
         </TabsContent>
         <TabsContent value="obligations">
           <ObligationsTab />
+        </TabsContent>
+        <TabsContent value="reconciliation">
+          <ReconciliationTab />
         </TabsContent>
         <TabsContent value="accounts">
           <AccountsTab />

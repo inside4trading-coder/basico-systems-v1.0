@@ -49,9 +49,12 @@ export interface AttentionInput {
   rate: "ok" | "stale" | "missing";
   unconvertedMovements: number;
   unconvertedCurrencies: string[];
+  /** Líneas del banco sin identificar y con posible coincidencia. */
+  bankUnmatched: number;
+  bankPossible: number;
 }
 
-export type AttentionTarget = "obligations" | "accounts" | "movements" | "settings";
+export type AttentionTarget = "obligations" | "accounts" | "movements" | "reconciliation" | "settings";
 
 export interface AttentionItem {
   id: string;
@@ -105,6 +108,21 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
       title: "Montos sin convertir",
       detail: `${parts.join(" y ")} no entran en los totales`,
       target: "movements",
+    });
+  }
+  if (input.bankUnmatched > 0 || input.bankPossible > 0) {
+    const total = input.bankUnmatched + input.bankPossible;
+    items.push({
+      id: "bank",
+      tone: "warning",
+      title: `${plural(total, "movimiento del banco", "movimientos del banco")} por conciliar`,
+      detail: [
+        input.bankUnmatched > 0 ? `${input.bankUnmatched} sin identificar` : null,
+        input.bankPossible > 0 ? plural(input.bankPossible, "posible coincidencia", "posibles coincidencias") : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      target: "reconciliation",
     });
   }
   if (input.dueSoon > 0) {

@@ -12,6 +12,7 @@ import { formatMoney } from "@/modules/pos/cart";
 import { caracasToday } from "@/modules/reports/dates";
 import { useCurrentRate, usePaymentMethods } from "@/modules/settings/api";
 import AccountSheet from "./AccountSheet";
+import { useBankPending } from "./bank/api";
 import { useTreasurySummary, type CategoryTotal, type TreasuryAccount } from "./api";
 import { ACCOUNT_KIND_LABEL, MOVEMENT_KIND_LABEL, formatDay } from "./lib";
 import { TREASURY_PERIOD_LABEL, attentionItems, shareOf, treasuryRange, type AttentionTarget, type TreasuryPeriod } from "./treasury";
@@ -31,6 +32,7 @@ export default function SummaryTab({ onNavigate }: { onNavigate: (tab: FinanceTa
   const { data, isLoading, error } = useTreasurySummary(range.from, range.to);
   const { data: rate } = useCurrentRate();
   const { data: methods = [] } = usePaymentMethods();
+  const { data: bank } = useBankPending();
   const [openId, setOpenId] = useState<string | null>(null);
 
   if (isLoading) return <p className="mono-cap text-xs text-muted-foreground">Cargando…</p>;
@@ -51,6 +53,8 @@ export default function SummaryTab({ onNavigate }: { onNavigate: (tab: FinanceTa
     rate: !data.local_currency ? "ok" : !data.rate ? "missing" : rate?.stale ? "stale" : "ok",
     unconvertedMovements: data.period.unconverted,
     unconvertedCurrencies: data.liquidity.unconverted,
+    bankUnmatched: bank?.unmatched ?? 0,
+    bankPossible: bank?.possible ?? 0,
   });
   const periodHint = range.from === null ? "Desde el inicio" : range.from === range.to ? formatDay(range.to) : `${formatDay(range.from)} – ${formatDay(range.to)}`;
 
