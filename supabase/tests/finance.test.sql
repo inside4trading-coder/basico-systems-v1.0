@@ -188,7 +188,7 @@ select results_eq(
 select is((select amount from public.obligation_instances where id = current_setting('test.overdue')::uuid), 300::numeric, 'la pagada conserva su monto');
 
 -- Desactivar quita las cuotas futuras pendientes.
-update public.obligations set is_active = false where id = 'aaaaaaaa-7777-7777-7777-777777777771';
+update public.obligations set status = 'paused' where id = 'aaaaaaaa-7777-7777-7777-777777777771';
 select public.refresh_obligations();
 select is((select count(*)::int from public.obligation_instances where status = 'pending' and due_date >= current_date), 0, 'sin cuotas futuras al desactivarla');
 

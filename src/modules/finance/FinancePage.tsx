@@ -10,7 +10,7 @@ import { useTenant } from "@/core/tenant-context";
 import { canSeeReports } from "@/core/tenant-selection";
 import AccountsTab from "./AccountsTab";
 import MovementsTab from "./MovementsTab";
-import ObligationsTab from "./ObligationsTab";
+import ObligationsTab from "./obligations/ObligationsTab";
 import SummaryTab from "./SummaryTab";
 
 export default function FinancePage() {

@@ -6,7 +6,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/core/supabase";
 import { useTenant } from "@/core/tenant-context";
-import type { AccountKind, Frequency, MovementKind } from "./lib";
+import { getActiveTenantId } from "@/core/tenant";
+import type { AccountKind, Frequency, Importance, InstanceStatus, MovementKind, ObligationStatus } from "./lib";
 
 export interface FinanceAccount {
   id: string;
@@ -37,6 +38,8 @@ export interface FinanceMovement {
   voided_at: string | null;
   void_reason: string | null;
   created_at: string;
+  obligation_instance_id: string | null;
+  obligation_amount: number | null;
 }
 
 export interface Obligation {
@@ -50,7 +53,11 @@ export interface Obligation {
   start_date: string;
   end_date: string | null;
   account_id: string | null;
-  is_active: boolean;
+  status: ObligationStatus;
+  importance: Importance;
+  responsible: string | null;
+  payment_method: string | null;
+  is_fixed_expense: boolean;
   notes: string | null;
 }
 
@@ -60,16 +67,31 @@ export interface ObligationInstance {
   due_date: string;
   amount: number | null;
   currency: string;
-  status: "pending" | "paid" | "skipped";
+  status: InstanceStatus;
   paid_on: string | null;
   movement_id: string | null;
   note: string | null;
+  paid_amount: number;
+  settled: boolean;
+  custom: boolean;
+  proof_paths: string[];
+  void_reason: string | null;
+}
+
+export interface ObligationEvent {
+  id: string;
+  obligation_id: string;
+  instance_id: string | null;
+  action: string;
+  detail: Record<string, unknown>;
+  actor: string | null;
+  created_at: string;
 }
 
 export interface FinanceSummary {
   accounts: { id: string; name: string; kind: AccountKind; currency: string; is_active: boolean; balance: number; last_movement_on: string | null }[];
   overdue: { count: number; by_currency: Record<string, number> };
-  upcoming: { id: string; obligation_id: string; name: string; due_date: string; amount: number | null; currency: string }[];
+  upcoming: { id: string; obligation_id: string; name: string; due_date: string; amount: number | null; currency: string; importance: Importance; status: InstanceStatus }[];
 }
 
 function useTenantKey() {
@@ -162,7 +184,7 @@ export function useMovements(filters: MovementFilters) {
       if (filters.accountId) q = q.eq("account_id", filters.accountId);
       const { data, error } = await q;
       if (error) throw asError(error);
-      return (data ?? []).map((m) => ({ ...m, amount: Number(m.amount) })) as FinanceMovement[];
+      return (data ?? []).map((m) => ({ ...m, amount: Number(m.amount), obligation_amount: num(m.obligation_amount) })) as FinanceMovement[];
     },
   });
 }
@@ -230,7 +252,7 @@ export function useObligations() {
   return useQuery({
     queryKey: ["fin", tenant, "obligations"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("obligations").select("*").order("is_active", { ascending: false }).order("name");
+      const { data, error } = await supabase.from("obligations").select("*").order("status").order("name");
       if (error) throw asError(error);
       return (data ?? []).map((o) => ({ ...o, amount: num(o.amount) })) as Obligation[];
     },
@@ -251,29 +273,175 @@ export function useSaveObligation() {
   });
 }
 
-/** Cuotas pendientes (todas) y resueltas de los últimos 60 días. */
-export function useInstances(today: string) {
+const mapInstance = (i: Record<string, unknown>) =>
+  ({ ...i, amount: num(i.amount), paid_amount: Number(i.paid_amount ?? 0), proof_paths: (i.proof_paths as string[] | null) ?? [] }) as ObligationInstance;
+
+/**
+ * Cuotas de un rango (el mes del calendario) más todas las abiertas, para
+ * vencidas y alertas. Antes se generan las que falten hasta el fin del rango.
+ */
+export function useInstances(from: string, to: string) {
   const tenant = useTenantKey();
   return useQuery({
-    queryKey: ["fin", tenant, "instances", today],
+    queryKey: ["fin", tenant, "instances", from, to],
     queryFn: async () => {
-      const since = new Date(Date.parse(`${today}T00:00:00Z`) - 60 * 86_400_000).toISOString().slice(0, 10);
+      const refresh = await supabase.rpc("refresh_obligations", { p_until: to });
+      if (refresh.error) throw asError(refresh.error);
       const { data, error } = await supabase
         .from("obligation_instances")
         .select("*")
-        .or(`status.eq.pending,due_date.gte.${since}`)
+        .or(`and(due_date.gte.${from},due_date.lte.${to}),status.in.(pending,partial)`)
         .order("due_date")
-        .limit(1000);
+        .limit(2000);
       if (error) throw asError(error);
-      return (data ?? []).map((i) => ({ ...i, amount: num(i.amount) })) as ObligationInstance[];
+      return (data ?? []).map(mapInstance);
     },
+  });
+}
+
+export function useObligation(id: string | undefined) {
+  const tenant = useTenantKey();
+  return useQuery({
+    enabled: Boolean(id),
+    queryKey: ["fin", tenant, "obligation", id],
+    queryFn: async () => {
+      const [o, inst, events] = await Promise.all([
+        supabase.from("obligations").select("*").eq("id", id!).maybeSingle(),
+        supabase.from("obligation_instances").select("*").eq("obligation_id", id!).order("due_date", { ascending: false }).limit(500),
+        supabase.from("obligation_events").select("*").eq("obligation_id", id!).order("created_at", { ascending: false }).limit(300),
+      ]);
+      if (o.error) throw asError(o.error);
+      if (inst.error) throw asError(inst.error);
+      if (events.error) throw asError(events.error);
+      return {
+        obligation: o.data ? ({ ...o.data, amount: num(o.data.amount) } as Obligation) : null,
+        instances: (inst.data ?? []).map(mapInstance),
+        events: (events.data ?? []) as ObligationEvent[],
+      };
+    },
+  });
+}
+
+/** Pagos (salidas del libro) de una cuota. */
+export function useInstancePayments(instanceId: string | null) {
+  const tenant = useTenantKey();
+  return useQuery({
+    enabled: Boolean(instanceId),
+    queryKey: ["fin", tenant, "instance_payments", instanceId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("finance_movements")
+        .select("*")
+        .eq("obligation_instance_id", instanceId!)
+        .order("occurred_on", { ascending: false });
+      if (error) throw asError(error);
+      return (data ?? []).map((m) => ({ ...m, amount: Number(m.amount), obligation_amount: num(m.obligation_amount) })) as FinanceMovement[];
+    },
+  });
+}
+
+const PROOFS_BUCKET = "finance-proofs";
+
+/** Sube comprobantes a <negocio>/<cuota>/ y los registra en la cuota. */
+export async function uploadProofs(instanceId: string, files: File[]): Promise<void> {
+  const tenant = getActiveTenantId();
+  if (!tenant || files.length === 0) return;
+  const paths: string[] = [];
+  for (const file of files) {
+    const safe = file.name.normalize("NFD").replace(/[^\w.-]+/g, "_").slice(-80);
+    const path = `${tenant}/${instanceId}/${Date.now()}-${safe}`;
+    const { error } = await supabase.storage.from(PROOFS_BUCKET).upload(path, file, { contentType: file.type, upsert: false });
+    if (error) throw new Error(`No se pudo subir ${file.name}: ${error.message}`);
+    paths.push(path);
+  }
+  const { error } = await supabase.rpc("attach_obligation_proofs", { p_instance_id: instanceId, p_paths: paths });
+  if (error) throw asError(error);
+}
+
+export async function proofUrl(path: string): Promise<string> {
+  const { data, error } = await supabase.storage.from(PROOFS_BUCKET).createSignedUrl(path, 600);
+  if (error || !data) throw asError(error);
+  return data.signedUrl;
+}
+
+export function useAttachProofs() {
+  const invalidate = useInvalidateFinance();
+  return useMutation({
+    mutationFn: ({ instanceId, files }: { instanceId: string; files: File[] }) => uploadProofs(instanceId, files),
+    onSuccess: invalidate,
+  });
+}
+
+export function useVoidInstance() {
+  const invalidate = useInvalidateFinance();
+  return useMutation({
+    mutationFn: async ({ instanceId, reason }: { instanceId: string; reason: string }) => {
+      const { error } = await supabase.rpc("void_obligation_instance", { p_instance_id: instanceId, p_reason: reason });
+      if (error) throw asError(error);
+    },
+    onSuccess: invalidate,
+  });
+}
+
+export function useReopenInstance() {
+  const invalidate = useInvalidateFinance();
+  return useMutation({
+    mutationFn: async (instanceId: string) => {
+      const { error } = await supabase.rpc("reopen_obligation_instance", { p_instance_id: instanceId });
+      if (error) throw asError(error);
+    },
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateInstance() {
+  const invalidate = useInvalidateFinance();
+  return useMutation({
+    mutationFn: async (input: { instanceId: string; amount: number | null; dueDate: string; note?: string }) => {
+      const { error } = await supabase.rpc("update_obligation_instance", {
+        p_instance_id: input.instanceId,
+        p_amount: input.amount,
+        p_due_date: input.dueDate,
+        p_note: input.note ?? null,
+      });
+      if (error) throw asError(error);
+    },
+    onSuccess: invalidate,
+  });
+}
+
+export function useAddInstance() {
+  const invalidate = useInvalidateFinance();
+  return useMutation({
+    mutationFn: async (input: { obligationId: string; dueDate: string; amount: number | null; note?: string }) => {
+      const { error } = await supabase.rpc("add_obligation_instance", {
+        p_obligation_id: input.obligationId,
+        p_due_date: input.dueDate,
+        p_amount: input.amount,
+        p_note: input.note ?? null,
+      });
+      if (error) throw asError(error);
+    },
+    onSuccess: invalidate,
   });
 }
 
 export function usePayInstance() {
   const invalidate = useInvalidateFinance();
   return useMutation({
-    mutationFn: async (input: { instanceId: string; accountId: string; amount: number; paidOn: string; reference?: string; note?: string }) => {
+    mutationFn: async (input: {
+      instanceId: string;
+      accountId: string;
+      amount: number;
+      paidOn: string;
+      reference?: string;
+      note?: string;
+      /** Cuánto cubre en la moneda de la cuota, si la cuenta está en otra. */
+      applied?: number | null;
+      /** Darla por pagada aunque no alcance. */
+      settle?: boolean;
+      files?: File[];
+    }) => {
       const { error } = await supabase.rpc("pay_obligation", {
         p_instance_id: input.instanceId,
         p_account_id: input.accountId,
@@ -281,8 +449,12 @@ export function usePayInstance() {
         p_paid_on: input.paidOn,
         p_reference: input.reference ?? null,
         p_note: input.note ?? null,
+        p_applied: input.applied ?? null,
+        p_settle: input.settle ?? false,
       });
       if (error) throw asError(error);
+      // El pago ya quedó; si falla un comprobante se avisa, pero el pago no se pierde.
+      if (input.files?.length) await uploadProofs(input.instanceId, input.files);
     },
     onSuccess: invalidate,
   });
