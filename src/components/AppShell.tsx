@@ -7,7 +7,7 @@ import { useTenant } from "@/core/tenant-context";
 import { canManageTeam, canSeeReports, canSupervise, type TenantRole } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
 import { useCurrentRate } from "@/modules/settings/api";
-import { useRateAutoSync } from "@/modules/settings/rateSync";
+import { useRateAutoSync } from "@/modules/settings/useRateAutoSync";
 
 export const ROLE_LABELS: Record<TenantRole, string> = {
   owner: "Dueño",
