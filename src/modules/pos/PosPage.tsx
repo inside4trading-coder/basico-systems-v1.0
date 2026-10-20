@@ -52,6 +52,7 @@ import { useOfflinePos } from "./offline/useOfflinePos";
 import { useScanner } from "./useScanner";
 import { parseAmount, usePosMoney } from "./usePosMoney";
 import ManualItemDialog from "./ManualItemDialog";
+import SessionAlerts from "./SessionAlerts";
 
 function readStorage<T>(key: string, fallback: T): T {
   try {
@@ -316,6 +317,12 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
         </div>
       </div>
 
+      <SessionAlerts
+        openedAt={session.opened_at}
+        reminderTime={tenantSettings?.closing_reminder_time}
+        canClose={offline.online}
+        onClose={() => setClosing(true)}
+      />
       <OfflineBar offline={offline} sessionId={session.id} />
 
       {stale && offline.online && (
