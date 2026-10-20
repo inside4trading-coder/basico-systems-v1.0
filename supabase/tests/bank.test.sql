@@ -167,7 +167,7 @@ select is((select count(*)::int from public.bank_statement_lines), 0, 'ni ve las
 select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-0000-0000-000000000001","role":"authenticated"}', true);
 select set_config('request.headers', '{"x-tenant-id":"bbbbbbbb-1111-1111-1111-111111111111"}', true);
 reset role;
-select set_config('test.lineA', (select id::text from public.bank_statement_lines where row_number = 4), true);
+select set_config('test.lineA', (select id::text from public.bank_statement_lines where row_number = 4 and tenant_id = 'aaaaaaaa-1111-1111-1111-111111111111'), true);
 set local role authenticated;
 select throws_ok(
   format($$ select public.ignore_bank_line(%L, 'x') $$, current_setting('test.lineA')),
