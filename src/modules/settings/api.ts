@@ -28,6 +28,15 @@ export interface TenantSettings {
   receipt_footer: string | null;
   /** "HH:MM:SS" desde la que el POS recuerda cerrar la caja; null = sin recordatorio. */
   closing_reminder_time: string | null;
+  /** El POS no cobra sin origen de la venta. */
+  channel_required: boolean;
+}
+
+export interface SalesChannel {
+  id: string;
+  name: string;
+  is_active: boolean;
+  position: number;
 }
 
 export interface TaxRate {
@@ -116,7 +125,7 @@ export function useTenantSettings() {
     queryFn: withOfflineCache(`tenant:${tenant}`, async () => {
       const { data, error } = await supabase
         .from("tenants")
-        .select("id, name, base_currency, local_currency, rate_source, is_special_taxpayer, prices_include_tax, igtf_rate, legal_name, tax_id, address, phone, receipt_footer, closing_reminder_time")
+        .select("id, name, base_currency, local_currency, rate_source, is_special_taxpayer, prices_include_tax, igtf_rate, legal_name, tax_id, address, phone, receipt_footer, closing_reminder_time, channel_required")
         .eq("id", tenant)
         .single();
       if (error) throw error;
@@ -207,6 +216,36 @@ export function usePaymentMethods() {
       if (error) throw error;
       return (data ?? []) as PaymentMethod[];
     }),
+  });
+}
+
+/** Orígenes de venta (tienda, WhatsApp…). Con copia local: el POS los usa sin conexión. */
+export function useSalesChannels() {
+  const tenant = useTenantKey();
+  return useQuery({
+    queryKey: ["cfg", tenant, "sales_channels"],
+    queryFn: withOfflineCache(`sales_channels:${tenant}`, async () => {
+      const { data, error } = await supabase.from("sales_channels").select("id, name, is_active, position").order("position").order("name");
+      if (error) throw error;
+      return (data ?? []) as SalesChannel[];
+    }),
+  });
+}
+
+export function useSaveSalesChannel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id?: string; name?: string; is_active?: boolean; position?: number }) => {
+      const { id, ...fields } = input;
+      const { error } = id
+        ? await supabase.from("sales_channels").update(fields).eq("id", id)
+        : await supabase.from("sales_channels").insert({ name: fields.name?.trim(), position: fields.position ?? 99 });
+      if (error) {
+        if (error.code === "23505") throw new Error("Ya existe un origen con ese nombre.");
+        throw asError(error);
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cfg"] }),
   });
 }
 

@@ -72,6 +72,8 @@ export interface RegisterSaleInput {
   note?: string | null;
   /** Solo ventas cobradas sin conexión: hora del cobro (ISO). */
   soldAt?: string;
+  /** Origen de la venta (tienda, WhatsApp…). */
+  channelId?: string | null;
 }
 
 export interface RegisterSaleResult {
@@ -200,6 +202,7 @@ export async function registerSale(input: RegisterSaleInput): Promise<RegisterSa
     p_customer: input.customer ?? null,
     p_note: input.note ?? null,
     ...(input.soldAt ? { p_sold_at: input.soldAt } : {}),
+    ...(input.channelId ? { p_channel_id: input.channelId } : {}),
   });
   if (error) throw asError(error);
   return data as RegisterSaleResult;
