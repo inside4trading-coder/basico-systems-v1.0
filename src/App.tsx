@@ -20,6 +20,7 @@ import ReportsPage from "@/modules/reports/ReportsPage";
 import FinancePage from "@/modules/finance/FinancePage";
 import ObligationDetailPage from "@/modules/finance/obligations/ObligationDetailPage";
 import ModuleGate from "@/components/ModuleGate";
+import CustomersPage from "@/modules/customers/CustomersPage";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -114,6 +115,16 @@ export default function App() {
                   <RequireTenant>
                     <ModuleGate module="pos">
                       <PosPage />
+                    </ModuleGate>
+                  </RequireTenant>
+                }
+              />
+              <Route
+                path="/clientes"
+                element={
+                  <RequireTenant>
+                    <ModuleGate module="pos">
+                      <CustomersPage />
                     </ModuleGate>
                   </RequireTenant>
                 }

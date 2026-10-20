@@ -3,6 +3,7 @@
  * se arma qué se vende y cómo se paga. Portado de useSublimeCashSession.ts y
  * del cobro de SublimePosApp.tsx (basicosystems@f551478b).
  */
+import type { SaleCustomer } from "@/modules/customers/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/core/supabase";
 import { useTenant } from "@/core/tenant-context";
@@ -70,7 +71,7 @@ export interface RegisterSaleInput {
   payments: SalePaymentInput[];
   cartDiscount?: number;
   change?: { currency: string; amount: number } | null;
-  customer?: { name?: string; doc?: string } | null;
+  customer?: SaleCustomer | null;
   note?: string | null;
   /** Solo ventas cobradas sin conexión: hora del cobro (ISO). */
   soldAt?: string;

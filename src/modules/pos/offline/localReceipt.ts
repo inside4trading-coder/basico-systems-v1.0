@@ -4,6 +4,7 @@
  * la tasa que el dispositivo tenía guardada; el número definitivo llega al
  * sincronizar.
  */
+import type { SaleCustomer } from "@/modules/customers/api";
 import type { SaleReceipt } from "../api";
 import { cartTotals, igtfOf, round2, toBase, type CartLine, type MoneySettings, type PaymentDraft, type PaymentMethodLike } from "../cart";
 import { provisionalNumber } from "./queue";
@@ -18,7 +19,7 @@ export interface LocalReceiptInput {
   methods: (PaymentMethodLike & { name: string })[];
   money: MoneySettings;
   change: { currency: string; amount: number } | null;
-  customer: { name?: string; doc?: string } | null;
+  customer: SaleCustomer | null;
   note: string | null;
 }
 
