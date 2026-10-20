@@ -49,6 +49,7 @@ import SalesSheet from "./sales/SalesSheet";
 import OfflineBar from "./offline/OfflineBar";
 import { buildLocalReceipt } from "./offline/localReceipt";
 import { useOfflinePos } from "./offline/useOfflinePos";
+import { ScanButton } from "@/core/scanner/CameraScanner";
 import { useScanner } from "./useScanner";
 import { parseAmount, usePosMoney } from "./usePosMoney";
 import ManualItemDialog from "./ManualItemDialog";
@@ -380,17 +381,20 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
 
       <div className="grid gap-4 lg:grid-cols-[1fr_420px]">
         <section className="space-y-3" aria-label="Catálogo">
-          <form onSubmit={submitSearch} className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              ref={searchRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Escanea o busca por código, nombre o atributo"
-              className="h-12 pl-9 text-base"
-              aria-label="Buscar producto"
-              autoFocus
-            />
+          <form onSubmit={submitSearch} className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                ref={searchRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Escanea o busca por código, nombre o atributo"
+                className="h-12 pl-9 text-base"
+                aria-label="Buscar producto"
+                autoFocus
+              />
+            </div>
+            <ScanButton className="h-12" showLabel onScan={(code) => runSearch(code, true)} />
           </form>
           <Button variant="outline" size="sm" onClick={() => setManualOpen(true)}>
             Agregar concepto

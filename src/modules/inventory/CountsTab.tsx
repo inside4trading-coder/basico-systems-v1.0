@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { ScanButton } from "@/core/scanner/CameraScanner";
+import { useScanner } from "@/core/scanner/useScanner";
 import { supabase } from "@/core/supabase";
 import { useTenant } from "@/core/tenant-context";
 import { canEditCatalog } from "@/core/tenant-selection";
@@ -198,9 +200,8 @@ function CountView({ count, locationName, supervisor, onBack }: { count: Count; 
   const open = count.status === "open";
   const fail = (title: string) => (err: Error) => toast.error(title, { description: err.message });
 
-  const onScan = async (event: FormEvent) => {
-    event.preventDefault();
-    const q = scan.trim();
+  const addOne = async (raw: string) => {
+    const q = raw.trim();
     if (!q) return;
     const { data, error } = await supabase.rpc("catalog_lookup", { p_query: q, p_limit: 2 });
     if (error) return toast.error(error.message);
@@ -212,6 +213,14 @@ function CountView({ count, locationName, supervisor, onBack }: { count: Count; 
     );
     setScan("");
   };
+  const onScan = (event: FormEvent) => {
+    event.preventDefault();
+    addOne(scan);
+  };
+  useScanner((code) => {
+    setScan("");
+    addOne(code);
+  }, open);
 
   return (
     <div className="space-y-3">
@@ -233,6 +242,7 @@ function CountView({ count, locationName, supervisor, onBack }: { count: Count; 
       {open && (
         <form onSubmit={onScan} className="flex gap-2">
           <Input value={scan} onChange={(e) => setScan(e.target.value)} placeholder="Escanea o escribe el código: suma 1" aria-label="Escanear producto" autoFocus />
+          <ScanButton onScan={addOne} />
           <Button type="submit" variant="outline">
             Sumar
           </Button>

@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScanButton } from "@/core/scanner/CameraScanner";
+import { useScanner } from "@/core/scanner/useScanner";
 import { lookupCatalog, useLocations, useStockOf } from "./api";
 import { formatQty, MATCH_KIND_LABEL, variantLabel, type LookupResult } from "./lib";
 
@@ -57,7 +59,10 @@ export function useDefaultLocation(): [string, (id: string) => void] {
   return [value, setValue];
 }
 
-/** Buscador para pistola o texto: Enter busca; un único resultado se elige solo. */
+/**
+ * Buscador para pistola, cámara o texto: Enter busca y una lectura de pistola
+ * (con o sin Enter al final) busca sola; un único resultado se elige solo.
+ */
 export function VariantFinder({
   onPick,
   autoFocus,
@@ -71,8 +76,8 @@ export function VariantFinder({
   const [results, setResults] = useState<LookupResult[]>([]);
   const [busy, setBusy] = useState(false);
 
-  const search = async () => {
-    const query = code.trim();
+  const search = async (raw: string = code) => {
+    const query = raw.trim();
     if (!query) return;
     setBusy(true);
     try {
@@ -93,6 +98,12 @@ export function VariantFinder({
     }
   };
 
+  const searchScanned = (scanned: string) => {
+    setCode("");
+    search(scanned);
+  };
+  useScanner(searchScanned);
+
   return (
     <div className="space-y-2">
       <div className="flex gap-2">
@@ -112,7 +123,8 @@ export function VariantFinder({
           inputMode="search"
           aria-label="Buscar producto"
         />
-        <Button className="h-12 w-12 shrink-0" onClick={search} disabled={busy} aria-label="Buscar">
+        <ScanButton className="h-12 w-12 shrink-0" onScan={searchScanned} />
+        <Button className="h-12 w-12 shrink-0" onClick={() => search()} disabled={busy} aria-label="Buscar">
           <Search />
         </Button>
       </div>
