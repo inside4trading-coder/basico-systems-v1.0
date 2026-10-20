@@ -118,6 +118,10 @@ describe("catálogo sin conexión", () => {
     expect(localLookup(rows, "aceite bosch")).toEqual([]);
   });
 
+  it("sin tildes ni mayúsculas", () => {
+    expect(localLookup(rows, "lubricántes").map((h) => h.variant_id)).toEqual(["v2"]);
+  });
+
   it("descuenta lo vendido sin conexión del disponible local", () => {
     const after = applyLocalSale({ locationId: "l1", fetchedAt: "", rows }, [
       { variant_id: "v1", qty: 2 },

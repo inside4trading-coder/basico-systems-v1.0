@@ -4,6 +4,7 @@
  * quitaron Woo, lotes de Abastecimiento y "proponer stock": las existencias
  * entran por Control (entradas y ajustes), no se editan en esta tabla.
  */
+import LabelsDialog from "./labels/LabelsDialog";
 import { Fragment, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Plus, SlidersHorizontal } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -98,8 +99,11 @@ export default function InventoryPage() {
   const stockValue = enriched.reduce((a, r) => a + r.total.onHand * Number(r.variant.cost ?? 0), 0);
   const columns = 7 + activeLocations.length;
 
+  const [labelsOpen, setLabelsOpen] = useState(false);
+
   return (
     <AppShell wide>
+      <LabelsDialog open={labelsOpen} onOpenChange={setLabelsOpen} />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl">Inventario</h1>
@@ -108,6 +112,9 @@ export default function InventoryPage() {
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" asChild>
             <Link to="/control">Entradas y ajustes</Link>
+          </Button>
+          <Button variant="outline" onClick={() => setLabelsOpen(true)}>
+            Etiquetas
           </Button>
           {editable && (
             <>
