@@ -4,6 +4,8 @@
  * SublimeCierres.tsx y SublimeFinanciero.tsx (basicosystems@f551478b), con los
  * números calculados en la base.
  */
+import IncomeReport from "./IncomeReport";
+import { useEntitlements } from "@/core/useEntitlements";
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import AppShell from "@/components/AppShell";
@@ -22,6 +24,7 @@ import StockReport from "./StockReport";
 const ALL = "all";
 
 export default function ReportsPage() {
+  const entitlements = useEntitlements();
   const { active } = useTenant();
   const { data: locations = [] } = useLocations();
   const [preset, setPreset] = useState<RangePreset | null>("7d");
@@ -84,6 +87,7 @@ export default function ReportsPage() {
           <TabsTrigger value="sales">Ventas</TabsTrigger>
           <TabsTrigger value="stock">Inventario</TabsTrigger>
           <TabsTrigger value="closures">Cierres de caja</TabsTrigger>
+          {entitlements.administracion && <TabsTrigger value="income">Resultado</TabsTrigger>}
         </TabsList>
         <TabsContent value="sales" className="space-y-4">
           {filters(true)}
@@ -97,6 +101,13 @@ export default function ReportsPage() {
           {filters(true)}
           <ClosuresReport range={range} locationId={locationId} currency={base} businessName={active?.tenant.name ?? ""} />
         </TabsContent>
+        {entitlements.administracion && (
+          <TabsContent value="income" className="space-y-4">
+            {filters(true)}
+            <p className="text-xs text-muted-foreground">El resultado es de todo el negocio: no se separa por sede.</p>
+            <IncomeReport range={range} currency={base} />
+          </TabsContent>
+        )}
       </Tabs>
     </AppShell>
   );
