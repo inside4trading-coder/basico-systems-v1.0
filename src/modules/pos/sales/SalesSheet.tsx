@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { useCurrentRate, type PaymentMethod } from "@/modules/settings/api";
 import { formatMoney, formatQty } from "../cart";
 import { parseAmount } from "../usePosMoney";
-import { useCreateReturn, useSaleDetail, useSales, useVoidSale, type SaleDetail } from "./api";
+import { useCreateReturn, useSaleDetail, useSales, useSetInvoice, useVoidSale, type SaleDetail } from "./api";
 import { refundInCurrency, returnTotal, returnableQty } from "./returns";
 
 const NO_REFUND = "none";
@@ -150,6 +150,7 @@ function SaleView({ sale, canVoid, canReturn, supervisor, onVoid, onReturn, onRe
         </li>
       </ul>
       <p className="text-xs text-muted-foreground">Cobro: {sale.payments.map((p) => `${p.method_name} ${formatMoney(p.amount, p.currency)}`).join(" · ")}</p>
+      <InvoiceField sale={sale} editable={supervisor} />
 
       {sale.returns.length > 0 && (
         <section className="space-y-1">
@@ -334,5 +335,35 @@ function ReturnDialog({ sale, methods, sessionId, onClose }: { sale: SaleDetail;
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** N.º de la factura emitida aparte, para encontrarla desde la venta. */
+function InvoiceField({ sale, editable }: { sale: SaleDetail; editable: boolean }) {
+  const save = useSetInvoice();
+  const [value, setValue] = useState(sale.invoice_number ?? "");
+  if (!editable) return sale.invoice_number ? <p className="text-xs text-muted-foreground">Factura: {sale.invoice_number}</p> : null;
+  const commit = () => {
+    if (value.trim() === (sale.invoice_number ?? "")) return;
+    save.mutate(
+      { saleId: sale.id, number: value },
+      {
+        onSuccess: () => toast.success(value.trim() ? "Factura anotada" : "Factura quitada"),
+        onError: (err) => toast.error("No se pudo guardar", { description: err.message }),
+      },
+    );
+  };
+  return (
+    <label className="flex items-center gap-2 text-xs">
+      <span className="text-muted-foreground">N.º de factura</span>
+      <Input
+        className="h-8 max-w-48"
+        value={value}
+        placeholder="Si se facturó aparte"
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => e.key === "Enter" && commit()}
+      />
+    </label>
   );
 }

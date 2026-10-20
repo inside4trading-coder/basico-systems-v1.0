@@ -16,6 +16,8 @@ export interface SaleRow {
   base_currency: string;
   customer_name: string | null;
   void_reason: string | null;
+  /** Factura emitida aparte (máquina fiscal o imprenta digital), si se anotó. */
+  invoice_number: string | null;
 }
 
 export interface SaleDetailItem {
@@ -53,7 +55,7 @@ function useTenantKey() {
 }
 
 const n = (v: unknown) => Number(v ?? 0);
-const SALE_COLUMNS = "id, number, status, session_id, sold_at, total, base_currency, customer_name, void_reason";
+const SALE_COLUMNS = "id, number, status, session_id, sold_at, total, base_currency, customer_name, void_reason, invoice_number";
 
 /** Ventas de la caja o, con texto, búsqueda por número o cliente en todas. */
 export function useSales(sessionId: string, query: string) {
@@ -65,7 +67,7 @@ export function useSales(sessionId: string, query: string) {
       let req = supabase.from("sales").select(SALE_COLUMNS).order("sold_at", { ascending: false }).limit(100);
       if (q) {
         const safe = q.replace(/[%,()]/g, " ");
-        req = req.or(`number.ilike.%${safe}%,customer_name.ilike.%${safe}%`);
+        req = req.or(`number.ilike.%${safe}%,customer_name.ilike.%${safe}%,invoice_number.ilike.%${safe}%`);
       } else {
         req = req.eq("session_id", sessionId);
       }
@@ -140,6 +142,17 @@ function useInvalidate() {
     void qc.invalidateQueries({ queryKey: ["fin"] });
     void qc.invalidateQueries({ queryKey: ["inv"] });
   };
+}
+
+export function useSetInvoice() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: async (input: { saleId: string; number: string }) => {
+      const { error } = await supabase.rpc("set_sale_invoice", { p_sale_id: input.saleId, p_number: input.number });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: invalidate,
+  });
 }
 
 export function useVoidSale() {
