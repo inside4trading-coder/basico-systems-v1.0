@@ -6,6 +6,7 @@
  */
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
+import BackLink from "@/components/BackLink";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -86,9 +87,7 @@ export default function SalesSheet({ open, onOpenChange, sessionId, sessionOpen,
             </div>
           ) : (
             <div className="mt-4 space-y-4 text-sm">
-              <Button size="sm" variant="ghost" onClick={() => setSelectedId(null)}>
-                ← Ventas
-              </Button>
+              <BackLink onClick={() => setSelectedId(null)}>Ventas</BackLink>
               {!detail ? (
                 <p className="mono-cap text-xs text-muted-foreground">Cargando…</p>
               ) : (

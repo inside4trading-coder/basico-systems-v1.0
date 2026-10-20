@@ -1,6 +1,6 @@
 /**
- * Inicio: accesos rápidos para todos y, para dueño, administrador y
- * encargado, el tablero del negocio: ventas de hoy y del mes, lo que requiere
+ * Inicio: saludo, accesos que cada usuario elige y ordena, actividad reciente
+ * y, para dueño, administrador y encargado, el tablero del negocio: ventas de hoy y del mes, lo que requiere
  * atención, más vendidos, más rentables y lo que está creciendo. Portado de
  * SublimeDashboard (basicosystems@f551478b).
  */
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { useBankPending } from "@/modules/finance/bank/api";
 import { useTreasurySummary } from "@/modules/finance/api";
 import { useReceivablesSummary } from "@/modules/finance/receivables/api";
+import { Greeting, MyShortcuts, RecentActivity } from "@/modules/home/HomeShortcuts";
 import { growers, topProfit, topSellers } from "@/modules/home/lib";
 import { useLocations } from "@/modules/inventory/api";
 import { useRestock } from "@/modules/inventory/restockApi";
@@ -35,7 +36,7 @@ export default function Home() {
 
   return (
     <AppShell wide={supervisor && entitlements.reportes}>
-      <h1 className="text-2xl">{active?.tenant.name}</h1>
+      <Greeting />
       {noLocations && canSupervise(active?.role) ? (
         <div className="space-y-3 rounded-surface border bg-card p-4">
           <p className="text-sm">Para empezar, crea al menos una sede: la tienda o el almacén donde está tu mercancía.</p>
@@ -45,28 +46,12 @@ export default function Home() {
         </div>
       ) : (
         <>
-          <QuickLinks pos={entitlements.pos} inventory={entitlements.inventario} />
+          <MyShortcuts />
+          <RecentActivity />
           {supervisor && entitlements.reportes && <Dashboard finance={entitlements.administracion} />}
         </>
       )}
     </AppShell>
-  );
-}
-
-function QuickLinks({ pos, inventory }: { pos: boolean; inventory: boolean }) {
-  const links = [
-    ...(pos ? [{ to: "/pos", label: "Vender" }] : []),
-    ...(inventory ? [{ to: "/inventario", label: "Inventario" }, { to: "/control", label: "Entradas, ajustes y traslados" }] : []),
-  ];
-  if (links.length === 0) return null;
-  return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      {links.map((l) => (
-        <Button key={l.to} asChild variant="outline" className="h-14">
-          <Link to={l.to}>{l.label}</Link>
-        </Button>
-      ))}
-    </div>
   );
 }
 
