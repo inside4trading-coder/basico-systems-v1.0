@@ -21,6 +21,7 @@ import { canEditCatalog } from "@/core/tenant-selection";
 import { useCatalog, useLocations, useUpdateVariant } from "./api";
 import { formatMoney, formatQty, SALE_BLOCK_LABEL, saleBlockers, sumStock, variantLabel } from "./lib";
 import NewProductDialog from "./NewProductDialog";
+import { BulkApplyButton, CostHistoryButton } from "./VariantTools";
 
 export default function InventoryPage() {
   const { active } = useTenant();
@@ -205,6 +206,7 @@ export default function InventoryPage() {
                       <TableCell colSpan={columns - 1}>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           <Badge variant="outline">{g.items.length} variantes</Badge>
+                          {editable && <BulkApplyButton productId={g.product.id} productName={g.product.name} count={g.items.length} />}
                           {g.product.category && <Badge variant="outline">{g.product.category}</Badge>}
                           <span className="num">{formatQty(g.items.reduce((a, r) => a + r.total.available, 0))} disponibles</span>
                         </div>
@@ -214,9 +216,12 @@ export default function InventoryPage() {
                   {shown.map((r) => (
                     <TableRow key={r.variant.id}>
                       <TableCell>
-                        <div className={`min-w-[200px] ${multi ? "pl-8 text-sm text-muted-foreground" : "font-medium"}`}>
-                          {multi ? variantLabel(r.variant.options) : r.product.name}
-                          {!multi && r.product.brand && <span className="ml-2 text-xs text-muted-foreground">{r.product.brand}</span>}
+                        <div className={`flex min-w-[200px] items-center gap-2 ${multi ? "pl-8 text-sm text-muted-foreground" : "font-medium"}`}>
+                          <span>
+                            {multi ? variantLabel(r.variant.options) : r.product.name}
+                            {!multi && r.product.brand && <span className="ml-2 text-xs text-muted-foreground">{r.product.brand}</span>}
+                          </span>
+                          {editable && <CostHistoryButton variantId={r.variant.id} name={multi ? `${r.product.name} ${variantLabel(r.variant.options)}` : r.product.name} currency={currency} />}
                         </div>
                       </TableCell>
                       <TableCell className="font-mono text-xs">

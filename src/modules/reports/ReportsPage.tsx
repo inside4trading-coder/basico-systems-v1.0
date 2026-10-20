@@ -4,6 +4,7 @@
  * SublimeCierres.tsx y SublimeFinanciero.tsx (basicosystems@f551478b), con los
  * números calculados en la base.
  */
+import CashMovementsPanel from "./CashMovementsPanel";
 import IncomeReport from "./IncomeReport";
 import { useEntitlements } from "@/core/useEntitlements";
 import { useState } from "react";
@@ -100,6 +101,7 @@ export default function ReportsPage() {
         <TabsContent value="closures" className="space-y-4">
           {filters(true)}
           <ClosuresReport range={range} locationId={locationId} currency={base} businessName={active?.tenant.name ?? ""} />
+          <CashMovementsPanel range={range} locationId={locationId} />
         </TabsContent>
         {entitlements.administracion && (
           <TabsContent value="income" className="space-y-4">
