@@ -6,6 +6,7 @@
  * firma restringida a dueño/administrador distinto de quien ajustó, y
  * cantidades fraccionarias.
  */
+import RestockTab from "./RestockTab";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeftRight, ClipboardCheck, PenLine, ScanLine, Undo2 } from "lucide-react";
 import { toast } from "sonner";
@@ -754,7 +755,7 @@ export default function ControlPage() {
   }, [tab]);
 
   return (
-    <AppShell>
+    <AppShell wide>
       <div>
         <h1 className="text-2xl">Control de inventario</h1>
         <p className="text-sm text-muted-foreground">Entradas, ajustes, traslados, firmas e historial</p>
@@ -767,6 +768,7 @@ export default function ControlPage() {
             {editable && <TabsTrigger value="recepcion">Recepción</TabsTrigger>}
             {editable && <TabsTrigger value="ajustes">Ajustes</TabsTrigger>}
             {editable && <TabsTrigger value="traslados">Traslados</TabsTrigger>}
+            {editable && <TabsTrigger value="reposicion">Reposición</TabsTrigger>}
             <TabsTrigger value="firmas">Firmas{pending ? ` (${pending})` : ""}</TabsTrigger>
             <TabsTrigger value="historial">Historial</TabsTrigger>
             <TabsTrigger value="reportes">Mermas</TabsTrigger>
@@ -788,6 +790,9 @@ export default function ControlPage() {
             </TabsContent>
             <TabsContent value="traslados">
               <Transfers />
+            </TabsContent>
+            <TabsContent value="reposicion">
+              <RestockTab />
             </TabsContent>
           </>
         )}
