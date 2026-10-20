@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { useTenant } from "@/core/tenant-context";
 import { cn } from "@/lib/utils";
 import { useLocations } from "@/modules/inventory/api";
-import { usePaymentMethods, useSalesChannels, useTenantSettings } from "@/modules/settings/api";
+import { useCashiers, usePaymentMethods, useSalesChannels, useTenantSettings } from "@/modules/settings/api";
 import { isNetworkError } from "@/core/offline";
 import {
   newIdempotencyKey,
@@ -72,6 +72,28 @@ function writeStorage(key: string, value: unknown) {
   }
 }
 
+/** Cajero elegido en esta caja: se recuerda en el equipo entre ventas y recargas. */
+function useStoredCashier(registerId: string): [string | null, (id: string | null) => void] {
+  const key = `pos.cashier.${registerId}`;
+  const [value, setValue] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  });
+  const set = (id: string | null) => {
+    setValue(id);
+    try {
+      if (id) localStorage.setItem(key, id);
+      else localStorage.removeItem(key);
+    } catch {
+      // Sin almacenamiento local se elige en cada recarga.
+    }
+  };
+  return [value, set];
+}
+
 export default function PosPage() {
   const { active } = useTenant();
   const storageKey = `pos.session.${active?.tenant.id}`;
@@ -117,6 +139,10 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
   const { money, stale, currencies, pricesIncludeTax } = usePosMoney();
   const { data: tenantSettings } = useTenantSettings();
   const { data: channels = [] } = useSalesChannels();
+  const { data: allCashiers = [] } = useCashiers();
+  const cashiers = allCashiers.filter((c) => c.is_active && (!c.location_id || c.location_id === session.location_id));
+  const [cashierId, setCashierId] = useStoredCashier(session.register_id);
+  const cashier = cashiers.find((c) => c.id === cashierId) ?? null;
   const { data: methods = [] } = usePaymentMethods();
   const { data: registers = [] } = useRegisters();
   const { data: locations = [] } = useLocations();
@@ -275,6 +301,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
       customer: result.customer,
       note: result.note,
       channelId: result.channelId,
+      cashierId: cashier?.id ?? null,
     };
     const soldAt = new Date().toISOString();
     if (!navigator.onLine) return queueOffline({ ...input, soldAt }, result);
@@ -302,6 +329,24 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
             {register?.name ?? "Caja"} · <span className="mono">{session.number}</span>
           </p>
           <p className="text-xs text-muted-foreground">{location?.name}</p>
+          {cashiers.length > 0 && (
+            <label className="mt-1 flex items-center gap-1 text-xs">
+              <span className="text-muted-foreground">Atiende:</span>
+              <select
+                aria-label="Cajero"
+                className="rounded border border-input bg-background px-1 py-0.5 text-xs"
+                value={cashier?.id ?? ""}
+                onChange={(e) => setCashierId(e.target.value || null)}
+              >
+                <option value="">Sin elegir</option>
+                {cashiers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" disabled={!offline.online} title={offline.online ? undefined : "Necesita conexión"} onClick={() => setHistory(true)}>
