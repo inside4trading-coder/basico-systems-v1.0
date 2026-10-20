@@ -167,6 +167,8 @@ export function useSaveLocation() {
         type: fields.type ?? "store",
         sells_in_pos: fields.sells_in_pos ?? true,
         is_active: fields.is_active ?? true,
+        address: fields.address?.trim() || null,
+        phone: fields.phone?.trim() || null,
       };
       const { error } = id
         ? await supabase.from("locations").update(payload).eq("id", id)

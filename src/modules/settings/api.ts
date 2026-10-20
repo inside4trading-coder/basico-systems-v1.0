@@ -19,6 +19,13 @@ export interface TenantSettings {
   is_special_taxpayer: boolean;
   prices_include_tax: boolean;
   igtf_rate: number;
+  /** Datos para la nota de entrega. */
+  name: string;
+  legal_name: string | null;
+  tax_id: string | null;
+  address: string | null;
+  phone: string | null;
+  receipt_footer: string | null;
 }
 
 export interface TaxRate {
@@ -107,7 +114,7 @@ export function useTenantSettings() {
     queryFn: withOfflineCache(`tenant:${tenant}`, async () => {
       const { data, error } = await supabase
         .from("tenants")
-        .select("id, base_currency, local_currency, rate_source, is_special_taxpayer, prices_include_tax, igtf_rate")
+        .select("id, name, base_currency, local_currency, rate_source, is_special_taxpayer, prices_include_tax, igtf_rate, legal_name, tax_id, address, phone, receipt_footer")
         .eq("id", tenant)
         .single();
       if (error) throw error;

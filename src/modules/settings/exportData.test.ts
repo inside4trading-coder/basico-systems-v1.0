@@ -24,6 +24,6 @@ describe("exportar datos", () => {
   });
 
   it("nombre de archivo limpio", () => {
-    expect(exportFileName("Repuestos Toyocabudare, C.A.", "2026-10-19")).toBe("repuestos-toyocabudare-c-a-datos-2026-10-19.xlsx");
+    expect(exportFileName("Repuestos Ejemplo, C.A.", "2026-10-19")).toBe("repuestos-ejemplo-c-a-datos-2026-10-19.xlsx");
   });
 });
