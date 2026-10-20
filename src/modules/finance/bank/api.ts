@@ -143,9 +143,10 @@ export function useBankBatches(accountId: string | null) {
   });
 }
 
-export function useBankPending() {
+export function useBankPending(enabled = true) {
   const tenant = useTenantKey();
   return useQuery({
+    enabled,
     queryKey: ["fin", tenant, "bank", "pending"],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("bank_pending");

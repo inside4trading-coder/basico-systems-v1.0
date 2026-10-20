@@ -149,9 +149,10 @@ export function useProviderLedger() {
   });
 }
 
-export function useReceivablesSummary() {
+export function useReceivablesSummary(enabled = true) {
   const tenant = useTenantKey();
   return useQuery({
+    enabled,
     queryKey: ["fin", tenant, "receivables", "summary"],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("receivables_summary");
