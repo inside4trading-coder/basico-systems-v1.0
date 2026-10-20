@@ -295,6 +295,7 @@ declare
   v_obl uuid;
   v_inst uuid;
   v_mov uuid;
+  v_count uuid;
   v_batch uuid;
   v_rcv uuid;
   v_rinst uuid;
@@ -383,6 +384,9 @@ begin
     insert into public.bank_fee_rules (tenant_id, account_id, phrase) values (t, v_acc, 'Aislamiento');
     insert into public.customers (tenant_id, name, doc) values (t, 'Cliente aislamiento', 'V-1');
     insert into public.cashiers (tenant_id, name) values (t, 'Cajero aislamiento');
+    insert into public.inventory_counts (tenant_id, number, location_id) values (t, 'ISO-C1', v_loc) returning id into v_count;
+    insert into public.inventory_count_items (tenant_id, count_id, variant_id)
+      select t, v_count, v.id from public.variants v where v.tenant_id = t limit 1;
     insert into public.sale_returns (tenant_id, sale_id, number, location_id, reason, total)
       values (t, v_sale, 'ISO-D1', v_loc, 'Aislamiento', 0) returning id into v_ret;
     insert into public.sale_return_items (tenant_id, return_id, sale_item_id, variant_id, description, qty, amount)
