@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { useTenant } from "@/core/tenant-context";
 import { cn } from "@/lib/utils";
 import { useLocations } from "@/modules/inventory/api";
-import { usePaymentMethods } from "@/modules/settings/api";
+import { usePaymentMethods, useTenantSettings } from "@/modules/settings/api";
 import { isNetworkError } from "@/core/offline";
 import {
   newIdempotencyKey,
@@ -114,6 +114,7 @@ const EMPTY_DRAFT: CartDraft = { lines: [], discountMode: "amount", discountValu
 function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => void }) {
   const { active } = useTenant();
   const { money, stale, currencies, pricesIncludeTax } = usePosMoney();
+  const { data: tenantSettings } = useTenantSettings();
   const { data: methods = [] } = usePaymentMethods();
   const { data: registers = [] } = useRegisters();
   const { data: locations = [] } = useLocations();
@@ -456,7 +457,18 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
       )}
       <ReceiptDialog
         target={receipt}
-        header={{ businessName: active?.tenant.name ?? "", locationName: location?.name, registerName: register?.name }}
+        header={{
+          businessName: tenantSettings?.name ?? active?.tenant.name ?? "",
+          legalName: tenantSettings?.legal_name,
+          taxId: tenantSettings?.tax_id,
+          address: tenantSettings?.address,
+          phone: tenantSettings?.phone,
+          footer: tenantSettings?.receipt_footer,
+          locationName: location?.name,
+          locationAddress: location?.address,
+          locationPhone: location?.phone,
+          registerName: register?.name,
+        }}
         onClose={() => {
           setReceipt(null);
           searchRef.current?.focus();

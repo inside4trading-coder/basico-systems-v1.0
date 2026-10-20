@@ -11,8 +11,17 @@ export type PaperWidth = 58 | 80;
 
 export interface ReceiptHeader {
   businessName: string;
+  /** Razón social y RIF del negocio (si se cargaron en Configuración). */
+  legalName?: string | null;
+  taxId?: string | null;
+  address?: string | null;
+  phone?: string | null;
   locationName?: string;
   registerName?: string;
+  /** Dirección y teléfono propios de la sede; reemplazan a los del negocio. */
+  locationAddress?: string | null;
+  locationPhone?: string | null;
+  footer?: string | null;
 }
 
 const PAPER_KEY = "pos.paper";
@@ -81,7 +90,9 @@ small { font-size: 0.85em; }
 </style></head><body>
 <p class="center"><strong>NOTA DE ENTREGA</strong></p>
 <h1>${e(header.businessName)}</h1>
+${header.legalName || header.taxId ? `<p class="center">${[header.legalName, header.taxId ? `RIF ${header.taxId}` : null].filter(Boolean).map((v) => e(v!)).join("<br>")}</p>` : ""}
 ${header.locationName ? `<p class="center">${e(header.locationName)}${header.registerName ? ` · ${e(header.registerName)}` : ""}</p>` : ""}
+${addressLine(header) ? `<p class="center"><small>${e(addressLine(header))}</small></p>` : ""}
 <hr>
 ${row(`<strong>${e(sale.number)}</strong>`, e(formatSaleDate(sale.sold_at)))}
 ${sale.customer_name ? row("Cliente", e(sale.customer_name)) : ""}
@@ -103,8 +114,16 @@ ${sale.igtf_total > 0 ? row("IGTF incluido", formatMoney(sale.igtf_total, base))
 ${sale.change_total > 0 ? row("Vuelto", formatMoney(sale.change_total, base)) : ""}
 ${sale.note ? `<hr><p>${e(sale.note)}</p>` : ""}
 <hr>
+${header.footer ? `<p class="center">${e(header.footer)}</p>` : ""}
 <p class="center"><small>Documento no fiscal</small></p>
 </body></html>`;
+}
+
+/** Dirección y teléfono: los de la sede si tiene, si no los del negocio. */
+function addressLine(h: ReceiptHeader): string {
+  const address = h.locationAddress || h.address;
+  const phone = h.locationPhone || h.phone;
+  return [address, phone ? `Tel. ${phone}` : null].filter(Boolean).join(" · ");
 }
 
 /** Imprime en un iframe oculto: no abre ventanas que el navegador pueda bloquear. */

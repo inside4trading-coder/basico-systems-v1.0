@@ -27,9 +27,11 @@ interface Draft {
   type: Location["type"];
   sells_in_pos: boolean;
   is_active: boolean;
+  address: string | null;
+  phone: string | null;
 }
 
-const EMPTY: Draft = { name: "", code: "", type: "store", sells_in_pos: true, is_active: true };
+const EMPTY: Draft = { name: "", code: "", type: "store", sells_in_pos: true, is_active: true, address: null, phone: null };
 
 export default function LocationsPage() {
   const { active } = useTenant();
@@ -89,6 +91,16 @@ export default function LocationsPage() {
             </select>
           </div>
         </div>
+        <div className="grid gap-3 sm:grid-cols-[1fr_12rem]">
+          <div className="space-y-1.5">
+            <Label htmlFor="loc-address">Dirección (sale en la nota de entrega)</Label>
+            <Input id="loc-address" value={draft.address ?? ""} onChange={(e) => setDraft({ ...draft, address: e.target.value })} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="loc-phone">Teléfono</Label>
+            <Input id="loc-phone" inputMode="tel" value={draft.phone ?? ""} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} />
+          </div>
+        </div>
         <div className="flex flex-wrap gap-6">
           <label className="flex items-center gap-2 text-sm">
             <Switch checked={draft.sells_in_pos} onCheckedChange={(v) => setDraft({ ...draft, sells_in_pos: v })} />
@@ -130,7 +142,7 @@ export default function LocationsPage() {
               size="sm"
               variant="ghost"
               onClick={() =>
-                setDraft({ id: l.id, name: l.name, code: l.code, type: l.type, sells_in_pos: l.sells_in_pos, is_active: l.is_active })
+                setDraft({ id: l.id, name: l.name, code: l.code, type: l.type, sells_in_pos: l.sells_in_pos, is_active: l.is_active, address: l.address, phone: l.phone })
               }
             >
               Editar

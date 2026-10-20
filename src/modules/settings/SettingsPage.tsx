@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/core/tenant-context";
 import { canManageTeam, canSupervise } from "@/core/tenant-selection";
+import BusinessSection from "./BusinessSection";
 import ExportSection from "./ExportSection";
 import PlanSection from "./PlanSection";
 import { formatDateTime } from "@/modules/inventory/lib";
@@ -56,6 +57,7 @@ export default function SettingsPage() {
   return (
     <AppShell>
       <h1 className="text-2xl">Configuración</h1>
+      {canManageTeam(active?.role) && <BusinessSection />}
       <RateSection />
       <TaxSection />
       <PaymentMethodsSection />

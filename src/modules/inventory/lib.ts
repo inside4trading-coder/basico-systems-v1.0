@@ -14,6 +14,9 @@ export interface Location {
   type: "store" | "warehouse" | "popup" | "external";
   sells_in_pos: boolean;
   is_active: boolean;
+  /** Se imprimen en la nota de entrega bajo el nombre de la sede. */
+  address: string | null;
+  phone: string | null;
   deleted_at: string | null;
 }
 
