@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/core/tenant-context";
 import { canManageTeam, canSupervise } from "@/core/tenant-selection";
 import BusinessSection from "./BusinessSection";
+import ClosingReminderSection from "./ClosingReminderSection";
 import ExportSection from "./ExportSection";
 import PlanSection from "./PlanSection";
 import { formatDateTime } from "@/modules/inventory/lib";
@@ -61,6 +62,7 @@ export default function SettingsPage() {
       <RateSection />
       <TaxSection />
       <PaymentMethodsSection />
+      {canManageTeam(active?.role) && <ClosingReminderSection />}
       {canManageTeam(active?.role) && <PlanSection />}
       {canManageTeam(active?.role) && <ExportSection />}
     </AppShell>

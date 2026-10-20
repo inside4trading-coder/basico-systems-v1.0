@@ -29,6 +29,8 @@ select results_eq(
 );
 update public.locations set address = 'Calle 2, Cabudare', phone = '0251-7654321' where id = 'aaaaaaaa-2222-2222-2222-222222222221';
 select is((select address from public.locations), 'Calle 2, Cabudare', 'y la dirección de la sede');
+update public.tenants set closing_reminder_time = '17:30' where id = 'aaaaaaaa-1111-1111-1111-111111111111';
+select is((select closing_reminder_time from public.tenants), '17:30'::time, 'y la hora del recordatorio de cierre');
 select throws_ok(
   $$ update public.tenants set tax_id = 'x' where id = 'aaaaaaaa-1111-1111-1111-111111111111' $$,
   '23514', null,
@@ -38,6 +40,8 @@ select throws_ok(
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000002","role":"authenticated"}', true);
 update public.tenants set legal_name = 'Otro' where id = 'aaaaaaaa-1111-1111-1111-111111111111';
 select is((select legal_name from public.tenants), 'Tienda A, C.A.', 'el cajero no los cambia');
+update public.tenants set closing_reminder_time = null where id = 'aaaaaaaa-1111-1111-1111-111111111111';
+select is((select closing_reminder_time from public.tenants), '17:30'::time, 'ni apaga el recordatorio');
 select is((select tax_id from public.tenants), 'J-12345678-9', 'pero los lee para imprimir');
 
 select * from finish();

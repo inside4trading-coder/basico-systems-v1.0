@@ -26,6 +26,8 @@ export interface TenantSettings {
   address: string | null;
   phone: string | null;
   receipt_footer: string | null;
+  /** "HH:MM:SS" desde la que el POS recuerda cerrar la caja; null = sin recordatorio. */
+  closing_reminder_time: string | null;
 }
 
 export interface TaxRate {
@@ -114,7 +116,7 @@ export function useTenantSettings() {
     queryFn: withOfflineCache(`tenant:${tenant}`, async () => {
       const { data, error } = await supabase
         .from("tenants")
-        .select("id, name, base_currency, local_currency, rate_source, is_special_taxpayer, prices_include_tax, igtf_rate, legal_name, tax_id, address, phone, receipt_footer")
+        .select("id, name, base_currency, local_currency, rate_source, is_special_taxpayer, prices_include_tax, igtf_rate, legal_name, tax_id, address, phone, receipt_footer, closing_reminder_time")
         .eq("id", tenant)
         .single();
       if (error) throw error;
