@@ -146,9 +146,10 @@ export interface TreasurySummary {
 
 const toNum = (v: unknown) => Number(v ?? 0);
 
-export function useTreasurySummary(from: string | null, to: string) {
+export function useTreasurySummary(from: string | null, to: string, enabled = true) {
   const tenant = useTenantKey();
   return useQuery({
+    enabled,
     queryKey: ["fin", tenant, "treasury", from, to],
     placeholderData: keepPreviousData,
     queryFn: async () => {
