@@ -32,6 +32,14 @@ export interface TenantSettings {
   channel_required: boolean;
 }
 
+/** Personal de caja: quien atiende, sin usuario propio. location_id null = todas las sedes. */
+export interface Cashier {
+  id: string;
+  name: string;
+  location_id: string | null;
+  is_active: boolean;
+}
+
 export interface SalesChannel {
   id: string;
   name: string;
@@ -229,6 +237,36 @@ export function useSalesChannels() {
       if (error) throw error;
       return (data ?? []) as SalesChannel[];
     }),
+  });
+}
+
+/** Con copia local: el POS elige cajero sin conexión. */
+export function useCashiers() {
+  const tenant = useTenantKey();
+  return useQuery({
+    queryKey: ["cfg", tenant, "cashiers"],
+    queryFn: withOfflineCache(`cashiers:${tenant}`, async () => {
+      const { data, error } = await supabase.from("cashiers").select("id, name, location_id, is_active").order("name");
+      if (error) throw error;
+      return (data ?? []) as Cashier[];
+    }),
+  });
+}
+
+export function useSaveCashier() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id?: string; name?: string; location_id?: string | null; is_active?: boolean }) => {
+      const { id, ...fields } = input;
+      const { error } = id
+        ? await supabase.from("cashiers").update(fields).eq("id", id)
+        : await supabase.from("cashiers").insert({ name: fields.name?.trim(), location_id: fields.location_id ?? null });
+      if (error) {
+        if (error.code === "23505") throw new Error("Ya hay alguien con ese nombre.");
+        throw asError(error);
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cfg"] }),
   });
 }
 

@@ -74,6 +74,8 @@ export interface RegisterSaleInput {
   soldAt?: string;
   /** Origen de la venta (tienda, WhatsApp…). */
   channelId?: string | null;
+  /** Personal de caja que atendió. */
+  cashierId?: string | null;
 }
 
 export interface RegisterSaleResult {
@@ -203,6 +205,7 @@ export async function registerSale(input: RegisterSaleInput): Promise<RegisterSa
     p_note: input.note ?? null,
     ...(input.soldAt ? { p_sold_at: input.soldAt } : {}),
     ...(input.channelId ? { p_channel_id: input.channelId } : {}),
+    ...(input.cashierId ? { p_cashier_id: input.cashierId } : {}),
   });
   if (error) throw asError(error);
   return data as RegisterSaleResult;

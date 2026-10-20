@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/core/tenant-context";
 import { canManageTeam, canSupervise } from "@/core/tenant-selection";
 import BusinessSection from "./BusinessSection";
+import CashiersSection from "./CashiersSection";
 import ChannelsSection from "./ChannelsSection";
 import ClosingReminderSection from "./ClosingReminderSection";
 import ExportSection from "./ExportSection";
@@ -63,6 +64,7 @@ export default function SettingsPage() {
       <RateSection />
       <TaxSection />
       <PaymentMethodsSection />
+      {canManageTeam(active?.role) && <CashiersSection />}
       {canManageTeam(active?.role) && <ChannelsSection />}
       {canManageTeam(active?.role) && <ClosingReminderSection />}
       {canManageTeam(active?.role) && <PlanSection />}
