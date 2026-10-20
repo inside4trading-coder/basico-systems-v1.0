@@ -19,7 +19,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useTenant } from "@/core/tenant-context";
 import { canEditCatalog } from "@/core/tenant-selection";
-import { useCatalog, useLocations, useUpdateVariant } from "./api";
+import { productTaxRate, withTax } from "@/core/tax";
+import { useTaxRates } from "@/modules/settings/api";
+import { useCatalog, useLocations, useUpdateProduct, useUpdateVariant } from "./api";
 import { formatMoney, formatQty, SALE_BLOCK_LABEL, saleBlockers, sumStock, variantLabel } from "./lib";
 import NewProductDialog from "./NewProductDialog";
 import { BulkApplyButton, CostHistoryButton } from "./VariantTools";
@@ -31,6 +33,8 @@ export default function InventoryPage() {
   const { data, isLoading } = useCatalog();
   const { data: locations = [] } = useLocations();
   const updVariant = useUpdateVariant();
+  const updProduct = useUpdateProduct();
+  const { data: taxRates = [] } = useTaxRates();
   const [creating, setCreating] = useState(false);
 
   const [q, setQ] = useState("");
@@ -99,7 +103,7 @@ export default function InventoryPage() {
 
   const sellableCount = enriched.filter((r) => r.blockers.length === 0).length;
   const stockValue = enriched.reduce((a, r) => a + r.total.onHand * Number(r.variant.cost ?? 0), 0);
-  const columns = 7 + activeLocations.length;
+  const columns = 9 + activeLocations.length;
 
   const [labelsOpen, setLabelsOpen] = useState(false);
 
@@ -180,8 +184,10 @@ export default function InventoryPage() {
             <TableRow>
               <TableHead>Producto</TableHead>
               <TableHead>SKU</TableHead>
-              <TableHead className="text-right">Precio</TableHead>
-              <TableHead className="text-right">Oferta</TableHead>
+              <TableHead className="text-right">Precio sin IVA</TableHead>
+              <TableHead className="text-right">Oferta sin IVA</TableHead>
+              <TableHead>IVA</TableHead>
+              <TableHead className="whitespace-nowrap text-right">PVP</TableHead>
               <TableHead className="text-right">Costo</TableHead>
               {activeLocations.map((l) => (
                 <TableHead key={l.id} className="whitespace-nowrap text-right">
@@ -237,6 +243,25 @@ export default function InventoryPage() {
                       </TableCell>
                       <MoneyCell editable={editable} value={r.variant.regular_price} onSave={(n) => saveVariant(r.variant.id, { regular_price: n })} currency={currency} />
                       <MoneyCell editable={editable} value={r.variant.price} onSave={(n) => saveVariant(r.variant.id, { price: n })} currency={currency} />
+                      <TableCell>
+                        <TaxPicker
+                          editable={editable}
+                          value={r.product.tax_rate_id}
+                          rates={taxRates}
+                          onChange={(id) =>
+                            updProduct.mutate(
+                              { id: r.product.id, patch: { tax_rate_id: id } },
+                              { onError: (err) => toast.error("No se pudo cambiar el IVA", { description: err.message }) },
+                            )
+                          }
+                        />
+                      </TableCell>
+                      <TableCell className="num whitespace-nowrap text-right font-semibold">
+                        {(() => {
+                          const net = r.variant.price ?? r.variant.regular_price;
+                          return net == null ? "—" : formatMoney(withTax(Number(net), productTaxRate(r.product.tax_rate_id, taxRates)), currency);
+                        })()}
+                      </TableCell>
                       <MoneyCell editable={editable} value={r.variant.cost} onSave={(n) => saveVariant(r.variant.id, { cost: n })} currency={currency} />
                       {activeLocations.map((l) => (
                         <TableCell key={l.id} className="num text-right">
@@ -320,6 +345,41 @@ function InlineText({ value, placeholder, onSave }: { value: string; placeholder
       onBlur={() => draft.trim() !== value && onSave(draft.trim())}
       className="h-8 min-w-[110px] text-xs"
     />
+  );
+}
+
+/** IVA del producto: el del negocio por defecto u otra tasa activa (exento, 8 %…). */
+function TaxPicker({
+  editable,
+  value,
+  rates,
+  onChange,
+}: {
+  editable: boolean;
+  value: string | null;
+  rates: { id: string; name: string; rate: number; is_default: boolean; is_active: boolean }[];
+  onChange: (id: string | null) => void;
+}) {
+  const fallback = rates.find((t) => t.is_default);
+  const current = value ? rates.find((t) => t.id === value) : undefined;
+  const label = current ? `${current.rate}%` : fallback ? `${fallback.rate}%` : "0%";
+  if (!editable) return <span className="num text-xs">{label}</span>;
+  return (
+    <select
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value || null)}
+      className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+      aria-label="IVA del producto"
+    >
+      <option value="">Por defecto{fallback ? ` · ${fallback.rate}%` : ""}</option>
+      {rates
+        .filter((t) => (t.is_active && !t.is_default) || t.id === value)
+        .map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name} · {t.rate}%
+          </option>
+        ))}
+    </select>
   );
 }
 

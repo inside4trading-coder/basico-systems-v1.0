@@ -27,6 +27,7 @@ export interface Product {
   category: string | null;
   description: string | null;
   image_url: string | null;
+  tax_rate_id: string | null;
   is_active: boolean;
   deleted_at: string | null;
 }

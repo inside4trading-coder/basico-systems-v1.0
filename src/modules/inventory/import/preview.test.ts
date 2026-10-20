@@ -52,7 +52,8 @@ describe("suggestMapping", () => {
       Referencia: "sku",
       "Nro. Parte": "code:oem",
       Marca: "brand",
-      PVP: "regular_price",
+      // El PVP trae IVA: no se toma solo como precio sin IVA.
+      PVP: "",
       Costo: "cost",
       Existencia: "stock:T1",
       AL: "stock:AL",

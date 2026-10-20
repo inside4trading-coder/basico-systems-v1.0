@@ -13,7 +13,8 @@ import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/core/supabase";
 import { formatMoney } from "@/modules/pos/cart";
 import { printReceipt } from "@/modules/pos/receipt";
-import { useCurrentRate, useTenantSettings } from "@/modules/settings/api";
+import { productTaxRate, withTax } from "@/core/tax";
+import { useCurrentRate, useTaxRates, useTenantSettings } from "@/modules/settings/api";
 import { LABEL_FORMAT_LABEL, expandLabels, labelsHtml, type LabelFormat, type LabelItem } from "./labels";
 
 interface Hit {
@@ -39,6 +40,7 @@ function barcodeSvg(code: string): string {
 export default function LabelsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { data: settings } = useTenantSettings();
   const { data: rate } = useCurrentRate();
+  const { data: taxRates = [] } = useTaxRates();
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
@@ -74,6 +76,12 @@ export default function LabelsDialog({ open, onOpenChange }: { open: boolean; on
       const { data: codes, error } = await supabase.from("product_codes").select("variant_id, code").eq("kind", "barcode").in("variant_id", ids);
       if (error) throw new Error(error.message);
       const byVariant = new Map((codes ?? []).map((c) => [c.variant_id as string, c.code as string]));
+      // La etiqueta lleva el PVP: el precio sin IVA más el IVA del producto.
+      const { data: taxOf, error: taxError } = await supabase.from("variants").select("id, products(tax_rate_id)").in("id", ids);
+      if (taxError) throw new Error(taxError.message);
+      const taxIdByVariant = new Map(
+        (taxOf ?? []).map((v) => [v.id as string, (v.products as unknown as { tax_rate_id: string | null } | null)?.tax_rate_id ?? null]),
+      );
       const missing: string[] = [];
       const items = rows.flatMap((r) => {
         const code = byVariant.get(r.hit.variant_id) ?? r.hit.sku;
@@ -81,7 +89,8 @@ export default function LabelsDialog({ open, onOpenChange }: { open: boolean; on
           missing.push(r.hit.product_name);
           return [];
         }
-        const price = Number(r.hit.price ?? 0);
+        const net = Number(r.hit.price ?? 0);
+        const price = settings?.prices_include_tax ? net : withTax(net, productTaxRate(taxIdByVariant.get(r.hit.variant_id), taxRates));
         const item: LabelItem = {
           name: r.hit.product_name,
           detail: [Object.values(r.hit.options ?? {}).join(" · "), r.hit.brand].filter(Boolean).join(" · ") || null,

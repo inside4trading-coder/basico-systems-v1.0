@@ -29,6 +29,7 @@ import {
   addToCart,
   cartDiscountAmount,
   cartTotals,
+  shelfPrice,
   formatMoney,
   formatQty,
   fromBase,
@@ -426,7 +427,9 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
                     {[Object.values(h.options ?? {}).join(" · "), h.brand, h.sku].filter(Boolean).join(" · ")}
                   </p>
                   <div className="mt-1 flex items-baseline justify-between">
-                    <span className="num font-bold">{h.price === null ? "Sin precio" : formatMoney(Number(h.price), base)}</span>
+                    <span className="num font-bold">
+                      {h.price === null ? "Sin precio" : formatMoney(shelfPrice(Number(h.price), h.tax_rate, pricesIncludeTax), base)}
+                    </span>
                     <span className={cn("num text-xs", h.available <= 0 ? "text-destructive" : "text-muted-foreground")}>
                       {formatQty(h.available)} {h.unit}
                     </span>
@@ -464,6 +467,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
                 line={l}
                 total={totals.lines.find((t) => t.variantId === l.variantId)?.total ?? 0}
                 currency={base}
+                pricesIncludeTax={pricesIncludeTax}
                 onQty={(qty) => setDraft((d) => ({ ...d, lines: setQty(d.lines, l.variantId, qty) }))}
                 onDiscount={(v) => setDraft((d) => ({ ...d, lines: setLineDiscount(d.lines, l.variantId, v) }))}
                 onRemove={() => setDraft((d) => ({ ...d, lines: removeLine(d.lines, l.variantId) }))}
@@ -495,7 +499,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           <dl className="space-y-1 border-t pt-3 text-sm">
             <Row label="Subtotal" value={formatMoney(totals.subtotal, base)} />
             {totals.discount > 0 && <Row label="Descuentos" value={`−${formatMoney(totals.discount, base)}`} />}
-            <Row label={pricesIncludeTax ? "Impuesto incluido" : "Impuesto"} value={formatMoney(totals.tax, base)} />
+            <Row label={pricesIncludeTax ? "Impuesto incluido" : "IVA"} value={formatMoney(totals.tax, base)} />
             <div className="flex items-baseline justify-between pt-1">
               <dt className="font-bold">Total</dt>
               <dd className="num text-2xl font-bold">{formatMoney(totals.total, base)}</dd>
@@ -615,6 +619,7 @@ function CartRow({
   line,
   total,
   currency,
+  pricesIncludeTax,
   onQty,
   onDiscount,
   onRemove,
@@ -622,6 +627,7 @@ function CartRow({
   line: CartLine;
   total: number;
   currency: string;
+  pricesIncludeTax: boolean;
   onQty: (qty: number) => void;
   onDiscount: (value: number) => void;
   onRemove: () => void;
@@ -634,7 +640,7 @@ function CartRow({
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{line.name}</p>
           <p className="truncate text-xs text-muted-foreground">
-            {[Object.values(line.options).join(" · "), line.sku, `${formatMoney(line.price, currency)} c/u`].filter(Boolean).join(" · ")}
+            {[Object.values(line.options).join(" · "), line.sku, `${formatMoney(shelfPrice(line.price, line.taxRate, pricesIncludeTax), currency)} c/u`].filter(Boolean).join(" · ")}
           </p>
         </div>
         <button type="button" onClick={onRemove} aria-label={`Quitar ${line.name}`} className="text-muted-foreground hover:text-destructive">

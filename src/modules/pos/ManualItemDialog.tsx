@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTaxRates } from "@/modules/settings/api";
-import { formatMoney, round2, type CartLine, type ManualKind, type MoneySettings } from "./cart";
+import { formatMoney, round2, shelfPrice, type CartLine, type ManualKind, type MoneySettings } from "./cart";
 import { parseAmount } from "./usePosMoney";
 
 const KINDS: { id: ManualKind; label: string }[] = [
@@ -100,7 +100,7 @@ export default function ManualItemDialog({
           </div>
           <div className="grid grid-cols-[1fr_auto] items-end gap-2">
             <div className="space-y-1">
-              <Label htmlFor="mi-price">Precio unitario</Label>
+              <Label htmlFor="mi-price">Precio unitario sin IVA</Label>
               <Input id="mi-price" inputMode="decimal" className="num" value={price} onChange={(e) => setPrice(e.target.value)} />
             </div>
             <div className="flex gap-1">
@@ -111,7 +111,12 @@ export default function ManualItemDialog({
               ))}
             </div>
           </div>
-          {currency !== base && priceBase > 0 && <p className="text-xs text-muted-foreground">Equivale a {formatMoney(priceBase, base)}</p>}
+          {priceBase > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {currency !== base && <>Equivale a {formatMoney(priceBase, base)} · </>}
+              PVP con IVA ({tax?.rate ?? 0}%): <b className="num text-foreground">{formatMoney(shelfPrice(priceBase, tax?.rate ?? 0, false), base)}</b>
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label htmlFor="mi-qty">Cantidad</Label>
