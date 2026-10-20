@@ -6,24 +6,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/core/supabase";
 import { getActiveTenantId } from "@/core/tenant";
+import { fitWithin, PRODUCT_IMAGES_BUCKET, storagePathOf } from "./photoPaths";
 
-export const PRODUCT_IMAGES_BUCKET = "product-images";
-export const MAX_SIDE_PX = 800;
 const MAX_INPUT_BYTES = 15 * 1024 * 1024;
-
-/** Tamaño final manteniendo la proporción, sin agrandar fotos chicas. */
-export function fitWithin(width: number, height: number, maxSide = MAX_SIDE_PX): { width: number; height: number } {
-  const scale = Math.min(1, maxSide / Math.max(width, height));
-  return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
-}
-
-/** Ruta del archivo dentro del bucket si el enlace es de nuestro bucket; si no, null. */
-export function storagePathOf(url: string | null): string | null {
-  if (!url) return null;
-  const marker = `/storage/v1/object/public/${PRODUCT_IMAGES_BUCKET}/`;
-  const i = url.indexOf(marker);
-  return i === -1 ? null : decodeURIComponent(url.slice(i + marker.length));
-}
 
 async function shrink(file: File): Promise<Blob> {
   if (!file.type.startsWith("image/")) throw new Error("El archivo no es una imagen");

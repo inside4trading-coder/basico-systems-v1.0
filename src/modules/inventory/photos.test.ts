@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fitWithin, storagePathOf } from "./photos";
+import { fitWithin, storagePathOf } from "./photoPaths";
 
 describe("fotos de productos", () => {
   it("achica al lado mayor de 800 px manteniendo la proporción", () => {
