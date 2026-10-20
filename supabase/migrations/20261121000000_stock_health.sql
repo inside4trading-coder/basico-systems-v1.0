@@ -12,6 +12,7 @@
 --   * sobrestock: con ventas y más de 90 días de cobertura.
 --   * sin_rotacion: el mismo criterio de public.report_slow_movers.
 -- Venta diaria y sugerido usan la misma regla que public.report_restock.
+-- Monto en riesgo: sugerido × precio (lo que falta para cubrir, a precio de venta).
 -- ABC por venta del periodo en las sedes consultadas: A hasta el 80 %
 -- acumulado, B hasta el 95 %, C el resto (y lo que no vendió).
 -- Mismas reglas de acceso que los demás reportes (app.report_tenant).
@@ -102,7 +103,7 @@ begin
   scored as (
     select f.*,
            case when f.f_quiebre then round(f.sold / p_days * coalesce(f.price, 0) * f.days_at_zero, 2) end as lost_sales,
-           round(greatest(ceil(f.sold / p_days * p_cover_days) - f.available, 0) * coalesce(f.price, 0), 2) as at_risk,
+           round(coalesce(f.suggested, 0) * coalesce(f.price, 0), 2) as at_risk,
            array_remove(array[
              case when f.f_quiebre then 'quiebre' end,
              case when f.f_por_romper then 'por_romper' end,

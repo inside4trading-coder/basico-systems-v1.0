@@ -89,7 +89,7 @@ from r, jsonb_array_elements(r.j -> 'rows') x;
 -- Resumen por segmento.
 select results_eq(
   $$ select segment, cnt, amount from seg order by segment $$,
-  $$ values ('alta_rotacion_poco_stock', 2, 500.00), ('clase_a_en_riesgo', 2, 550.00), ('por_romper', 2, 400.00),
+  $$ values ('alta_rotacion_poco_stock', 2, 500.00), ('clase_a_en_riesgo', 2, 550.00), ('por_romper', 2, 432.00),
             ('quiebre', 1, 150.00), ('sin_rotacion', 1, 120.00), ('sobrestock', 1, 1200.00) $$,
   'cada segmento con su cantidad y monto'
 );

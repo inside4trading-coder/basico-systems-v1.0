@@ -85,7 +85,7 @@ export interface StockHealthRow {
   days_at_zero: number | null;
   /** Venta perdida estimada (solo quiebre). */
   lost_sales: number | null;
-  /** Venta de los días a cubrir que lo disponible no alcanza. */
+  /** Sugerido × precio: lo que falta para cubrir, a precio de venta. */
   at_risk: number;
   /** A costo (sobrestock y sin rotación). */
   immobilized: number | null;
