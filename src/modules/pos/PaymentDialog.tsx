@@ -23,11 +23,14 @@ import {
   type PaymentDraft,
 } from "./cart";
 import { parseAmount } from "./usePosMoney";
+import CustomerPicker from "@/modules/customers/CustomerPicker";
+import { saleCustomer } from "@/modules/customers/lib";
+import type { SaleCustomer } from "@/modules/customers/api";
 
 export interface PaymentResult {
   payments: PaymentDraft[];
   change: { currency: string; amount: number } | null;
-  customer: { name?: string; doc?: string } | null;
+  customer: SaleCustomer | null;
   note: string | null;
 }
 
@@ -54,8 +57,7 @@ export default function PaymentDialog({
   const [fields, setFields] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [changeCurrency, setChangeCurrency] = useState(money.baseCurrency);
-  const [customerName, setCustomerName] = useState("");
-  const [customerDoc, setCustomerDoc] = useState("");
+  const [customer, setCustomer] = useState<SaleCustomer>({});
   const [note, setNote] = useState("");
 
   useEffect(() => {
@@ -65,8 +67,7 @@ export default function PaymentDialog({
     setAmount(null);
     setFields({});
     setError(null);
-    setCustomerName("");
-    setCustomerDoc("");
+    setCustomer({});
     setNote("");
     setChangeCurrency(money.baseCurrency);
   }, [open, money.baseCurrency]);
@@ -126,7 +127,7 @@ export default function PaymentDialog({
     onConfirm({
       payments,
       change: summary.excess > 0 && change !== null ? { currency: changeCurrency, amount: change } : null,
-      customer: customerName.trim() || customerDoc.trim() ? { name: customerName.trim(), doc: customerDoc.trim() } : null,
+      customer: saleCustomer(customer),
       note: note.trim() || null,
     });
   };
@@ -265,16 +266,9 @@ export default function PaymentDialog({
 
         <details className="rounded-xl border p-4 text-sm">
           <summary className="cursor-pointer font-semibold">Cliente y nota (opcional)</summary>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="mt-3 grid gap-3">
+            <CustomerPicker value={customer} onChange={setCustomer} />
             <div className="space-y-1">
-              <Label htmlFor="pay-customer">Nombre</Label>
-              <Input id="pay-customer" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="pay-doc">Cédula o RIF</Label>
-              <Input id="pay-doc" value={customerDoc} onChange={(e) => setCustomerDoc(e.target.value)} />
-            </div>
-            <div className="space-y-1 sm:col-span-2">
               <Label htmlFor="pay-note">Nota</Label>
               <Input id="pay-note" value={note} onChange={(e) => setNote(e.target.value)} />
             </div>
