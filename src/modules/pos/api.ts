@@ -238,6 +238,42 @@ export interface PosHit {
   match_kind: string;
   available: number;
   tax_rate: number;
+  /** Solo en el catálogo con el buscador vacío. */
+  image_url?: string | null;
+  category?: string | null;
+}
+
+export interface PosCatalog {
+  categories: string[];
+  items: PosHit[];
+}
+
+/** Lo que se vende en la sede, lo más vendido primero (public.pos_catalog). */
+export async function fetchPosCatalog(locationId: string, category: string | null): Promise<PosCatalog> {
+  const { data, error } = await supabase.rpc("pos_catalog", { p_location_id: locationId, p_category: category, p_limit: 60 });
+  if (error) throw asError(error);
+  const r = (data ?? { categories: [], items: [] }) as PosCatalog;
+  return {
+    categories: r.categories ?? [],
+    items: (r.items ?? []).map((h) => ({
+      ...h,
+      options: h.options ?? {},
+      price: h.price === null ? null : Number(h.price),
+      available: Number(h.available),
+      tax_rate: Number(h.tax_rate),
+    })),
+  };
+}
+
+export function usePosCatalog(locationId: string, category: string | null, enabled: boolean) {
+  const { active } = useTenant();
+  return useQuery({
+    enabled,
+    queryKey: ["pos", active?.tenant.id, "catalog", locationId, category],
+    queryFn: () => fetchPosCatalog(locationId, category),
+    placeholderData: (prev) => prev,
+    staleTime: 60_000,
+  });
 }
 
 /**
