@@ -61,6 +61,49 @@ export interface SlowMover {
   first_stocked_at: string | null;
 }
 
+export type StockSegment = "quiebre" | "por_romper" | "alta_rotacion_poco_stock" | "clase_a_en_riesgo" | "sobrestock" | "sin_rotacion";
+
+export interface StockHealthRow {
+  variant_id: string;
+  name: string;
+  sku: string | null;
+  options: Record<string, string>;
+  location_id: string;
+  location_name: string;
+  abc_class: "A" | "B" | "C";
+  sold: number;
+  revenue: number;
+  daily: number;
+  available: number;
+  /** Días que alcanza lo disponible; null sin ventas en el periodo. */
+  cover: number | null;
+  min_qty: number | null;
+  target_qty: number | null;
+  suggested: number | null;
+  price: number | null;
+  cost: number | null;
+  days_at_zero: number | null;
+  /** Venta perdida estimada (solo quiebre). */
+  lost_sales: number | null;
+  /** Venta de los días a cubrir que lo disponible no alcanza. */
+  at_risk: number;
+  /** A costo (sobrestock y sin rotación). */
+  immobilized: number | null;
+  /** El más urgente de `segments`. */
+  segment: StockSegment;
+  segments: StockSegment[];
+}
+
+export interface StockHealthReport {
+  days: number;
+  cover_days: number;
+  /** Por segmento: filas, monto en riesgo o inmovilizado, y filas sin precio o costo. */
+  summary: Record<StockSegment, { count: number; amount: number; missing: number }>;
+  total: number;
+  /** Hasta 1000, lo más urgente primero. */
+  rows: StockHealthRow[];
+}
+
 export interface CashCount {
   currency: string;
   opening: number;
@@ -143,6 +186,18 @@ export function useSlowMovers(days: number, locationId: string | null) {
       const { data, error } = await supabase.rpc("report_slow_movers", { p_days: days, p_location_id: locationId });
       if (error) throw asError(error);
       return numbers<SlowMover[]>(data ?? []);
+    },
+  });
+}
+
+export function useStockHealth(locationId: string | null, days: number, coverDays: number) {
+  const tenant = useTenantKey();
+  return useQuery({
+    queryKey: ["reports", tenant, "stock-health", locationId, days, coverDays],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("report_stock_health", { p_location_id: locationId, p_days: days, p_cover_days: coverDays });
+      if (error) throw asError(error);
+      return numbers<StockHealthReport>(data);
     },
   });
 }

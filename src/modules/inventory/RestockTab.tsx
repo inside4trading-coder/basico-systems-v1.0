@@ -17,9 +17,9 @@ import { formatQty } from "./lib";
 
 const variantName = (r: RestockRow) => [r.name, ...Object.values(r.options ?? {})].join(" · ");
 
-export default function RestockTab() {
+export default function RestockTab({ initialLocationId = null }: { initialLocationId?: string | null }) {
   const { data: locations = [] } = useLocations();
-  const [locationId, setLocationId] = useState<string | null>(null);
+  const [locationId, setLocationId] = useState<string | null>(initialLocationId);
   const [days, setDays] = useState(30);
   const [cover, setCover] = useState(15);
   const [editing, setEditing] = useState<RestockRow | null>(null);
