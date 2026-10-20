@@ -24,6 +24,7 @@ import { useTaxRates } from "@/modules/settings/api";
 import { useCatalog, useLocations, useUpdateProduct, useUpdateVariant } from "./api";
 import { formatMoney, formatQty, SALE_BLOCK_LABEL, saleBlockers, sumStock, variantLabel } from "./lib";
 import NewProductDialog from "./NewProductDialog";
+import { ProductPhotoButton } from "./ProductPhoto";
 import { BulkApplyButton, CostHistoryButton } from "./VariantTools";
 
 export default function InventoryPage() {
@@ -210,6 +211,9 @@ export default function InventoryPage() {
                       <TableCell>
                         <div className="flex min-w-[200px] items-center gap-2">
                           {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                          <span onClick={(e) => e.stopPropagation()}>
+                            <ProductPhotoButton productId={g.product.id} productName={g.product.name} url={g.product.image_url} editable={editable} />
+                          </span>
                           <span className="font-semibold">{g.product.name}</span>
                         </div>
                       </TableCell>
@@ -227,6 +231,7 @@ export default function InventoryPage() {
                     <TableRow key={r.variant.id}>
                       <TableCell>
                         <div className={`flex min-w-[200px] items-center gap-2 ${multi ? "pl-8 text-sm text-muted-foreground" : "font-medium"}`}>
+                          {!multi && <ProductPhotoButton productId={r.product.id} productName={r.product.name} url={r.product.image_url} editable={editable} />}
                           <span>
                             {multi ? variantLabel(r.variant.options) : r.product.name}
                             {!multi && r.product.brand && <span className="ml-2 text-xs text-muted-foreground">{r.product.brand}</span>}
