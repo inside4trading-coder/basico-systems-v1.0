@@ -34,6 +34,7 @@ import {
   fromBase,
   removeLine,
   round2,
+  saleItems,
   setLineDiscount,
   setQty,
   type CartLine,
@@ -50,6 +51,7 @@ import { buildLocalReceipt } from "./offline/localReceipt";
 import { useOfflinePos } from "./offline/useOfflinePos";
 import { useScanner } from "./useScanner";
 import { parseAmount, usePosMoney } from "./usePosMoney";
+import ManualItemDialog from "./ManualItemDialog";
 
 function readStorage<T>(key: string, fallback: T): T {
   try {
@@ -139,6 +141,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
   const [history, setHistory] = useState(false);
   const [receipt, setReceipt] = useState<{ saleId: string } | { local: SaleReceipt } | null>(null);
   const [localResults, setLocalResults] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
   const idempotencyKey = useRef<string | null>(null);
   const sale = useRegisterSale();
 
@@ -262,7 +265,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
     const input: RegisterSaleInput = {
       idempotencyKey: key,
       sessionId: session.id,
-      items: draft.lines.map((l) => ({ variant_id: l.variantId, qty: l.qty, discount: l.discount })),
+      items: saleItems(draft.lines),
       payments: result.payments.map((p) => ({ payment_method_id: p.methodId, amount: p.amount, reference: p.reference, bank: p.bank, extra: p.extra })),
       cartDiscount: totals.cartDiscount,
       change: result.change,
@@ -334,6 +337,15 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
               autoFocus
             />
           </form>
+          <Button variant="outline" size="sm" onClick={() => setManualOpen(true)}>
+            Agregar concepto
+          </Button>
+          <ManualItemDialog
+            open={manualOpen}
+            onOpenChange={setManualOpen}
+            money={money}
+            onAdd={(line) => setDraft((d) => ({ ...d, lines: [...d.lines, line] }))}
+          />
           {searching && <p className="mono-cap text-xs text-muted-foreground">Buscando…</p>}
           {!searching && localResults && hits.length > 0 && (
             <p className="text-xs text-muted-foreground">Sin conexión: resultados del catálogo guardado en este equipo.</p>

@@ -35,7 +35,8 @@ export interface SalesReport {
   by_day: { day: string; tickets: number; net: number }[];
   by_hour: { hour: number; tickets: number; net: number }[];
   by_location: { location_id: string; name: string; tickets: number; net: number }[];
-  by_product: { variant_id: string; name: string; sku: string | null; qty: number; net: number; profit: number | null; costed: boolean }[];
+  /** variant_id null y manual true: concepto manual del POS, agrupado por descripción. */
+  by_product: { variant_id: string | null; manual?: boolean; name: string; sku: string | null; qty: number; net: number; profit: number | null; costed: boolean }[];
   by_method: { method: string; currency: string; count: number; amount: number; amount_base: number }[];
   by_seller: { seller: string; tickets: number; net: number }[];
 }
