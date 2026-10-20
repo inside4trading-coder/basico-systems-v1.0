@@ -6,6 +6,7 @@
  * firma restringida a dueño/administrador distinto de quien ajustó, y
  * cantidades fraccionarias.
  */
+import CountsTab from "./CountsTab";
 import RestockTab from "./RestockTab";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeftRight, ClipboardCheck, PenLine, ScanLine, Undo2 } from "lucide-react";
@@ -769,6 +770,7 @@ export default function ControlPage() {
             {editable && <TabsTrigger value="ajustes">Ajustes</TabsTrigger>}
             {editable && <TabsTrigger value="traslados">Traslados</TabsTrigger>}
             {editable && <TabsTrigger value="reposicion">Reposición</TabsTrigger>}
+            <TabsTrigger value="conteos">Conteos</TabsTrigger>
             <TabsTrigger value="firmas">Firmas{pending ? ` (${pending})` : ""}</TabsTrigger>
             <TabsTrigger value="historial">Historial</TabsTrigger>
             <TabsTrigger value="reportes">Mermas</TabsTrigger>
@@ -796,6 +798,9 @@ export default function ControlPage() {
             </TabsContent>
           </>
         )}
+        <TabsContent value="conteos">
+          <CountsTab />
+        </TabsContent>
         <TabsContent value="firmas">
           <PendingSignatures rows={rows} />
         </TabsContent>
