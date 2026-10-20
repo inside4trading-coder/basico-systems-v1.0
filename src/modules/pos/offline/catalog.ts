@@ -53,6 +53,11 @@ function toHit(row: SnapshotRow, matchKind: string): PosHit {
   };
 }
 
+/** Minúsculas sin tildes: "Bujía" y "bujia" son lo mismo (igual que app.fold en la base). */
+export function fold(text: string): string {
+  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
 export function localLookup(rows: SnapshotRow[], query: string, limit = 30): PosHit[] {
   const q = query.trim();
   if (!q) return [];
@@ -64,9 +69,12 @@ export function localLookup(rows: SnapshotRow[], query: string, limit = 30): Pos
   const byCode = rows.filter((r) => r.codes.some((c) => c.toUpperCase() === upper));
   if (byCode.length) return byCode.map((r) => toHit(r, "codigo"));
 
-  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const words = fold(q).split(/\s+/).filter(Boolean);
   return rows
-    .filter((r) => words.every((w) => r.search.includes(w)))
+    .filter((r) => {
+      const text = fold(r.search);
+      return words.every((w) => text.includes(w));
+    })
     .slice(0, limit)
     .map((r) => toHit(r, "texto"));
 }
