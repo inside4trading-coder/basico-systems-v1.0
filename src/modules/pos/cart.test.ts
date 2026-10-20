@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  saleItems,
   addToCart,
   cartDiscountAmount,
   cartTotals,
@@ -173,5 +174,20 @@ describe("cobro", () => {
     const s = paymentSummary([{ key: "1", methodId: "pm", amount: 100 }], [pagoMovil], 10, { ...money, rate: null });
     expect(s.unconvertible).toBe(true);
     expect(suggestedAmount(5, pagoMovil, { ...money, rate: null })).toBe(0);
+  });
+});
+
+describe("líneas para register_sale", () => {
+  it("catálogo manda la variante; concepto manual, descripción, precio e impuesto", () => {
+    const base = { productId: "p", options: {}, sku: null, unit: "unidad", taxRate: 16, qty: 2, discount: 1, available: null };
+    expect(
+      saleItems([
+        { ...base, variantId: "v1", name: "Filtro", price: 10 },
+        { ...base, variantId: "manual-1", productId: "", name: "Mano de obra", price: 15, manual: { kind: "servicio", taxRateId: "t0" } },
+      ]),
+    ).toEqual([
+      { variant_id: "v1", qty: 2, discount: 1 },
+      { manual: true, kind: "servicio", description: "Mano de obra", price: 15, qty: 2, discount: 1, tax_rate_id: "t0" },
+    ]);
   });
 });

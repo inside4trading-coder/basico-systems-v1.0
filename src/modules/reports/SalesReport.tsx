@@ -19,7 +19,7 @@ export default function SalesReportView({ range, locationId, currency }: { range
   const tag = `${range.from}_${range.to}`;
 
   const productCols: Column<SalesReport["by_product"][number]>[] = [
-    { header: "Producto", value: (r) => r.name },
+    { header: "Producto", value: (r) => (r.manual ? `${r.name} (concepto)` : r.name) },
     { header: "SKU", value: (r) => r.sku },
     { header: "Unidades", value: (r) => r.qty, render: (r) => formatQty(r.qty), align: "right" },
     { header: "Ventas", value: (r) => r.net, render: (r) => money(r.net), align: "right" },
@@ -116,7 +116,7 @@ export default function SalesReportView({ range, locationId, currency }: { range
         </Panel>
       </div>
       <Panel title="Por producto (100 que más venden)" right={<ExportButton fileName={`ventas_producto_${tag}`} rows={data.by_product} columns={productCols} />}>
-        <DataTable rows={data.by_product} columns={productCols} rowKey={(r) => r.variant_id} />
+        <DataTable rows={data.by_product} columns={productCols} rowKey={(r) => r.variant_id ?? `manual-${r.name}`} />
       </Panel>
       <Panel title="Por cajero" right={<ExportButton fileName={`ventas_cajero_${tag}`} rows={data.by_seller} columns={sellerCols} />}>
         <DataTable rows={data.by_seller} columns={sellerCols} rowKey={(r) => r.seller} />

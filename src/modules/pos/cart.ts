@@ -12,7 +12,10 @@
  *   4. pagos convertidos a la moneda base con la tasa; IGTF = base - base/(1+r).
  */
 
+export type ManualKind = "producto" | "servicio" | "extra";
+
 export interface CartLine {
+  /** Variante del catálogo, o "manual-…" para un concepto que no viene del inventario. */
   variantId: string;
   productId: string;
   name: string;
@@ -28,6 +31,21 @@ export interface CartLine {
   discount: number;
   /** Disponible en la sede al momento de agregarlo; null si no se sabe. */
   available: number | null;
+  /** Concepto manual: tipo e impuesto elegido (null = el del negocio). */
+  manual?: { kind: ManualKind; taxRateId: string | null };
+}
+
+export type SaleItemPayload =
+  | { variant_id: string; qty: number; discount?: number }
+  | { manual: true; kind: ManualKind; description: string; price: number; qty: number; discount?: number; tax_rate_id: string | null };
+
+/** Líneas del carrito como las recibe register_sale. */
+export function saleItems(lines: CartLine[]): SaleItemPayload[] {
+  return lines.map((l) =>
+    l.manual
+      ? { manual: true, kind: l.manual.kind, description: l.name, price: l.price, qty: l.qty, discount: l.discount, tax_rate_id: l.manual.taxRateId }
+      : { variant_id: l.variantId, qty: l.qty, discount: l.discount },
+  );
 }
 
 export interface LineTotals {

@@ -3,6 +3,7 @@
  * se arma qué se vende y cómo se paga. Portado de useSublimeCashSession.ts y
  * del cobro de SublimePosApp.tsx (basicosystems@f551478b).
  */
+import type { SaleItemPayload } from "./cart";
 import type { SaleCustomer } from "@/modules/customers/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/core/supabase";
@@ -49,12 +50,8 @@ export interface SessionSummary {
   by_method: { method: string; currency: string; amount: number; amount_base: number }[];
 }
 
-export interface SaleItemInput {
-  variant_id: string;
-  qty: number;
-  /** Descuento de la línea en moneda base. */
-  discount?: number;
-}
+/** Línea de venta: variante del catálogo o concepto manual (descuento en moneda base). */
+export type SaleItemInput = SaleItemPayload;
 
 export interface SalePaymentInput {
   payment_method_id: string;
