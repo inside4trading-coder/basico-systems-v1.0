@@ -42,6 +42,11 @@ export default function SalesReportView({ range, locationId, currency }: { range
     { header: "Tickets", value: (r) => r.tickets, align: "right" },
     { header: "Ventas", value: (r) => r.net, render: (r) => money(r.net), align: "right" },
   ];
+  const channelCols: Column<NonNullable<SalesReport["by_channel"]>[number]>[] = [
+    { header: "Origen", value: (r) => r.channel },
+    { header: "Tickets", value: (r) => r.tickets, align: "right" },
+    { header: "Ventas", value: (r) => r.net, render: (r) => money(r.net), align: "right" },
+  ];
 
   return (
     <div className="space-y-4">
@@ -121,6 +126,11 @@ export default function SalesReportView({ range, locationId, currency }: { range
       <Panel title="Por cajero" right={<ExportButton fileName={`ventas_cajero_${tag}`} rows={data.by_seller} columns={sellerCols} />}>
         <DataTable rows={data.by_seller} columns={sellerCols} rowKey={(r) => r.seller} />
       </Panel>
+      {(data.by_channel?.length ?? 0) > 0 && (
+        <Panel title="Por origen" right={<ExportButton fileName={`ventas_origen_${tag}`} rows={data.by_channel ?? []} columns={channelCols} />}>
+          <DataTable rows={data.by_channel ?? []} columns={channelCols} rowKey={(r) => r.channel} />
+        </Panel>
+      )}
     </div>
   );
 }

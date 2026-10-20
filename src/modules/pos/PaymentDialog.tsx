@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type { PaymentMethod } from "@/modules/settings/api";
+import type { PaymentMethod, SalesChannel } from "@/modules/settings/api";
 import {
   changeIn,
   formatMoney,
@@ -32,6 +32,7 @@ export interface PaymentResult {
   change: { currency: string; amount: number } | null;
   customer: SaleCustomer | null;
   note: string | null;
+  channelId: string | null;
 }
 
 export default function PaymentDialog({
@@ -40,6 +41,8 @@ export default function PaymentDialog({
   total,
   money,
   methods,
+  channels,
+  channelRequired,
   busy,
   onConfirm,
 }: {
@@ -48,6 +51,9 @@ export default function PaymentDialog({
   total: number;
   money: MoneySettings;
   methods: PaymentMethod[];
+  /** Orígenes activos; si channelRequired, hay que elegir uno. */
+  channels: SalesChannel[];
+  channelRequired: boolean;
   busy: boolean;
   onConfirm: (result: PaymentResult) => void;
 }) {
@@ -58,6 +64,7 @@ export default function PaymentDialog({
   const [error, setError] = useState<string | null>(null);
   const [changeCurrency, setChangeCurrency] = useState(money.baseCurrency);
   const [customer, setCustomer] = useState<SaleCustomer>({});
+  const [channelId, setChannelId] = useState<string | null>(null);
   const [note, setNote] = useState("");
 
   useEffect(() => {
@@ -68,6 +75,7 @@ export default function PaymentDialog({
     setFields({});
     setError(null);
     setCustomer({});
+    setChannelId(null);
     setNote("");
     setChangeCurrency(money.baseCurrency);
   }, [open, money.baseCurrency]);
@@ -110,7 +118,9 @@ export default function PaymentDialog({
     setError(null);
   };
 
-  const blocker = summary.unconvertible
+  const blocker = channelRequired && channels.length > 0 && !channelId
+    ? "Elige el origen de la venta."
+    : summary.unconvertible
     ? "Un pago usa una moneda sin tasa."
     : payments.length === 0
       ? "Registra al menos un pago."
@@ -129,6 +139,7 @@ export default function PaymentDialog({
       change: summary.excess > 0 && change !== null ? { currency: changeCurrency, amount: change } : null,
       customer: saleCustomer(customer),
       note: note.trim() || null,
+      channelId,
     });
   };
 
@@ -261,6 +272,28 @@ export default function PaymentDialog({
               </Button>
             ))}
             {change !== null && <span className="num ml-auto text-xl font-bold">{formatMoney(change, changeCurrency)}</span>}
+          </div>
+        )}
+
+        {channels.length > 0 && (
+          <div className="space-y-2 rounded-xl border p-4 text-sm">
+            <p className="font-semibold">
+              Origen de la venta{channelRequired ? "" : " (opcional)"}
+            </p>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Origen de la venta">
+              {channels.map((c) => (
+                <Button
+                  key={c.id}
+                  type="button"
+                  size="sm"
+                  variant={channelId === c.id ? "default" : "outline"}
+                  aria-pressed={channelId === c.id}
+                  onClick={() => setChannelId(channelId === c.id ? null : c.id)}
+                >
+                  {c.name}
+                </Button>
+              ))}
+            </div>
           </div>
         )}
 

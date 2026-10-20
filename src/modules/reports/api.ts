@@ -39,6 +39,8 @@ export interface SalesReport {
   by_product: { variant_id: string | null; manual?: boolean; name: string; sku: string | null; qty: number; net: number; profit: number | null; costed: boolean }[];
   by_method: { method: string; currency: string; count: number; amount: number; amount_base: number }[];
   by_seller: { seller: string; tickets: number; net: number }[];
+  /** Origen de la venta; "Sin origen" agrupa las ventas sin él. */
+  by_channel?: { channel: string; tickets: number; net: number }[];
 }
 
 export interface StockValueReport {

@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { useTenant } from "@/core/tenant-context";
 import { cn } from "@/lib/utils";
 import { useLocations } from "@/modules/inventory/api";
-import { usePaymentMethods, useTenantSettings } from "@/modules/settings/api";
+import { usePaymentMethods, useSalesChannels, useTenantSettings } from "@/modules/settings/api";
 import { isNetworkError } from "@/core/offline";
 import {
   newIdempotencyKey,
@@ -116,6 +116,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
   const { active } = useTenant();
   const { money, stale, currencies, pricesIncludeTax } = usePosMoney();
   const { data: tenantSettings } = useTenantSettings();
+  const { data: channels = [] } = useSalesChannels();
   const { data: methods = [] } = usePaymentMethods();
   const { data: registers = [] } = useRegisters();
   const { data: locations = [] } = useLocations();
@@ -273,6 +274,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
       change: result.change,
       customer: result.customer,
       note: result.note,
+      channelId: result.channelId,
     };
     const soldAt = new Date().toISOString();
     if (!navigator.onLine) return queueOffline({ ...input, soldAt }, result);
@@ -460,7 +462,17 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
       </div>
 
       {money && (
-        <PaymentDialog open={paying} onOpenChange={setPaying} total={totals.total} money={money} methods={methods} busy={sale.isPending} onConfirm={confirm} />
+        <PaymentDialog
+          open={paying}
+          onOpenChange={setPaying}
+          total={totals.total}
+          money={money}
+          methods={methods}
+          channels={channels.filter((c) => c.is_active)}
+          channelRequired={tenantSettings?.channel_required ?? false}
+          busy={sale.isPending}
+          onConfirm={confirm}
+        />
       )}
       <ReceiptDialog
         target={receipt}
