@@ -169,6 +169,9 @@ export function useSaveLocation() {
         is_active: fields.is_active ?? true,
         address: fields.address?.trim() || null,
         phone: fields.phone?.trim() || null,
+        latitude: fields.latitude ?? null,
+        longitude: fields.longitude ?? null,
+        clock_radius_m: fields.clock_radius_m ?? 100,
       };
       const { error } = id
         ? await supabase.from("locations").update(payload).eq("id", id)

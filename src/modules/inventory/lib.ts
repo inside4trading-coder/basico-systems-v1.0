@@ -17,6 +17,10 @@ export interface Location {
   /** Se imprimen en la nota de entrega bajo el nombre de la sede. */
   address: string | null;
   phone: string | null;
+  /** Ubicación y radio para fichar desde el teléfono (add-on Fichaje). */
+  latitude: number | null;
+  longitude: number | null;
+  clock_radius_m: number;
   deleted_at: string | null;
 }
 

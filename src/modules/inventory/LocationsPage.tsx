@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/core/tenant-context";
+import { useEntitlements } from "@/core/useEntitlements";
 import { canSupervise } from "@/core/tenant-selection";
 import { useLocations, useSaveLocation } from "./api";
 import { useRegisters, useSaveRegister } from "@/modules/pos/api";
@@ -29,15 +30,30 @@ interface Draft {
   is_active: boolean;
   address: string | null;
   phone: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  clock_radius_m: number;
 }
 
-const EMPTY: Draft = { name: "", code: "", type: "store", sells_in_pos: true, is_active: true, address: null, phone: null };
+const EMPTY: Draft = {
+  name: "",
+  code: "",
+  type: "store",
+  sells_in_pos: true,
+  is_active: true,
+  address: null,
+  phone: null,
+  latitude: null,
+  longitude: null,
+  clock_radius_m: 100,
+};
 
 export default function LocationsPage() {
   const { active } = useTenant();
   const { data: locations = [], isLoading } = useLocations();
   const save = useSaveLocation();
   const [draft, setDraft] = useState<Draft>(EMPTY);
+  const { fichaje } = useEntitlements();
 
   if (!canSupervise(active?.role)) return <Navigate to="/" replace />;
 
@@ -101,6 +117,7 @@ export default function LocationsPage() {
             <Input id="loc-phone" inputMode="tel" value={draft.phone ?? ""} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} />
           </div>
         </div>
+        {fichaje && <ClockLocationFields draft={draft} onChange={setDraft} />}
         <div className="flex flex-wrap gap-6">
           <label className="flex items-center gap-2 text-sm">
             <Switch checked={draft.sells_in_pos} onCheckedChange={(v) => setDraft({ ...draft, sells_in_pos: v })} />
@@ -142,7 +159,19 @@ export default function LocationsPage() {
               size="sm"
               variant="ghost"
               onClick={() =>
-                setDraft({ id: l.id, name: l.name, code: l.code, type: l.type, sells_in_pos: l.sells_in_pos, is_active: l.is_active, address: l.address, phone: l.phone })
+                setDraft({
+                  id: l.id,
+                  name: l.name,
+                  code: l.code,
+                  type: l.type,
+                  sells_in_pos: l.sells_in_pos,
+                  is_active: l.is_active,
+                  address: l.address,
+                  phone: l.phone,
+                  latitude: l.latitude,
+                  longitude: l.longitude,
+                  clock_radius_m: l.clock_radius_m,
+                })
               }
             >
               Editar
@@ -211,6 +240,64 @@ function RegistersOf({ locationId }: { locationId: string }) {
           Agregar caja
         </Button>
       </form>
+    </div>
+  );
+}
+
+/**
+ * Ubicación de la sede para el fichaje: el personal solo ficha dentro del
+ * radio. Lo más simple es cargarla desde la tienda con el teléfono.
+ */
+function ClockLocationFields({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => void }) {
+  const [locating, setLocating] = useState(false);
+  const coord = (text: string) => {
+    const n = Number(text.trim().replace(",", "."));
+    return text.trim() === "" || !Number.isFinite(n) ? null : n;
+  };
+  const useHere = () => {
+    if (!navigator.geolocation) return toast.error("Este equipo no da la ubicación");
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(false);
+        onChange({ ...draft, latitude: Number(pos.coords.latitude.toFixed(6)), longitude: Number(pos.coords.longitude.toFixed(6)) });
+        toast.success(`Ubicación tomada (precisión ${Math.round(pos.coords.accuracy)} m)`);
+      },
+      (err) => {
+        setLocating(false);
+        toast.error("No se pudo obtener la ubicación", { description: err.message });
+      },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  };
+  return (
+    <div className="space-y-2 rounded-lg border p-3">
+      <p className="text-sm font-medium">Ubicación para fichar</p>
+      <p className="text-xs text-muted-foreground">
+        El personal ficha desde su teléfono solo si está dentro del radio. Sin ubicación, los fichajes de esta sede quedan por revisar.
+      </p>
+      <div className="grid gap-2 sm:grid-cols-[1fr_1fr_8rem_auto] sm:items-end">
+        <div className="space-y-1">
+          <Label htmlFor="loc-lat">Latitud</Label>
+          <Input id="loc-lat" inputMode="decimal" value={draft.latitude ?? ""} onChange={(e) => onChange({ ...draft, latitude: coord(e.target.value) })} />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="loc-lng">Longitud</Label>
+          <Input id="loc-lng" inputMode="decimal" value={draft.longitude ?? ""} onChange={(e) => onChange({ ...draft, longitude: coord(e.target.value) })} />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="loc-radius">Radio (m)</Label>
+          <Input
+            id="loc-radius"
+            inputMode="numeric"
+            value={draft.clock_radius_m}
+            onChange={(e) => onChange({ ...draft, clock_radius_m: Math.min(2000, Math.max(20, Number(e.target.value) || 100)) })}
+          />
+        </div>
+        <Button type="button" variant="outline" onClick={useHere} disabled={locating}>
+          {locating ? "Ubicando…" : "Usar mi ubicación"}
+        </Button>
+      </div>
     </div>
   );
 }

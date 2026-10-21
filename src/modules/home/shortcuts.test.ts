@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { allowedShortcuts, moveKey, pushRecent, selectShortcuts, shortcutForPath, SHORTCUTS } from "./shortcuts";
 
-const all = { pos: true, inventario: true, administracion: true, reportes: true };
+const all = { pos: true, inventario: true, administracion: true, reportes: true, fichaje: true };
 const keys = (rows: { key: string }[]) => rows.map((r) => r.key);
 
 describe("catálogo de accesos de Inicio", () => {
@@ -31,6 +31,11 @@ describe("catálogo de accesos de Inicio", () => {
 
   it("el dueño ve todo el catálogo con todos los módulos", () => {
     expect(allowedShortcuts("owner", all)).toHaveLength(SHORTCUTS.length);
+  });
+
+  it("Fichaje es un add-on: sin él, su acceso no aparece", () => {
+    expect(keys(allowedShortcuts("owner", { ...all, fichaje: false }))).not.toContain("fichaje");
+    expect(keys(allowedShortcuts("owner", all))).toContain("fichaje");
   });
 
   it("sin el módulo en el plan, sus accesos no aparecen", () => {

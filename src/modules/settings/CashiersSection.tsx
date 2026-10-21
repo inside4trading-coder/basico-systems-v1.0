@@ -1,6 +1,7 @@
 /**
- * Personal de caja: quienes atienden sin usuario propio. Se eligen en el POS
- * y el reporte por cajero usa su nombre. Portado de ConfigCajeros
+ * Personal del negocio, con o sin usuario propio: quien atiende la caja se
+ * elige en el POS y el reporte por cajero usa su nombre; con el add-on
+ * Fichaje, la misma lista ficha. Portado de ConfigCajeros
  * (basicosystems@f551478b).
  */
 import { useState, type FormEvent } from "react";
@@ -27,7 +28,7 @@ export default function CashiersSection() {
       { name: name.trim(), location_id: locationId || null },
       {
         onSuccess: () => {
-          toast.success(`${name.trim()} agregado al personal de caja`);
+          toast.success(`${name.trim()} agregado al personal`);
           setName("");
         },
         onError: fail,
@@ -40,9 +41,10 @@ export default function CashiersSection() {
   return (
     <Card className="space-y-3 p-4">
       <div>
-        <p className="mono-cap text-xs text-muted-foreground">Personal de caja</p>
+        <p className="mono-cap text-xs text-muted-foreground">Personal</p>
         <p className="text-sm text-muted-foreground">
-          Quienes atienden sin usuario propio. Se eligen en el POS («Atiende») y el reporte por cajero usa su nombre.
+          Quienes trabajan en el negocio. Los que atienden el POS se eligen al cobrar («Atiende») y el reporte por cajero usa su
+          nombre. Con Fichaje, el PIN y el horario se asignan en Fichaje.
         </p>
       </div>
       <ul className="space-y-2">
@@ -57,6 +59,20 @@ export default function CashiersSection() {
                 if (v && v !== c.name) save.mutate({ id: c.id, name: v }, { onError: fail });
               }}
             />
+            <Input
+              aria-label={`Cargo de ${c.name}`}
+              defaultValue={c.job_title ?? ""}
+              placeholder="Cargo"
+              className="h-9 w-36"
+              onBlur={(e) => {
+                const v = e.target.value.trim() || null;
+                if (v !== c.job_title) save.mutate({ id: c.id, job_title: v }, { onError: fail });
+              }}
+            />
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Switch checked={c.works_pos} onCheckedChange={(v) => save.mutate({ id: c.id, works_pos: v }, { onError: fail })} />
+              Atiende el POS
+            </label>
             <select
               aria-label={`Sede de ${c.name}`}
               className={select}
@@ -79,8 +95,8 @@ export default function CashiersSection() {
         {cashiers.length === 0 && <li className="text-sm text-muted-foreground">Nadie todavía: cada venta queda a nombre del usuario que cobra.</li>}
       </ul>
       <form className="flex flex-wrap gap-2" onSubmit={add}>
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" aria-label="Nombre del cajero" className="min-w-40 flex-1" />
-        <select aria-label="Sede del cajero" className={select} value={locationId} onChange={(e) => setLocationId(e.target.value)}>
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" aria-label="Nombre de la persona" className="min-w-40 flex-1" />
+        <select aria-label="Sede de la persona" className={select} value={locationId} onChange={(e) => setLocationId(e.target.value)}>
           <option value="">Todas las sedes</option>
           {locations.map((l) => (
             <option key={l.id} value={l.id}>

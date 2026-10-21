@@ -33,11 +33,14 @@ export interface TenantSettings {
 }
 
 /** Personal de caja: quien atiende, sin usuario propio. location_id null = todas las sedes. */
+/** Personal del negocio: atiende en el POS y, con el add-on, ficha. */
 export interface Cashier {
   id: string;
   name: string;
   location_id: string | null;
   is_active: boolean;
+  job_title: string | null;
+  works_pos: boolean;
 }
 
 export interface SalesChannel {
@@ -246,7 +249,7 @@ export function useCashiers() {
   return useQuery({
     queryKey: ["cfg", tenant, "cashiers"],
     queryFn: withOfflineCache(`cashiers:${tenant}`, async () => {
-      const { data, error } = await supabase.from("cashiers").select("id, name, location_id, is_active").order("name");
+      const { data, error } = await supabase.from("cashiers").select("id, name, location_id, is_active, job_title, works_pos").order("name");
       if (error) throw error;
       return (data ?? []) as Cashier[];
     }),
@@ -256,11 +259,16 @@ export function useCashiers() {
 export function useSaveCashier() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { id?: string; name?: string; location_id?: string | null; is_active?: boolean }) => {
+    mutationFn: async (input: Partial<Omit<Cashier, "id">> & { id?: string }) => {
       const { id, ...fields } = input;
       const { error } = id
         ? await supabase.from("cashiers").update(fields).eq("id", id)
-        : await supabase.from("cashiers").insert({ name: fields.name?.trim(), location_id: fields.location_id ?? null });
+        : await supabase.from("cashiers").insert({
+            name: fields.name?.trim(),
+            location_id: fields.location_id ?? null,
+            job_title: fields.job_title?.trim() || null,
+            works_pos: fields.works_pos ?? true,
+          });
       if (error) {
         if (error.code === "23505") throw new Error("Ya hay alguien con ese nombre.");
         throw asError(error);

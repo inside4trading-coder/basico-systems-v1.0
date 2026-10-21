@@ -145,7 +145,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
   const { data: tenantSettings } = useTenantSettings();
   const { data: channels = [] } = useSalesChannels();
   const { data: allCashiers = [] } = useCashiers();
-  const cashiers = allCashiers.filter((c) => c.is_active && (!c.location_id || c.location_id === session.location_id));
+  const cashiers = allCashiers.filter((c) => c.is_active && c.works_pos && (!c.location_id || c.location_id === session.location_id));
   const [cashierId, setCashierId] = useStoredCashier(session.register_id);
   const cashier = cashiers.find((c) => c.id === cashierId) ?? null;
   const { data: methods = [] } = usePaymentMethods();

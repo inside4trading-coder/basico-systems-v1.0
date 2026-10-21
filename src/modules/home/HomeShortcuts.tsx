@@ -26,6 +26,7 @@ import {
   SlidersHorizontal,
   Upload,
   UserCog,
+  Clock,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -59,6 +60,7 @@ const ICONS: Record<ShortcutIcon, LucideIcon> = {
   "map-pin": MapPin,
   settings: Settings,
   "user-cog": UserCog,
+  clock: Clock,
 };
 
 const TZ = "America/Caracas";
