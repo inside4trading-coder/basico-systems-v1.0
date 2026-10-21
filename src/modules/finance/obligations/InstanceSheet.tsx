@@ -16,6 +16,7 @@ import { caracasToday } from "@/modules/reports/dates";
 import {
   proofUrl,
   useAttachProofs,
+  useInstanceLinks,
   useInstancePayments,
   useReopenInstance,
   useVoidMovement,
@@ -25,6 +26,7 @@ import {
 } from "../api";
 import { DUE_STATE_LABEL, IMPORTANCE_LABEL, dueState, formatDay, isOpen, relativeDay, remaining } from "../lib";
 import { EditInstanceDialog, PayDialog, ReasonDialog } from "./dialogs";
+import LinkPaymentDialog from "./LinkPaymentDialog";
 import { ACCEPTED_PROOFS, pickProofs } from "./proofs";
 
 export default function InstanceSheet({ instance, obligation, accounts, onClose }: {
@@ -36,10 +38,11 @@ export default function InstanceSheet({ instance, obligation, accounts, onClose 
   const { active } = useTenant();
   const today = caracasToday();
   const payments = useInstancePayments(instance?.id ?? null);
+  const links = useInstanceLinks(instance?.id ?? null);
   const attach = useAttachProofs();
   const reopen = useReopenInstance();
   const voidMovement = useVoidMovement();
-  const [dialog, setDialog] = useState<"pay" | "edit" | "skip" | "void" | null>(null);
+  const [dialog, setDialog] = useState<"pay" | "link" | "edit" | "skip" | "void" | null>(null);
 
   if (!instance) return null;
   const state = dueState(instance.due_date, instance.status, today);
@@ -111,6 +114,11 @@ export default function InstanceSheet({ instance, obligation, accounts, onClose 
                 </Button>
               )}
               {open && (
+                <Button variant="outline" onClick={() => setDialog("link")}>
+                  Enlazar pago existente
+                </Button>
+              )}
+              {open && (
                 <Button variant="outline" onClick={() => setDialog("edit")}>
                   Editar
                 </Button>
@@ -144,7 +152,20 @@ export default function InstanceSheet({ instance, obligation, accounts, onClose 
 
             <section className="space-y-2">
               <h3 className="mono-cap text-[10px] text-muted-foreground">Pagos</h3>
-              {(payments.data ?? []).length === 0 && <p className="text-xs text-muted-foreground">Sin pagos registrados.</p>}
+              {(payments.data ?? []).length === 0 && (links.data ?? []).length === 0 && <p className="text-xs text-muted-foreground">Sin pagos registrados.</p>}
+              {(links.data ?? []).length > 0 && (
+                <ul className="space-y-1">
+                  {(links.data ?? []).map((l) => (
+                    <li key={l.id} className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-2 text-xs">
+                      <span className="min-w-0">
+                        Enlazado · {l.movement ? `${formatDay(l.movement.occurred_on)} · ${accounts.find((a) => a.id === l.movement!.account_id)?.name ?? ""}` : ""}
+                        {l.movement?.reference ? ` · Ref. ${l.movement.reference}` : ""}
+                      </span>
+                      <span className="num font-semibold">{formatMoney(l.amount_applied, instance.currency)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <ul className="space-y-1">
                 {(payments.data ?? []).map((p) => (
                   <li key={p.id} className={`flex items-center justify-between gap-2 rounded-lg border p-2 ${p.voided_at ? "opacity-60" : ""}`}>
@@ -229,6 +250,7 @@ export default function InstanceSheet({ instance, obligation, accounts, onClose 
           </div>
         </SheetContent>
       </Sheet>
+      {dialog === "link" && <LinkPaymentDialog instance={instance} obligation={obligation} accounts={accounts} onClose={() => setDialog(null)} />}
       {dialog === "pay" && <PayDialog instance={instance} obligation={obligation} accounts={usable} onClose={() => setDialog(null)} />}
       {dialog === "edit" && <EditInstanceDialog instance={instance} onClose={() => setDialog(null)} />}
       {(dialog === "skip" || dialog === "void") && <ReasonDialog instance={instance} mode={dialog} onClose={() => setDialog(null)} />}

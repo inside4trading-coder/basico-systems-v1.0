@@ -29,7 +29,7 @@ select set_config('request.headers', '{"x-tenant-id":"aaaaaaaa-1111-1111-1111-11
 -- ---------------------------------------------------------------------------
 
 select is(
-  (select count(*)::int from public.finance_catalog_items where kind = 'category'), 11,
+  (select count(*)::int from public.finance_catalog_items where kind = 'category'), 18,
   'un negocio nuevo arranca con categorías genéricas'
 );
 select lives_ok(

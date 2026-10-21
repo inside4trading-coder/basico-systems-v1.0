@@ -570,3 +570,101 @@ export function useSkipInstance() {
     onSuccess: invalidate,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Enlazar pagos ya registrados a cuotas
+// ---------------------------------------------------------------------------
+
+export interface LinkCandidate {
+  id: string;
+  occurred_on: string;
+  account_id: string;
+  account_name: string;
+  amount: number;
+  currency: string;
+  category: string | null;
+  counterparty: string | null;
+  reference: string | null;
+  note: string | null;
+  allocated: number;
+  linked_here: boolean;
+}
+
+export interface MovementLink {
+  id: string;
+  movement_id: string;
+  amount_allocated: number;
+  amount_applied: number;
+  movement: { occurred_on: string; amount: number; currency: string; reference: string | null; category: string | null; account_id: string } | null;
+}
+
+/** Egresos a mano del rango que se pueden enlazar a la cuota. */
+export function useLinkCandidates(instanceId: string | null, from: string, to: string) {
+  const tenant = useTenantKey();
+  return useQuery({
+    enabled: Boolean(instanceId),
+    queryKey: ["fin", tenant, "link_candidates", instanceId, from, to],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("obligation_link_candidates", { p_instance_id: instanceId, p_from: from, p_to: to });
+      if (error) throw asError(error);
+      return ((data ?? []) as LinkCandidate[]).map((m) => ({ ...m, amount: Number(m.amount), allocated: Number(m.allocated) }));
+    },
+  });
+}
+
+/** Movimientos enlazados a una cuota. */
+export function useInstanceLinks(instanceId: string | null) {
+  const tenant = useTenantKey();
+  return useQuery({
+    enabled: Boolean(instanceId),
+    queryKey: ["fin", tenant, "instance_links", instanceId],
+    queryFn: async () => {
+      const { data: links, error } = await supabase
+        .from("finance_movement_links")
+        .select("id, movement_id, amount_allocated, amount_applied")
+        .eq("obligation_instance_id", instanceId!);
+      if (error) throw asError(error);
+      const ids = (links ?? []).map((l) => l.movement_id);
+      const { data: moves, error: e2 } = ids.length
+        ? await supabase.from("finance_movements").select("id, occurred_on, amount, currency, reference, category, account_id").in("id", ids)
+        : { data: [], error: null };
+      if (e2) throw asError(e2);
+      return (links ?? []).map((l) => {
+        const m = (moves ?? []).find((x) => x.id === l.movement_id);
+        return {
+          ...l,
+          amount_allocated: Number(l.amount_allocated),
+          amount_applied: Number(l.amount_applied),
+          movement: m ? { ...m, amount: Number(m.amount) } : null,
+        };
+      }) as MovementLink[];
+    },
+  });
+}
+
+export function useLinkMovement() {
+  const invalidate = useInvalidateFinance();
+  return useMutation({
+    mutationFn: async (input: { instanceId: string; movementId: string; amount?: number | null; applied?: number | null }) => {
+      const { error } = await supabase.rpc("link_movement", {
+        p_instance_id: input.instanceId,
+        p_movement_id: input.movementId,
+        p_amount: input.amount ?? null,
+        p_applied: input.applied ?? null,
+      });
+      if (error) throw asError(error);
+    },
+    onSuccess: invalidate,
+  });
+}
+
+export function useUnlinkMovement() {
+  const invalidate = useInvalidateFinance();
+  return useMutation({
+    mutationFn: async (linkId: string) => {
+      const { error } = await supabase.rpc("unlink_movement", { p_link_id: linkId });
+      if (error) throw asError(error);
+    },
+    onSuccess: invalidate,
+  });
+}

@@ -16,6 +16,7 @@ import { formatMoney } from "@/modules/pos/cart";
 import { catalogNames, useCatalog } from "../api";
 import { MOVEMENT_KIND_LABEL, formatDay } from "../lib";
 import SuggestInput from "../SuggestInput";
+import CategoryPicker from "../CategoryPicker";
 import CollectionPanel from "./CollectionPanel";
 import { useCreateFromLine, useIgnoreLine, useLineCandidates, useLinkedMovement, useMatchLine, useReopenLine, type BankLine } from "./api";
 import { LINE_STATUS_LABEL } from "./labels";
@@ -177,7 +178,7 @@ export default function LineSheet({ line, onClose }: { line: BankLine | null; on
                   <p className="text-xs text-muted-foreground">Queda en el libro con la fecha, el monto y la referencia del banco, ya conciliado.</p>
                   <div className="space-y-1">
                     <Label htmlFor="bl-category">Categoría</Label>
-                    <SuggestInput id="bl-category" value={category} onChange={setCategory} options={catalogNames(catalog, "category", line.direction)} />
+                    <CategoryPicker id="bl-category" value={category} onChange={setCategory} direction={line.direction} />
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="bl-counterparty">{line.direction === "in" ? "De quién" : "A quién"}</Label>
