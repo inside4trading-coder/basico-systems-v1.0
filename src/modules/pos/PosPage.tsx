@@ -5,9 +5,12 @@
  * el que calcula register_sale en el servidor.
  */
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Minus, Plus, Search, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Minus, Plus, Search, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import AppShell from "@/components/AppShell";
+import RateBadge from "@/components/RateBadge";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTenant } from "@/core/tenant-context";
@@ -28,6 +31,7 @@ import {
 import {
   addToCart,
   cartDiscountAmount,
+  currencySymbol,
   cartTotals,
   shelfPrice,
   formatMoney,
@@ -58,6 +62,8 @@ import { parseAmount, usePosMoney } from "./usePosMoney";
 import ManualItemDialog from "./ManualItemDialog";
 import { CatalogPanel, ProductCard, ProductGrid } from "./ProductCard";
 import SessionAlerts from "./SessionAlerts";
+import DualPrice from "./DualPrice";
+import FunctionsBar, { type PosFunction } from "./FunctionsBar";
 
 function readStorage<T>(key: string, fallback: T): T {
   try {
@@ -135,9 +141,11 @@ interface CartDraft {
   lines: CartLine[];
   discountMode: "amount" | "percent";
   discountValue: string;
+  /** Nota del pedido; se lleva al cobro. */
+  note?: string;
 }
 
-const EMPTY_DRAFT: CartDraft = { lines: [], discountMode: "amount", discountValue: "" };
+const EMPTY_DRAFT: CartDraft = { lines: [], discountMode: "amount", discountValue: "", note: "" };
 
 function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => void }) {
   const { active } = useTenant();
@@ -176,6 +184,12 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
   const [receipt, setReceipt] = useState<{ saleId: string } | { local: SaleReceipt } | null>(null);
   const [localResults, setLocalResults] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const discountRef = useRef<HTMLInputElement>(null);
+  const cartRef = useRef<HTMLElement>(null);
+  const cartHeight = useFitToViewport(cartRef);
+  const lastSaleKey = `pos.lastSale.${session.id}`;
+  const [lastSaleId, setLastSaleId] = useState<string | null>(() => readStorage(lastSaleKey, null));
   const idempotencyKey = useRef<string | null>(null);
   const sale = useRegisterSale();
 
@@ -323,6 +337,8 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
         toast.warning(`El servidor calculó ${formatMoney(res.total, money!.baseCurrency)}`);
       }
       finishSale();
+      setLastSaleId(res.sale_id);
+      writeStorage(lastSaleKey, res.sale_id);
       setReceipt({ saleId: res.sale_id });
     } catch (err) {
       if (isNetworkError(err)) return queueOffline({ ...input, soldAt }, result);
@@ -331,57 +347,84 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
   };
 
   const base = money?.baseCurrency ?? active?.tenant.base_currency ?? "USD";
-  const localTotal = money?.localCurrency ? fromBase(totals.total, money.localCurrency, money) : null;
+  const hasLines = draft.lines.length > 0;
+
+  const onFunction = (id: PosFunction) => {
+    switch (id) {
+      case "manual":
+        return setManualOpen(true);
+      case "note":
+        return setNoteOpen(true);
+      case "cash":
+        return setMoving(true);
+      case "discount":
+        if (!hasLines) return toast.info("Agrega productos para aplicar un descuento");
+        return discountRef.current?.focus();
+      case "suspend":
+        if (!hasLines) return toast.info("El carrito está vacío");
+        return setHolding(true);
+      case "resume":
+        return setHeldOpen(true);
+      case "return":
+        toast.info("Elige la venta y usa «Devolver»");
+        return setHistory(true);
+      case "history":
+        return setHistory(true);
+      case "reprint":
+        if (!lastSaleId) return toast.info("Aún no hay ventas en esta caja", { description: "Busca una venta anterior en Historial." });
+        return setReceipt({ saleId: lastSaleId });
+      case "close":
+        return setClosing(true);
+      default:
+        return;
+    }
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card p-3">
-        <div className="text-sm">
-          <p className="font-semibold">
-            {register?.name ?? "Caja"} · <span className="mono">{session.number}</span>
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {location?.name}
-            {money?.localCurrency && money.rate ? (
-              <span className="num ml-2 rounded-full border px-2 py-0.5 text-[11px] text-foreground">
-                Tasa {formatMoney(money.rate, money.localCurrency)}
-              </span>
-            ) : null}
-          </p>
-          {cashiers.length > 0 && (
-            <label className="mt-1 flex items-center gap-1 text-xs">
-              <span className="text-muted-foreground">Atiende:</span>
-              <select
-                aria-label="Cajero"
-                className="rounded border border-input bg-background px-1 py-0.5 text-xs"
-                value={cashier?.id ?? ""}
-                onChange={(e) => setCashierId(e.target.value || null)}
-              >
-                <option value="">Sin elegir</option>
-                {cashiers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-        </div>
+    <div className="space-y-3 pb-24 lg:pb-0">
+      <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3">
+        <dl className="flex flex-wrap items-end gap-x-5 gap-y-2 text-sm">
+          <HeaderField label="Sede" value={location?.name ?? "—"} />
+          <HeaderField label="Caja" value={register?.name ?? "Caja"} />
+          <HeaderField label="Sesión" value={<span className="mono">{session.number}</span>} />
+          <div>
+            <dt className="mono-cap text-[10px] text-muted-foreground">Cajero</dt>
+            <dd>
+              {cashiers.length > 0 ? (
+                <select
+                  aria-label="Cajero"
+                  className="rounded border border-input bg-background px-1 py-0.5 text-sm font-semibold"
+                  value={cashier?.id ?? ""}
+                  onChange={(e) => setCashierId(e.target.value || null)}
+                >
+                  <option value="">Sin elegir</option>
+                  {cashiers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-semibold">—</span>
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt className="mono-cap text-[10px] text-muted-foreground">Tasa</dt>
+            <dd>
+              <RateBadge className="text-foreground" />
+            </dd>
+          </div>
+        </dl>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" disabled={!offline.online} title={offline.online ? undefined : "Necesita conexión"} onClick={() => setHistory(true)}>
-            Ventas
-          </Button>
           <Button size="sm" variant="outline" disabled={!offline.online} title={offline.online ? undefined : "Necesita conexión"} onClick={() => setMoving(true)}>
-            Efectivo
-          </Button>
-          <Button size="sm" variant="outline" disabled={!offline.online} title={offline.online ? undefined : "Necesita conexión"} onClick={() => setClosing(true)}>
-            Cerrar caja
+            <Wallet className="h-4 w-4" /> Movimientos de caja
           </Button>
           <Button size="sm" variant="ghost" onClick={onLeave}>
-            Cambiar caja
+            <ArrowLeftRight className="h-4 w-4" /> Cambiar caja
           </Button>
         </div>
-      </div>
+      </header>
 
       <SessionAlerts
         openedAt={session.opened_at}
@@ -397,8 +440,16 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
         </p>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_420px]">
-        <section className="space-y-3" aria-label="Catálogo">
+      <FunctionsBar
+        online={offline.online}
+        hidden={["coupon"]}
+        badges={{ resume: held.data?.length ?? 0 }}
+        active={{ note: Boolean(draft.note?.trim()) }}
+        onAction={onFunction}
+      />
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_400px]">
+        <section className="min-w-0 space-y-3" aria-label="Catálogo">
           <form onSubmit={submitSearch} className="flex gap-2">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -414,9 +465,6 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
             </div>
             <ScanButton className="h-12" showLabel onScan={(code) => runSearch(code, true)} />
           </form>
-          <Button variant="outline" size="sm" onClick={() => setManualOpen(true)}>
-            Agregar concepto
-          </Button>
           <ManualItemDialog
             open={manualOpen}
             onOpenChange={setManualOpen}
@@ -447,80 +495,116 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           )}
         </section>
 
-        <section className="space-y-3 rounded-xl border bg-card p-3 lg:sticky lg:top-4 lg:self-start" aria-label="Carrito">
-          <div className="flex flex-wrap items-center justify-between gap-1">
-            <h2 className="text-base">Carrito</h2>
-            <div className="flex flex-wrap gap-1">
-              <Button size="sm" variant="outline" disabled={!offline.online} onClick={() => setHeldOpen(true)}>
-                En espera{held.data?.length ? ` (${held.data.length})` : ""}
-              </Button>
-              {draft.lines.length > 0 && (
-                <>
-                  <Button size="sm" variant="outline" disabled={!offline.online} onClick={() => setHolding(true)}>
-                    Apartar
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setDraft(EMPTY_DRAFT)}>
-                    Vaciar
-                  </Button>
-                </>
+        {/* El carrito tiene su propio scroll: totales y Cobrar quedan siempre a la vista. */}
+        <section
+          ref={cartRef}
+          style={cartHeight ? { height: cartHeight } : undefined}
+          className="flex flex-col rounded-xl border bg-card lg:sticky lg:top-4 lg:self-start"
+          aria-label="Carrito"
+        >
+          <div className="flex items-center justify-between gap-2 border-b p-3">
+            <h2 className="text-base">
+              Carrito
+              {hasLines && (
+                <span className="num ml-2 rounded-full bg-foreground px-2 py-0.5 text-xs text-background">
+                  {formatQty(draft.lines.reduce((a, l) => a + l.qty, 0))} und.
+                </span>
               )}
-            </div>
-          </div>
-          {draft.lines.length === 0 && <p className="text-sm text-muted-foreground">Escanea o busca un producto para empezar.</p>}
-          <ul className="space-y-2">
-            {draft.lines.map((l) => (
-              <CartRow
-                key={l.variantId}
-                line={l}
-                total={totals.lines.find((t) => t.variantId === l.variantId)?.total ?? 0}
-                currency={base}
-                money={money}
-                pricesIncludeTax={pricesIncludeTax}
-                onQty={(qty) => setDraft((d) => ({ ...d, lines: setQty(d.lines, l.variantId, qty) }))}
-                onDiscount={(v) => setDraft((d) => ({ ...d, lines: setLineDiscount(d.lines, l.variantId, v) }))}
-                onRemove={() => setDraft((d) => ({ ...d, lines: removeLine(d.lines, l.variantId) }))}
-              />
-            ))}
-          </ul>
-
-          {draft.lines.length > 0 && (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="shrink-0">Descuento</span>
-              <Input
-                inputMode="decimal"
-                aria-label="Descuento del carrito"
-                value={draft.discountValue}
-                onChange={(e) => setDraft((d) => ({ ...d, discountValue: e.target.value }))}
-                className="num h-9"
-                placeholder="0"
-              />
-              <div className="flex shrink-0">
-                {(["amount", "percent"] as const).map((m) => (
-                  <Button key={m} size="sm" variant={draft.discountMode === m ? "default" : "outline"} onClick={() => setDraft((d) => ({ ...d, discountMode: m }))}>
-                    {m === "amount" ? base : "%"}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <dl className="space-y-1 border-t pt-3 text-sm">
-            <Row label="Subtotal" value={formatMoney(totals.subtotal, base)} />
-            {totals.discount > 0 && <Row label="Descuentos" value={`−${formatMoney(totals.discount, base)}`} />}
-            <Row label={pricesIncludeTax ? "Impuesto incluido" : "IVA"} value={formatMoney(totals.tax, base)} />
-            <div className="flex items-baseline justify-between pt-1">
-              <dt className="font-bold">Total</dt>
-              <dd className="num text-2xl font-bold">{formatMoney(totals.total, base)}</dd>
-            </div>
-            {localTotal !== null && money?.localCurrency && (
-              <Row label="Equivale" value={formatMoney(localTotal, money.localCurrency)} />
+            </h2>
+            {hasLines && (
+              <Button size="sm" variant="ghost" onClick={() => setDraft(EMPTY_DRAFT)}>
+                Vaciar
+              </Button>
             )}
-          </dl>
-          <Button size="lg" className="h-14 w-full text-base" disabled={draft.lines.length === 0 || !money} onClick={openPayment}>
-            Cobrar {draft.lines.length > 0 ? formatMoney(totals.total, base) : ""}
-          </Button>
+          </div>
+          <div className="min-h-[120px] flex-1 overflow-y-auto p-3">
+            {!hasLines && <p className="py-8 text-center text-sm text-muted-foreground">Escanea o elige un producto del catálogo.</p>}
+            <ul className="space-y-2">
+              {draft.lines.map((l) => (
+                <CartRow
+                  key={l.variantId}
+                  line={l}
+                  total={totals.lines.find((t) => t.variantId === l.variantId)?.total ?? 0}
+                  currency={base}
+                  money={money}
+                  pricesIncludeTax={pricesIncludeTax}
+                  onQty={(qty) => setDraft((d) => ({ ...d, lines: setQty(d.lines, l.variantId, qty) }))}
+                  onDiscount={(v) => setDraft((d) => ({ ...d, lines: setLineDiscount(d.lines, l.variantId, v) }))}
+                  onRemove={() => setDraft((d) => ({ ...d, lines: removeLine(d.lines, l.variantId) }))}
+                />
+              ))}
+            </ul>
+          </div>
+
+          <div className="space-y-3 border-t p-3">
+            {hasLines && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="shrink-0">Descuento</span>
+                <Input
+                  ref={discountRef}
+                  inputMode="decimal"
+                  aria-label="Descuento del carrito"
+                  value={draft.discountValue}
+                  onChange={(e) => setDraft((d) => ({ ...d, discountValue: e.target.value }))}
+                  className="num h-9"
+                  placeholder="0"
+                />
+                <div className="flex shrink-0">
+                  {(["amount", "percent"] as const).map((m) => (
+                    <Button key={m} size="sm" variant={draft.discountMode === m ? "default" : "outline"} onClick={() => setDraft((d) => ({ ...d, discountMode: m }))}>
+                      {m === "amount" ? currencySymbol(base) : "%"}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {draft.note?.trim() && (
+              <button
+                type="button"
+                onClick={() => setNoteOpen(true)}
+                className="block w-full truncate rounded-md border border-dashed px-2 py-1 text-left text-xs text-muted-foreground"
+              >
+                Nota: {draft.note}
+              </button>
+            )}
+            <dl className="space-y-1 text-sm">
+              <Row label="Subtotal" value={<DualInline amount={totals.subtotal} base={base} money={money} />} />
+              {totals.discount > 0 && (
+                <Row
+                  label="Descuentos"
+                  value={
+                    <>
+                      −<DualInline amount={totals.discount} base={base} money={money} />
+                    </>
+                  }
+                />
+              )}
+              <Row label={pricesIncludeTax ? "Impuesto incluido" : "IVA"} value={<DualInline amount={totals.tax} base={base} money={money} />} />
+              <div className="flex items-start justify-between pt-1">
+                <dt className="font-bold">Total</dt>
+                <dd className="text-right">
+                  <DualPrice amount={totals.total} baseCurrency={base} money={money} size="lg" className="items-end" />
+                </dd>
+              </div>
+            </dl>
+            <Button size="lg" className="h-14 w-full text-base" disabled={!hasLines || !money} onClick={openPayment}>
+              Cobrar
+            </Button>
+          </div>
         </section>
       </div>
+
+      {/* En el teléfono, el cobro queda fijo abajo mientras se agregan productos. */}
+      {hasLines && (
+        <div className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t bg-background p-3 lg:hidden">
+          <DualPrice amount={totals.total} baseCurrency={base} money={money} />
+          <Button size="lg" className="h-12 flex-1" disabled={!money} onClick={openPayment}>
+            Cobrar
+          </Button>
+        </div>
+      )}
+
+      <NoteDialog open={noteOpen} onOpenChange={setNoteOpen} value={draft.note ?? ""} onSave={(note) => setDraft((d) => ({ ...d, note }))} />
 
       {money && (
         <PaymentDialog
@@ -532,6 +616,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           channels={channels.filter((c) => c.is_active)}
           channelRequired={tenantSettings?.channel_required ?? false}
           busy={sale.isPending}
+          initialNote={draft.note ?? ""}
           onConfirm={confirm}
         />
       )}
@@ -645,7 +730,9 @@ function CartRow({
   const [editing, setEditing] = useState(false);
   const [discountMode, setDiscountMode] = useState<"amount" | "percent">("amount");
   const applyDiscount = (text: string) => onDiscount(lineDiscountAmount(discountMode, parseAmount(text), line));
-  const localTotal = money?.localCurrency ? fromBase(total, money.localCurrency, money) : null;
+  const unit = shelfPrice(line.price, line.taxRate, pricesIncludeTax);
+  const unitLocal = money?.localCurrency && money.rate ? fromBase(unit, money.localCurrency, money) : null;
+  const unitLabel = unitLocal !== null && money?.localCurrency ? `${formatMoney(unitLocal, money.localCurrency)} (${formatMoney(unit, currency)})` : formatMoney(unit, currency);
   const atMax = line.available !== null && line.qty >= line.available;
   return (
     <li className="space-y-2 rounded-lg border p-2">
@@ -653,7 +740,7 @@ function CartRow({
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{line.name}</p>
           <p className="truncate text-xs text-muted-foreground">
-            {[Object.values(line.options).join(" · "), line.sku, `${formatMoney(shelfPrice(line.price, line.taxRate, pricesIncludeTax), currency)} c/u`].filter(Boolean).join(" · ")}
+            {[Object.values(line.options).join(" · "), line.sku, `${unitLabel} c/u`].filter(Boolean).join(" · ")}
           </p>
         </div>
         <button type="button" onClick={onRemove} aria-label={`Quitar ${line.name}`} className="text-muted-foreground hover:text-destructive">
@@ -686,12 +773,7 @@ function CartRow({
         <button type="button" className="text-xs text-primary underline" onClick={() => setEditing(!editing)}>
           {line.discount > 0 ? `−${formatMoney(line.discount, currency)}` : "Descuento"}
         </button>
-        <span className="text-right">
-          <span className="num block font-semibold">{formatMoney(total, currency)}</span>
-          {localTotal !== null && money?.localCurrency && (
-            <span className="num block text-[11px] text-muted-foreground">{formatMoney(localTotal, money.localCurrency)}</span>
-          )}
-        </span>
+        <DualPrice amount={total} baseCurrency={currency} money={money} size="sm" className="items-end text-right" />
       </div>
       {editing && (
         <div className="flex gap-1">
@@ -707,7 +789,7 @@ function CartRow({
                 setEditing(false);
               }
             }}
-            placeholder={discountMode === "percent" ? "Porcentaje" : `Monto en ${currency}`}
+            placeholder={discountMode === "percent" ? "Porcentaje" : `Monto en ${currencySymbol(currency)}`}
             className="num h-9"
             autoFocus
           />
@@ -721,7 +803,7 @@ function CartRow({
               aria-pressed={discountMode === m}
               onClick={() => setDiscountMode(m)}
             >
-              {m === "percent" ? "%" : currency}
+              {m === "percent" ? "%" : currencySymbol(currency)}
             </Button>
           ))}
         </div>
@@ -730,11 +812,113 @@ function CartRow({
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between">
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="num">{value}</dd>
     </div>
+  );
+}
+
+/**
+ * Alto del carrito en pantallas anchas: llega justo al borde inferior de la
+ * ventana, para que totales y Cobrar se vean sin desplazar la página.
+ */
+function useFitToViewport(ref: React.RefObject<HTMLElement | null>): number | null {
+  const [height, setHeight] = useState<number | null>(null);
+  useEffect(() => {
+    const wide = window.matchMedia("(min-width: 1024px)");
+    const update = () => {
+      const el = ref.current;
+      if (!el || !wide.matches) return setHeight(null);
+      const top = Math.max(el.getBoundingClientRect().top, 16);
+      setHeight(Math.max(420, Math.round(window.innerHeight - top - 16)));
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, { passive: true });
+    wide.addEventListener("change", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update);
+      wide.removeEventListener("change", update);
+    };
+  }, [ref]);
+  return height;
+}
+
+function HeaderField({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="mono-cap text-[10px] text-muted-foreground">{label}</dt>
+      <dd className="font-semibold">{value}</dd>
+    </div>
+  );
+}
+
+/** Bs y REF en una sola línea, para subtotales. */
+function DualInline({ amount, base, money }: { amount: number; base: string; money: MoneySettings | null }) {
+  const local = money?.localCurrency && money.rate ? fromBase(amount, money.localCurrency, money) : null;
+  if (local === null || !money?.localCurrency) return <>{formatMoney(amount, base)}</>;
+  return (
+    <>
+      {formatMoney(local, money.localCurrency)} <span className="text-[11px] text-muted-foreground">· {formatMoney(amount, base)}</span>
+    </>
+  );
+}
+
+function NoteDialog({
+  open,
+  onOpenChange,
+  value,
+  onSave,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  value: string;
+  onSave: (note: string) => void;
+}) {
+  const [text, setText] = useState(value);
+  useEffect(() => {
+    if (open) setText(value);
+  }, [open, value]);
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Nota del pedido</DialogTitle>
+        </DialogHeader>
+        <Textarea
+          aria-label="Nota del pedido"
+          value={text}
+          maxLength={500}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Ej.: entregar mañana, el cliente retira en tienda…"
+          autoFocus
+        />
+        <DialogFooter>
+          {value && (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                onSave("");
+                onOpenChange(false);
+              }}
+            >
+              Quitar nota
+            </Button>
+          )}
+          <Button
+            onClick={() => {
+              onSave(text.trim());
+              onOpenChange(false);
+            }}
+          >
+            Guardar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

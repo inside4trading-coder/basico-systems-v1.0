@@ -44,6 +44,7 @@ export default function PaymentDialog({
   channels,
   channelRequired,
   busy,
+  initialNote = "",
   onConfirm,
 }: {
   open: boolean;
@@ -55,6 +56,8 @@ export default function PaymentDialog({
   channels: SalesChannel[];
   channelRequired: boolean;
   busy: boolean;
+  /** Nota que ya se escribió desde el POS. */
+  initialNote?: string;
   onConfirm: (result: PaymentResult) => void;
 }) {
   const [payments, setPayments] = useState<PaymentDraft[]>([]);
@@ -76,8 +79,10 @@ export default function PaymentDialog({
     setError(null);
     setCustomer({});
     setChannelId(null);
-    setNote("");
+    setNote(initialNote);
     setChangeCurrency(money.baseCurrency);
+    // La nota solo se toma al abrir el cobro.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, money.baseCurrency]);
 
   const usable = useMemo(
@@ -154,11 +159,15 @@ export default function PaymentDialog({
 
         <div className="rounded-xl border bg-card p-4">
           <p className="mono-cap text-[10px] text-muted-foreground">Total a cobrar</p>
-          <p className="num text-3xl font-bold">{formatMoney(total, money.baseCurrency)}</p>
-          {local !== null && money.localCurrency && (
-            <p className="num text-sm text-muted-foreground">
-              {formatMoney(local, money.localCurrency)} · tasa {money.rate?.toLocaleString("es-VE", { maximumFractionDigits: 4 })}
-            </p>
+          {local !== null && money.localCurrency ? (
+            <>
+              <p className="num text-3xl font-bold">{formatMoney(local, money.localCurrency)}</p>
+              <p className="num text-sm text-muted-foreground">
+                {formatMoney(total, money.baseCurrency)} · tasa {money.rate?.toLocaleString("es-VE", { maximumFractionDigits: 4 })}
+              </p>
+            </>
+          ) : (
+            <p className="num text-3xl font-bold">{formatMoney(total, money.baseCurrency)}</p>
           )}
         </div>
 

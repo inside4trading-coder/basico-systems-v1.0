@@ -296,23 +296,7 @@ export function changeIn(excessBase: number, currency: string, s: MoneySettings)
   return fromBase(excessBase, currency, s);
 }
 
-export function formatMoney(value: number, currency: string): string {
-  const n = value.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `${currencySymbol(currency)} ${n}`;
-}
-
-export function currencySymbol(currency: string): string {
-  switch (currency) {
-    case "USD":
-      return "$";
-    case "VES":
-      return "Bs.";
-    case "EUR":
-      return "€";
-    default:
-      return currency;
-  }
-}
+export { currencySymbol, formatMoney } from "@/core/money";
 
 export function formatQty(qty: number): string {
   return qty.toLocaleString("es-VE", { maximumFractionDigits: 3 });
