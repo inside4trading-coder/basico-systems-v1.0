@@ -45,8 +45,16 @@ export function ProductCard({
         {details && <p className="truncate text-[11px] text-muted-foreground">{details}</p>}
         <div className="mt-auto flex items-end justify-between gap-2 pt-1">
           <div>
-            <p className="num font-bold">{pvp === null ? "Sin precio" : formatMoney(pvp, baseCurrency)}</p>
-            {local !== null && money?.localCurrency && <p className="num text-[11px] text-muted-foreground">{formatMoney(local, money.localCurrency)}</p>}
+            {pvp === null ? (
+              <p className="num font-bold">Sin precio</p>
+            ) : local !== null && money?.localCurrency ? (
+              <>
+                <p className="num font-bold">{formatMoney(local, money.localCurrency)}</p>
+                <p className="num text-[11px] text-muted-foreground">{formatMoney(pvp, baseCurrency)}</p>
+              </>
+            ) : (
+              <p className="num font-bold">{formatMoney(pvp, baseCurrency)}</p>
+            )}
           </div>
           <span className={cn("num whitespace-nowrap text-[11px]", hit.available <= 0 ? "text-destructive" : "text-muted-foreground")}>
             {formatQty(hit.available)} disp.

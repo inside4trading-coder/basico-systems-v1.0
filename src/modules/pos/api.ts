@@ -27,6 +27,8 @@ export interface CashSession {
   opened_by: string;
   opened_at: string;
   closed_at: string | null;
+  /** Quién atiende la caja ahora; se elige al abrir. */
+  cashier_id: string | null;
 }
 
 export interface CashLine {
@@ -76,6 +78,8 @@ export interface RegisterSaleInput {
   channelId?: string | null;
   /** Personal de caja que atendió. */
   cashierId?: string | null;
+  /** Cupón aplicado: su descuento va incluido en cartDiscount. Necesita conexión. */
+  coupon?: { code: string; discount: number } | null;
 }
 
 export interface RegisterSaleResult {
@@ -155,10 +159,37 @@ export function useSessionSummary(sessionId: string | null) {
 export function useOpenSession() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ registerId, opening, note }: { registerId: string; opening: { currency: string; amount: number }[]; note?: string }) => {
-      const { data, error } = await supabase.rpc("open_cash_session", { p_register_id: registerId, p_opening: opening, p_note: note ?? null });
+    mutationFn: async ({
+      registerId,
+      opening,
+      note,
+      cashierId,
+    }: {
+      registerId: string;
+      opening: { currency: string; amount: number }[];
+      note?: string;
+      cashierId?: string | null;
+    }) => {
+      const { data, error } = await supabase.rpc("open_cash_session", {
+        p_register_id: registerId,
+        p_opening: opening,
+        p_note: note ?? null,
+        p_cashier_id: cashierId ?? null,
+      });
       if (error) throw asError(error);
       return data as { session_id: string; number: string };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["pos"] }),
+  });
+}
+
+/** Relevo de cajero con la caja abierta. */
+export function useChangeSessionCashier() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ sessionId, cashierId }: { sessionId: string; cashierId: string }) => {
+      const { error } = await supabase.rpc("change_session_cashier", { p_session_id: sessionId, p_cashier_id: cashierId });
+      if (error) throw asError(error);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["pos"] }),
   });
@@ -194,6 +225,24 @@ export function useCloseSession() {
 }
 
 export async function registerSale(input: RegisterSaleInput): Promise<RegisterSaleResult> {
+  if (input.coupon) {
+    const { data, error } = await supabase.rpc("register_sale_coupon", {
+      p_idempotency_key: input.idempotencyKey,
+      p_session_id: input.sessionId,
+      p_items: input.items,
+      p_payments: input.payments,
+      p_cart_discount: input.cartDiscount ?? 0,
+      p_coupon_code: input.coupon.code,
+      p_coupon_discount: input.coupon.discount,
+      p_change: input.change ?? null,
+      p_customer: input.customer ?? null,
+      p_note: input.note ?? null,
+      p_channel_id: input.channelId ?? null,
+      p_cashier_id: input.cashierId ?? null,
+    });
+    if (error) throw asError(error);
+    return data as RegisterSaleResult;
+  }
   const { data, error } = await supabase.rpc("register_sale", {
     p_idempotency_key: input.idempotencyKey,
     p_session_id: input.sessionId,
