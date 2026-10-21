@@ -8,6 +8,7 @@ import { useTenant } from "@/core/tenant-context";
 import { useEntitlements } from "@/core/useEntitlements";
 import { usePaymentMethods } from "@/modules/settings/api";
 import type { FinancingRow } from "./financingFile";
+import type { FinancingPaymentRow } from "./paymentsFile";
 
 export interface ReceivableInstallment {
   id: string;
@@ -244,4 +245,93 @@ export function useFinancingEnabled(): boolean {
   const entitlements = useEntitlements();
   const { data: methods = [] } = usePaymentMethods();
   return Boolean(entitlements.cashea) && methods.some((m) => m.kind === "bnpl" && m.is_active);
+}
+
+// ---------------------------------------------------------------------------
+// Financiadora, paso 2: pagos recibidos
+// ---------------------------------------------------------------------------
+
+export type PaymentRowStatus = "conciliado" | "posible" | "sin_banco" | "sin_operacion" | "pago_inicial" | "duplicado";
+
+export interface PaymentsImportResult {
+  dry_run: boolean;
+  matched: number;
+  possible: number;
+  no_bank: number;
+  no_operation: number;
+  initial: number;
+  duplicated: number;
+  rows: {
+    row: string;
+    status: PaymentRowStatus;
+    detail: string | null;
+    date: string | null;
+    amount_local: number;
+    reference: string | null;
+    installment: string;
+    order: string | null;
+    invoice: string | null;
+    customer: string | null;
+  }[];
+}
+
+export const useImportFinancingPayments = () =>
+  useRpc<
+    { p_provider: string; p_account_id: string; p_rows: FinancingPaymentRow[]; p_dry_run: boolean; p_file_name: string; p_file_hash: string },
+    PaymentsImportResult
+  >("import_financing_payments");
+
+export interface PaymentsImport {
+  id: string;
+  provider: string;
+  account_id: string;
+  file_name: string;
+  rows_total: number;
+  matched: number;
+  possible: number;
+  no_bank: number;
+  no_operation: number;
+  initial: number;
+  duplicated: number;
+  created_at: string;
+}
+
+export function useFinancingPaymentImports(enabled = true) {
+  const tenant = useTenantKey();
+  return useQuery({
+    enabled,
+    queryKey: ["fin", tenant, "financing_payment_imports"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("financing_payment_imports").select("*").order("created_at", { ascending: false }).limit(100);
+      if (error) throw asError(error);
+      return (data ?? []) as PaymentsImport[];
+    },
+  });
+}
+
+export interface FinancingPayment {
+  id: string;
+  reference: string;
+  installment: string;
+  paid_on: string;
+  amount_local: number;
+  amount_base: number | null;
+}
+
+/** Pagos que informó la financiadora para una venta, ya conciliados con el banco. */
+export function useReceivableFinancingPayments(receivableId: string | null, enabled = true) {
+  const tenant = useTenantKey();
+  return useQuery({
+    enabled: enabled && Boolean(receivableId),
+    queryKey: ["fin", tenant, "financing_payments", receivableId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("financing_payments")
+        .select("id, reference, installment, paid_on, amount_local, amount_base")
+        .eq("receivable_id", receivableId!)
+        .order("paid_on");
+      if (error) throw asError(error);
+      return (data ?? []).map((p) => ({ ...p, amount_local: Number(p.amount_local), amount_base: p.amount_base === null ? null : Number(p.amount_base) })) as FinancingPayment[];
+    },
+  });
 }

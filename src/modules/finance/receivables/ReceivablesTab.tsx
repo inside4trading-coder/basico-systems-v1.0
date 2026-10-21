@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { useTenant } from "@/core/tenant-context";
 import { canSupervise } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
+import { downloadXlsx } from "@/modules/inventory/import/files";
 import { formatMoney } from "@/modules/pos/cart";
 import { caracasToday } from "@/modules/reports/dates";
 import { usePaymentMethods, useTenantSettings } from "@/modules/settings/api";
@@ -104,6 +105,27 @@ export default function ReceivablesTab() {
   const balances = summary?.providers ?? [];
   const providerCards = [...new Set([...balances.map((b) => b.provider), ...providers.filter((p) => receivables.some((r) => r.provider === p))])];
 
+  const exportRows = () =>
+    downloadXlsx(
+      `por_cobrar_${today}.xlsx`,
+      ["Tipo", "Financiadora", "Cliente", "Documento", "Orden", "Fecha", "Moneda", "Monto", "Cobrado", "Pendiente", "Próxima cuota", "Estado"],
+      shown.map((r) => [
+        r.kind === "credit" ? "Crédito" : "Financiadora",
+        r.provider,
+        r.customer_name,
+        r.document,
+        r.external_ref,
+        r.issued_on,
+        r.currency,
+        r.amount,
+        r.collected,
+        Math.max(0, r.amount - r.collected),
+        nextDue(r.installments)?.due_date ?? null,
+        r.status === "open" ? (isOverdue(r, today) ? "Vencida" : "Abierta") : r.status === "paid" ? "Cobrada" : "Cancelada",
+      ]),
+      "Por cobrar",
+    );
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -121,6 +143,9 @@ export default function ReceivablesTab() {
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={() => setCreating(true)}>
           Nuevo crédito
+        </Button>
+        <Button size="sm" variant="outline" disabled={shown.length === 0} onClick={exportRows}>
+          Excel
         </Button>
       </div>
 

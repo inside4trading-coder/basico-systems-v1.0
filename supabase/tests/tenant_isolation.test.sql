@@ -312,6 +312,8 @@ declare
   v_rcv uuid;
   v_rinst uuid;
   v_rcol uuid;
+  v_line uuid;
+  v_fpi uuid;
   v_ret uuid;
 begin
   foreach t in array array[
@@ -379,7 +381,7 @@ begin
     insert into public.bank_import_batches (tenant_id, account_id, file_name)
       values (t, v_acc, 'aislamiento.csv') returning id into v_batch;
     insert into public.bank_statement_lines (tenant_id, account_id, batch_id, line_date, direction, amount, currency, identity_key)
-      values (t, v_acc, v_batch, current_date, 'in', 1, 'USD', 'aislamiento');
+      values (t, v_acc, v_batch, current_date, 'in', 1, 'USD', 'aislamiento') returning id into v_line;
     insert into public.receivables (tenant_id, kind, customer_name, issued_on, currency, amount)
       values (t, 'credit', 'Cliente aislamiento', current_date, 'USD', 10) returning id into v_rcv;
     insert into public.receivable_installments (tenant_id, receivable_id, number, due_date, amount)
@@ -389,6 +391,11 @@ begin
     insert into public.provider_ledger (tenant_id, provider, entry_date, kind, amount, currency)
       values (t, 'Financiadora', current_date, 'adjustment', 1, 'USD');
     insert into public.receivable_imports (tenant_id, provider, file_name) values (t, 'Financiadora', 'aislamiento.xlsx');
+    insert into public.financing_payment_imports (tenant_id, provider, account_id, file_name)
+      values (t, 'Financiadora', v_acc, 'pagos.xlsx') returning id into v_fpi;
+    insert into public.financing_payments (tenant_id, provider, reference, installment, paid_on, amount_local,
+                                           receivable_id, line_id, collection_id, import_id)
+      values (t, 'Financiadora', 'ISO1', '1', current_date, 1, v_rcv, v_line, v_rcol, v_fpi);
     insert into public.pos_held_carts (tenant_id, location_id, label, payload, created_by)
       values (t, v_loc, 'Aislamiento', '{}', 'cccccccc-0000-0000-0000-000000000001');
     insert into public.member_locations (tenant_id, user_id, location_id)

@@ -14,7 +14,7 @@ import { formatMoney } from "@/modules/pos/cart";
 import { caracasToday } from "@/modules/reports/dates";
 import type { FinanceAccount } from "../api";
 import { formatDay } from "../lib";
-import { useCancelReceivable, useReceivableCollections, useVoidCollection, type Receivable, type ReceivableInstallment } from "./api";
+import { useCancelReceivable, useReceivableCollections, useReceivableFinancingPayments, useVoidCollection, type Receivable, type ReceivableInstallment } from "./api";
 import { CollectDialog, CommissionDialog, CoverDialog } from "./dialogs";
 import { INSTALLMENT_STATE_LABEL, installmentLeft, installmentState } from "./lib";
 
@@ -32,6 +32,7 @@ export default function ReceivableSheet({ receivable, accounts, onClose }: { rec
   const { active } = useTenant();
   const today = caracasToday();
   const { data: collections = [] } = useReceivableCollections(receivable?.id ?? null);
+  const { data: providerPayments = [] } = useReceivableFinancingPayments(receivable?.id ?? null, receivable?.kind === "financing");
   const voidCollection = useVoidCollection();
   const cancel = useCancelReceivable();
   const [dialog, setDialog] = useState<"collect" | "commission" | null>(null);
@@ -132,6 +133,25 @@ export default function ReceivableSheet({ receivable, accounts, onClose }: { rec
                 })}
               </ul>
             </section>
+
+            {providerPayments.length > 0 && (
+              <section className="space-y-2">
+                <h3 className="mono-cap text-[10px] text-muted-foreground">Pagos informados por {receivable.provider}</h3>
+                <ul className="space-y-1 text-xs">
+                  {providerPayments.map((p) => (
+                    <li key={p.id} className="flex justify-between gap-2 rounded-lg border p-2">
+                      <span>
+                        Cuota {p.installment} · {formatDay(p.paid_on)} · Ref. {p.reference}
+                      </span>
+                      <span className="num">
+                        Bs. {p.amount_local.toLocaleString("es-VE", { minimumFractionDigits: 2 })}
+                        {p.amount_base !== null ? ` · ${formatMoney(p.amount_base, receivable.currency)}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             <section className="space-y-2">
               <h3 className="mono-cap text-[10px] text-muted-foreground">Cobros</h3>
