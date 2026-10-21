@@ -16,6 +16,7 @@ import { addDays, caracasToday } from "@/modules/reports/dates";
 import { catalogNames, useAccounts, useCatalog, useCreateMovement, useMovements, useTransfer, useVoidMovement, type FinanceAccount, type FinanceMovement } from "./api";
 import { MOVEMENT_KIND_LABEL, formatDay, signedAmount } from "./lib";
 import SuggestInput from "./SuggestInput";
+import CategoryPicker from "./CategoryPicker";
 
 const ALL = "all";
 
@@ -274,13 +275,7 @@ function MovementDialog({ direction, accounts, onClose }: { direction: "in" | "o
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label htmlFor="mv-category">Categoría</Label>
-              <SuggestInput
-                id="mv-category"
-                value={category}
-                onChange={setCategory}
-                options={catalogNames(catalog, "category", direction)}
-                placeholder={direction === "in" ? "Ventas, préstamo…" : "Servicios, nómina…"}
-              />
+              <CategoryPicker id="mv-category" value={category} onChange={setCategory} direction={direction} />
             </div>
             <div className="space-y-1">
               <Label htmlFor="mv-counterparty">{direction === "in" ? "De quién" : "A quién"}</Label>

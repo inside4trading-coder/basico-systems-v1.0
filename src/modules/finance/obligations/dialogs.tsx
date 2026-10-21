@@ -31,6 +31,7 @@ import {
 } from "../api";
 import { FREQUENCY_LABEL, IMPORTANCE_LABEL, formatDay, remaining, type Frequency, type Importance } from "../lib";
 import SuggestInput from "../SuggestInput";
+import CategoryPicker from "../CategoryPicker";
 import { ACCEPTED_PROOFS, pickProofs } from "./proofs";
 
 function useCurrencies(): string[] {
@@ -103,7 +104,7 @@ export function ObligationDialog({ obligation, accounts, onClose }: { obligation
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label htmlFor="ob-category">Categoría</Label>
-              <SuggestInput id="ob-category" value={category} onChange={setCategory} options={catalogNames(catalog, "category", "out")} placeholder="Alquiler, impuestos…" />
+              <CategoryPicker id="ob-category" value={category} onChange={setCategory} direction="out" />
             </div>
             <div className="space-y-1">
               <Label htmlFor="ob-counterparty">A quién se paga</Label>
