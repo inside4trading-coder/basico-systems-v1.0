@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { useCashMovement, useCloseSession, useSessionSummary, type SessionSummary } from "./api";
-import { currencySymbol, formatMoney } from "./cart";
+import { cashCurrencyLabel } from "@/core/money";
+import { formatMoney } from "./cart";
 import { parseAmount } from "./usePosMoney";
 
 export function CashMovementDialog({
@@ -72,7 +73,7 @@ export function CashMovementDialog({
           <div className="flex gap-2">
             {currencies.map((c) => (
               <Button key={c} type="button" size="sm" variant={c === currency ? "default" : "outline"} onClick={() => setCurrency(c)}>
-                {currencySymbol(c)} {c}
+                {cashCurrencyLabel(c)}
               </Button>
             ))}
           </div>

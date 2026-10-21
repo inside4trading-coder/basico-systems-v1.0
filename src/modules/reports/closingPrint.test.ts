@@ -25,8 +25,8 @@ describe("impresión del cierre", () => {
   it("lleva esperado, contado, diferencia y firmas", () => {
     const html = closingHtml(closure, "Repuestos Demo", "USD", 80);
     expect(html).toContain("CIERRE DE CAJA");
-    expect(html).toContain("$ 139,50");
-    expect(html).toContain("$ -1,00");
+    expect(html).toContain("REF 139,50");
+    expect(html).toContain("REF -1,00");
     expect(html).toContain("Sin conexión");
     expect(html).toContain("Firma encargado");
     expect(html).toContain("size: 80mm auto");

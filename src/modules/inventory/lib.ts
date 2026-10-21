@@ -202,14 +202,7 @@ export function saleBlockers(args: {
   return out;
 }
 
-export function formatMoney(value: number | null | undefined, currency: string): string {
-  const n = Number(value ?? 0);
-  try {
-    return new Intl.NumberFormat("es-VE", { style: "currency", currency, minimumFractionDigits: 2 }).format(n);
-  } catch {
-    return `${currency} ${n.toFixed(2)}`;
-  }
-}
+export { formatMoney } from "@/core/money";
 
 /** Cantidades: enteros sin decimales, fracciones con hasta tres. */
 export function formatQty(value: number | null | undefined): string {
