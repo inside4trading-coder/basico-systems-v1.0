@@ -85,7 +85,7 @@ select throws_ok(
   'nadie fija la tasa oficial desde el cliente'
 );
 select lives_ok(
-  $$ update public.tenants set rate_source = 'manual', prices_include_tax = false, igtf_rate = 3
+  $$ update public.tenants set rate_source = 'manual', igtf_rate = 3
      where id = 'aaaaaaaa-1111-1111-1111-111111111111';
      insert into public.tenant_rates (base_currency, quote_currency, rate, note) values ('USD', 'VES', 900, 'Tasa del día') $$,
   'el dueño cambia a tasa propia y la fija'

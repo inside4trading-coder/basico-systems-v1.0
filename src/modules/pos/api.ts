@@ -238,6 +238,42 @@ export interface PosHit {
   match_kind: string;
   available: number;
   tax_rate: number;
+  /** Solo en el catálogo con el buscador vacío. */
+  image_url?: string | null;
+  category?: string | null;
+}
+
+export interface PosCatalog {
+  categories: string[];
+  items: PosHit[];
+}
+
+/** Lo que se vende en la sede, lo más vendido primero (public.pos_catalog). */
+export async function fetchPosCatalog(locationId: string, category: string | null): Promise<PosCatalog> {
+  const { data, error } = await supabase.rpc("pos_catalog", { p_location_id: locationId, p_category: category, p_limit: 60 });
+  if (error) throw asError(error);
+  const r = (data ?? { categories: [], items: [] }) as PosCatalog;
+  return {
+    categories: r.categories ?? [],
+    items: (r.items ?? []).map((h) => ({
+      ...h,
+      options: h.options ?? {},
+      price: h.price === null ? null : Number(h.price),
+      available: Number(h.available),
+      tax_rate: Number(h.tax_rate),
+    })),
+  };
+}
+
+export function usePosCatalog(locationId: string, category: string | null, enabled: boolean) {
+  const { active } = useTenant();
+  return useQuery({
+    enabled,
+    queryKey: ["pos", active?.tenant.id, "catalog", locationId, category],
+    queryFn: () => fetchPosCatalog(locationId, category),
+    placeholderData: (prev) => prev,
+    staleTime: 60_000,
+  });
 }
 
 /**
@@ -254,7 +290,7 @@ export async function searchForPos(query: string, locationId: string): Promise<P
   const productIds = [...new Set(hits.map((h) => h.product_id))];
   const [stocks, products, taxes] = await Promise.all([
     supabase.from("stocks").select("variant_id, available").eq("location_id", locationId).in("variant_id", variantIds),
-    supabase.from("products").select("id, tax_rate_id").in("id", productIds),
+    supabase.from("products").select("id, tax_rate_id, image_url").in("id", productIds),
     supabase.from("tax_rates").select("id, rate, is_default"),
   ]);
   if (stocks.error) throw asError(stocks.error);
@@ -268,11 +304,14 @@ export async function searchForPos(query: string, locationId: string): Promise<P
     (products.data ?? []).map((p) => [p.id as string, p.tax_rate_id ? (taxById.get(p.tax_rate_id) ?? defaultTax) : defaultTax]),
   );
 
+  const imageOfProduct = new Map((products.data ?? []).map((p) => [p.id as string, (p.image_url as string | null) ?? null]));
+
   return hits.map((h) => ({
     ...h,
     price: h.price === null ? null : Number(h.price),
     available: available.get(h.variant_id) ?? 0,
     tax_rate: taxOfProduct.get(h.product_id) ?? defaultTax,
+    image_url: imageOfProduct.get(h.product_id) ?? null,
   }));
 }
 

@@ -6,7 +6,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCreateProduct, type NewVariantInput } from "./api";
-import { parseOptions } from "./lib";
+import { formatMoney, parseOptions } from "./lib";
+import { productTaxRate, withTax } from "@/core/tax";
 import { useTaxRates } from "@/modules/settings/api";
 
 interface VariantDraft {
@@ -128,7 +129,7 @@ export default function NewProductDialog({ open, onOpenChange, currency }: { ope
 
           <div className="space-y-3">
             <p className="mono-cap text-xs text-muted-foreground">
-              {multi ? `${variants.length} variantes` : "Precio y códigos"} · montos en {currency}
+              {multi ? `${variants.length} variantes` : "Precio y códigos"} · montos en {currency}, sin IVA
             </p>
             {variants.map((v, i) => (
               <div key={i} className="space-y-2 rounded-lg border p-3">
@@ -164,11 +165,11 @@ export default function NewProductDialog({ open, onOpenChange, currency }: { ope
                     <Input id={`np-bc-${i}`} value={v.barcode} onChange={(e) => update(i, { barcode: e.target.value })} />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-[11px]" htmlFor={`np-rp-${i}`}>Precio</Label>
+                    <Label className="text-[11px]" htmlFor={`np-rp-${i}`}>Precio sin IVA</Label>
                     <Input id={`np-rp-${i}`} inputMode="decimal" value={v.regularPrice} onChange={(e) => update(i, { regularPrice: e.target.value })} />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-[11px]" htmlFor={`np-p-${i}`}>Oferta</Label>
+                    <Label className="text-[11px]" htmlFor={`np-p-${i}`}>Oferta sin IVA</Label>
                     <Input id={`np-p-${i}`} inputMode="decimal" value={v.price} onChange={(e) => update(i, { price: e.target.value })} placeholder="—" />
                   </div>
                   <div className="space-y-1">
@@ -176,6 +177,11 @@ export default function NewProductDialog({ open, onOpenChange, currency }: { ope
                     <Input id={`np-c-${i}`} inputMode="decimal" value={v.cost} onChange={(e) => update(i, { cost: e.target.value })} />
                   </div>
                 </div>
+                <PvpHint
+                  net={toNumber(v.price) ?? toNumber(v.regularPrice)}
+                  rate={productTaxRate(taxRateId || null, taxes)}
+                  currency={currency}
+                />
               </div>
             ))}
             <Button type="button" variant="outline" size="sm" onClick={() => setVariants((list) => [...list, emptyVariant()])}>
@@ -191,5 +197,16 @@ export default function NewProductDialog({ open, onOpenChange, currency }: { ope
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** PVP que verá el cliente (precio u oferta más el IVA elegido). */
+function PvpHint({ net, rate, currency }: { net: number | null; rate: number; currency: string }) {
+  if (net == null || Number.isNaN(net)) return null;
+  return (
+    <p className="text-xs text-muted-foreground">
+      PVP con IVA ({rate}%):{" "}
+      <b className="num text-foreground">{formatMoney(withTax(net, rate), currency)}</b>
+    </p>
   );
 }

@@ -23,6 +23,10 @@ insert into public.variants (id, tenant_id, product_id, sku, price) values
 insert into public.stocks (tenant_id, variant_id, location_id, on_hand) values
   ('aaaaaaaa-1111-1111-1111-111111111111', 'aaaaaaaa-5555-5555-5555-555555555551', 'aaaaaaaa-2222-2222-2222-222222222221', 5);
 
+-- Estos casos se escribieron con precios con IVA incluido (ventas anteriores a
+-- 20261119000000_net_prices.sql); el cálculo sigue soportándolo.
+update public.tenants set prices_include_tax = true;
+
 set local role authenticated;
 select set_config('request.headers', '{"x-tenant-id":"aaaaaaaa-1111-1111-1111-111111111111"}', true);
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000002","role":"authenticated"}', true);
