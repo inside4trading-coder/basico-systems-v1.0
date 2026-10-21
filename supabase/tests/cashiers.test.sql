@@ -43,7 +43,7 @@ select lives_ok(
 
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000002","role":"authenticated"}', true);
 select throws_ok($$ insert into public.cashiers (name) values ('Otro') $$, '42501', null, 'el cajero no registra personal');
-select set_config('test.session', public.open_cash_session('aaaaaaaa-3333-3333-3333-333333333331') ->> 'session_id', true);
+select set_config('test.session', public.open_cash_session('aaaaaaaa-3333-3333-3333-333333333331', '[]', null, 'aaaaaaaa-7777-7777-7777-777777777771') ->> 'session_id', true);
 select set_config('test.cash', (select id::text from public.payment_methods where code = 'cash_base'), true);
 
 create function pg_temp.sell(p_key text, p_cashier uuid) returns jsonb language sql as $$
@@ -55,7 +55,7 @@ $$;
 
 select lives_ok($$ select pg_temp.sell('ca-venta-01', 'aaaaaaaa-7777-7777-7777-777777777771') $$, 'vende con el cajero de la sede');
 select lives_ok($$ select pg_temp.sell('ca-venta-02', 'aaaaaaaa-7777-7777-7777-777777777772') $$, 'o con uno de todas las sedes');
-select lives_ok($$ select pg_temp.sell('ca-venta-03', null) $$, 'o sin cajero');
+select lives_ok($$ select pg_temp.sell('ca-venta-03', null) $$, 'o sin cajero explícito (toma el de la sesión)');
 select throws_ok(
   $$ select pg_temp.sell('ca-venta-04', 'aaaaaaaa-7777-7777-7777-777777777773') $$,
   'P0002', 'Cajero no disponible en esta sede',
@@ -74,8 +74,8 @@ select throws_ok(
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
 select results_eq(
   $$ select c ->> 'seller', (c ->> 'tickets')::int from jsonb_array_elements(public.report_sales(current_date, current_date) -> 'by_seller') c order by 1 $$,
-  $$ values ('cajero-a@test.local'::text, 1), ('Luis', 1), ('Yolimar', 1) $$,
-  'por cajero: el personal por su nombre, y sin cajero el usuario que cobró'
+  $$ values ('Luis'::text, 1), ('Yolimar', 2) $$,
+  'por cajero: el personal por su nombre; la venta sin cajero explícito queda con el de la sesión'
 );
 
 select * from finish();
