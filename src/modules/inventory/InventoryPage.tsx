@@ -4,6 +4,7 @@
  * quitaron Woo, lotes de Abastecimiento y "proponer stock": las existencias
  * entran por Control (entradas y ajustes), no se editan en esta tabla.
  */
+import { ScanButton } from "@/core/scanner/CameraScanner";
 import LabelsDialog from "./labels/LabelsDialog";
 import { Fragment, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Plus, SlidersHorizontal } from "lucide-react";
@@ -153,7 +154,10 @@ export default function InventoryPage() {
           <SlidersHorizontal className="h-3.5 w-3.5" /> Filtros
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <Input placeholder="Buscar nombre, SKU, código…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <div className="flex gap-2">
+            <Input placeholder="Buscar nombre, SKU, código…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <ScanButton className="shrink-0 px-3" onScan={setQ} />
+          </div>
           <Picker value={locationId} onChange={setLocationId} allLabel="Todas las sedes" options={activeLocations.map((l) => ({ value: l.id, label: l.name }))} />
           <Picker value={category} onChange={setCategory} allLabel="Todas las categorías" options={categories.map((c) => ({ value: c, label: c }))} />
           <Picker value={brand} onChange={setBrand} allLabel="Todas las marcas" options={brands.map((b) => ({ value: b, label: b }))} />
