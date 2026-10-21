@@ -23,6 +23,7 @@ import ModuleGate from "@/components/ModuleGate";
 import CustomersPage from "@/modules/customers/CustomersPage";
 import ClockPage from "@/modules/clock/ClockPage";
 import PunchPage from "@/modules/clock/PunchPage";
+import StudioPage from "@/modules/studio/StudioPage";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -67,6 +68,16 @@ export default function App() {
               <Route path="/login" element={<Login />} />
               {/* Fichar desde el teléfono: sin sesión, con la clave del negocio y el PIN. */}
               <Route path="/fichar/:clockKey" element={<PunchPage />} />
+              <Route
+                path="/estudio"
+                element={
+                  <RequireTenant>
+                    <ModuleGate module="estudio">
+                      <StudioPage />
+                    </ModuleGate>
+                  </RequireTenant>
+                }
+              />
               <Route
                 path="/fichaje"
                 element={

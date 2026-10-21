@@ -28,7 +28,8 @@ export type ShortcutIcon =
   | "map-pin"
   | "settings"
   | "user-cog"
-  | "clock";
+  | "clock"
+  | "sparkles";
 
 export interface Shortcut {
   key: string;
@@ -58,6 +59,7 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "cierres", label: "Cierres de caja", caption: "Reportes", to: "/reportes?tab=closures", icon: "receipt", visible: canSeeReports, module: "reportes" },
   { key: "administracion", label: "Administración", caption: "Tesorería", to: "/administracion", icon: "landmark", visible: canSeeReports, module: "administracion" },
   { key: "obligaciones", label: "Obligaciones", caption: "Administración", to: "/administracion?tab=obligations", icon: "calendar", visible: canSeeReports, module: "administracion" },
+  { key: "estudio", label: "Estudio IA", caption: "Fotos de producto", to: "/estudio", icon: "sparkles", visible: canEditCatalog, module: "estudio" },
   { key: "fichaje", label: "Fichaje", caption: "Personal", to: "/fichaje", icon: "clock", visible: canSeeReports, module: "fichaje" },
   { key: "por-cobrar", label: "Por cobrar", caption: "Administración", to: "/administracion?tab=receivables", icon: "hand-coins", visible: canSeeReports, module: "administracion" },
   { key: "conciliacion", label: "Conciliación", caption: "Administración", to: "/administracion?tab=reconciliation", icon: "scale", visible: canSeeReports, module: "administracion" },

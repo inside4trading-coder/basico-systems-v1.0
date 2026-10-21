@@ -27,6 +27,7 @@ import {
   Upload,
   UserCog,
   Clock,
+  Sparkles,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -61,6 +62,7 @@ const ICONS: Record<ShortcutIcon, LucideIcon> = {
   settings: Settings,
   "user-cog": UserCog,
   clock: Clock,
+  sparkles: Sparkles,
 };
 
 const TZ = "America/Caracas";

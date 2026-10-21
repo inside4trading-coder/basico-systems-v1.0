@@ -398,6 +398,8 @@ begin
     insert into public.cashiers (tenant_id, name) values (t, 'Cajero aislamiento') returning id into v_staff;
     insert into public.clock_events (tenant_id, staff_id, kind) values (t, v_staff, 'entrada');
     insert into public.clock_pin_failures (tenant_id) values (t);
+    insert into public.studio_jobs (tenant_id, product_id, kind, source_path)
+      select t, p.id, 'catalogo', t::text || '/aislamiento.webp' from public.products p where p.tenant_id = t limit 1;
     insert into public.inventory_counts (tenant_id, number, location_id) values (t, 'ISO-C1', v_loc) returning id into v_count;
     insert into public.inventory_count_items (tenant_id, count_id, variant_id)
       select t, v_count, v.id from public.variants v where v.tenant_id = t limit 1;

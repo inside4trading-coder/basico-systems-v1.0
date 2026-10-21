@@ -6,15 +6,16 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/core/supabase";
 import { getActiveTenantId } from "@/core/tenant";
-import { fitWithin, PRODUCT_IMAGES_BUCKET, storagePathOf } from "./photoPaths";
+import { fitWithin, MAX_SIDE_PX, PRODUCT_IMAGES_BUCKET, storagePathOf } from "./photoPaths";
 
 const MAX_INPUT_BYTES = 15 * 1024 * 1024;
 
-async function shrink(file: File): Promise<Blob> {
+/** Achica en el equipo y pasa a WebP (con transparencia, si la tiene). */
+export async function shrinkPhoto(file: Blob, maxSide = MAX_SIDE_PX): Promise<Blob> {
   if (!file.type.startsWith("image/")) throw new Error("El archivo no es una imagen");
   if (file.size > MAX_INPUT_BYTES) throw new Error("La foto pesa más de 15 MB");
   const bitmap = await createImageBitmap(file);
-  const { width, height } = fitWithin(bitmap.width, bitmap.height);
+  const { width, height } = fitWithin(bitmap.width, bitmap.height, maxSide);
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -39,7 +40,7 @@ async function removeStored(url: string | null) {
 export async function uploadProductPhoto(productId: string, file: File, previousUrl: string | null): Promise<string> {
   const tenant = getActiveTenantId();
   if (!tenant) throw new Error("Sin negocio activo");
-  const blob = await shrink(file);
+  const blob = await shrinkPhoto(file);
   const path = `${tenant}/${productId}/${crypto.randomUUID()}.webp`;
   const { error } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).upload(path, blob, { contentType: "image/webp", upsert: false });
   if (error) throw new Error(`No se pudo subir la foto: ${error.message}`);
