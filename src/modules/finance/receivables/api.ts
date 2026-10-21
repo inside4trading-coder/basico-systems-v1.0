@@ -335,3 +335,9 @@ export function useReceivableFinancingPayments(receivableId: string | null, enab
     },
   });
 }
+
+/** Nombre de la financiadora activa (el de su método de pago). */
+export function useFinancingProvider(): string {
+  const { data: methods = [] } = usePaymentMethods();
+  return methods.find((m) => m.kind === "bnpl" && m.is_active)?.name ?? "la financiadora";
+}

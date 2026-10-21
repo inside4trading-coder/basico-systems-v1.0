@@ -77,7 +77,7 @@ export default function FinancingImportCard({ className }: { className?: string 
   return (
     <section className={cn("space-y-3 rounded-xl border bg-card p-4", className)}>
       <div>
-        <h2 className="text-sm">Cargar reporte de la financiadora</h2>
+        <h2 className="text-sm">1 · Órdenes y cuotas</h2>
         <p className="text-xs text-muted-foreground">
           El reporte de órdenes (Excel o CSV) trae n.º de orden, cuotas y estados. Se une con las ventas del POS cobradas con ese método por número de venta o de
           orden; las que no estén se crean.

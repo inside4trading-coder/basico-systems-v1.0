@@ -10,12 +10,11 @@ import { canManageTeam } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
 import { usePaymentMethods } from "@/modules/settings/api";
 import { useAccounts } from "../api";
-import FinancingImportCard from "../receivables/FinancingImportCard";
-import FinancingPaymentsCard from "../receivables/FinancingPaymentsCard";
+import FinancingFilesPanel from "../receivables/FinancingFilesPanel";
 import { useFinancingEnabled, useFinancingPaymentImports } from "../receivables/api";
 import { ALL_ACCOUNTS, useBankBatches, useBankProfiles, useFinancingImports, useImportGuides } from "./api";
 import ImportGuide from "./ImportGuide";
-import { SOURCE_STATUS_LABEL, bankGuide, financingOrdersGuide, financingPaymentsGuide, lastLoadByAccount, sourceStatus, type SourceStatus } from "./sources";
+import { SOURCE_STATUS_LABEL, bankGuide, lastLoadByAccount, sourceStatus, type SourceStatus } from "./sources";
 import StatementImporter from "./StatementImporter";
 
 const STATUS_DOT: Record<SourceStatus, string> = {
@@ -107,17 +106,7 @@ export default function ImportCenter() {
         })}
       </ul>
 
-      {selected?.id === FINANCING && (
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Para una conciliación completa, descarga los dos archivos de {provider} con el mismo rango de fechas: primero las órdenes y cuotas, después los pagos recibidos.
-          </p>
-          <ImportGuide guideKey="financing:orders" guides={guides} defaultSteps={financingOrdersGuide(provider)} canEdit={canEdit} title="1 · ¿Dónde obtengo el reporte de órdenes?" />
-          <FinancingImportCard />
-          <ImportGuide guideKey="financing:payments" guides={guides} defaultSteps={financingPaymentsGuide(provider)} canEdit={canEdit} title="2 · ¿Dónde obtengo el archivo de pagos?" />
-          <FinancingPaymentsCard />
-        </div>
-      )}
+      {selected?.id === FINANCING && <FinancingFilesPanel />}
       {account && (
         <div className="space-y-3">
           <ImportGuide guideKey={`account:${account.id}`} guides={guides} defaultSteps={bankGuide(account.name)} canEdit={canEdit} title="¿Dónde obtengo este archivo?" />

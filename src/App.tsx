@@ -18,6 +18,7 @@ import SettingsPage from "@/modules/settings/SettingsPage";
 import PosPage from "@/modules/pos/PosPage";
 import ReportsPage from "@/modules/reports/ReportsPage";
 import FinancePage from "@/modules/finance/FinancePage";
+import FinancingPage from "@/modules/financing/FinancingPage";
 import ObligationDetailPage from "@/modules/finance/obligations/ObligationDetailPage";
 import ModuleGate from "@/components/ModuleGate";
 import CustomersPage from "@/modules/customers/CustomersPage";
@@ -170,6 +171,16 @@ export default function App() {
                   <RequireTenant>
                     <ModuleGate module="administracion">
                       <FinancePage />
+                    </ModuleGate>
+                  </RequireTenant>
+                }
+              />
+              <Route
+                path="/cashea"
+                element={
+                  <RequireTenant>
+                    <ModuleGate module="cashea">
+                      <FinancingPage />
                     </ModuleGate>
                   </RequireTenant>
                 }
