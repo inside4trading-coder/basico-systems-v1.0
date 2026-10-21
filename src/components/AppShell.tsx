@@ -8,6 +8,7 @@ import { useEntitlements } from "@/core/useEntitlements";
 import { useTenant } from "@/core/tenant-context";
 import { canManageTeam, canSeeReports, canSupervise, type TenantRole } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
+import { useTrackRecent } from "@/modules/home/recent";
 import { useCurrentRate } from "@/modules/settings/api";
 import { useRateAutoSync } from "@/modules/settings/useRateAutoSync";
 
@@ -45,6 +46,7 @@ export default function AppShell({ children, wide = false }: { children: ReactNo
   const role = active?.role;
   const entitlements = useEntitlements();
   useRateAutoSync();
+  useTrackRecent(active?.tenant.id);
 
   return (
     <div className="min-h-screen bg-background">

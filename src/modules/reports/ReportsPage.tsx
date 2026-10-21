@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTenant } from "@/core/tenant-context";
 import { canSeeReports } from "@/core/tenant-selection";
+import { useTabParam } from "@/lib/useTabParam";
 import { useLocations } from "@/modules/inventory/api";
 import ClosuresReport from "./ClosuresReport";
 import { PRESET_LABEL, presetRange, type DateRange, type RangePreset } from "./dates";
@@ -32,6 +33,7 @@ export default function ReportsPage() {
   const [preset, setPreset] = useState<RangePreset | null>("7d");
   const [range, setRange] = useState<DateRange>(() => presetRange("7d"));
   const [location, setLocation] = useState(ALL);
+  const [tab, setTab] = useTabParam<string>(entitlements.administracion ? ["sales", "stock", "closures", "income"] : ["sales", "stock", "closures"], "sales");
 
   if (!canSeeReports(active?.role)) return <Navigate to="/" replace />;
   const locationId = location === ALL ? null : location;
@@ -84,7 +86,7 @@ export default function ReportsPage() {
   return (
     <AppShell wide>
       <h1 className="text-2xl">Reportes</h1>
-      <Tabs defaultValue="sales" className="space-y-4">
+      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="sales">Ventas</TabsTrigger>
           <TabsTrigger value="stock">Inventario</TabsTrigger>

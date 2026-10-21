@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import AppShell from "@/components/AppShell";
+import BackLink from "@/components/BackLink";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -57,6 +58,7 @@ export default function CatalogFieldsPage() {
   return (
     <AppShell>
       <div>
+        <BackLink to="/inventario">Inventario</BackLink>
         <h1 className="text-2xl">Campos del catálogo</h1>
         <p className="text-sm text-muted-foreground">
           Datos propios de tu negocio: vehículo compatible, principio activo, material… Los marcados como buscables se encuentran desde el buscador.

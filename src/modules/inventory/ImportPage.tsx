@@ -9,6 +9,7 @@ import { Navigate } from "react-router-dom";
 import { Download, FileSpreadsheet, Upload } from "lucide-react";
 import { toast } from "sonner";
 import AppShell from "@/components/AppShell";
+import BackLink from "@/components/BackLink";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -173,6 +174,7 @@ export default function ImportPage() {
     <AppShell wide>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
+          <BackLink to="/inventario">Inventario</BackLink>
           <h1 className="text-2xl">Importar y exportar</h1>
           <p className="text-sm text-muted-foreground">Carga tu catálogo y existencias desde Excel o CSV</p>
         </div>
