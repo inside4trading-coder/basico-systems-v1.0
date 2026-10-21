@@ -178,7 +178,7 @@ revoke all on function public.report_stock_health(uuid, integer, integer) from p
 grant execute on function public.report_stock_health(uuid, integer, integer) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- Demo: igual que en 20261118000000_demo_refresh.sql, más un quiebre en
+-- Demo: igual que en 20261119000000_net_prices.sql, más un quiebre en
 -- Barquisimeto (tres de lo que más rota, en cero desde hace 5 días) para que
 -- Salud de inventario muestre todos los segmentos.
 -- ---------------------------------------------------------------------------
@@ -301,7 +301,7 @@ begin
   end if;
 
   update public.tenants
-  set base_currency = 'USD', local_currency = 'VES', rate_source = 'manual', prices_include_tax = true,
+  set base_currency = 'USD', local_currency = 'VES', rate_source = 'manual', prices_include_tax = false,
       is_special_taxpayer = false, status = 'active',
       legal_name = 'Repuestos Lara Demo, C.A.', tax_id = 'J-50123456-1',
       address = 'Av. Intercomunal Cabudare-Barquisimeto, Lara', phone = '0251-2611234',
@@ -425,6 +425,7 @@ begin
     values (t.id, x.name || coalesce(' ' || split_part(x.vehicle, ' ', 2), '') || ' ' || x.brand, x.brand, x.category, v_owner)
     returning id into v_session;  -- id del producto (reuso de variable)
     v_r := round((x.price * (0.9 + x.bn * 0.12 + (x.vn % 3) * 0.04))::numeric, 2);
+    v_r := round(v_r / 1.16, 2);  -- precio sin IVA (16 %)
     insert into public.variants (tenant_id, product_id, sku, regular_price, price, cost)
     values (t.id, v_session, upper(left(x.brand, 3)) || '-' || lpad((1000 + v_row)::text, 5, '0'), v_r, v_r, round(v_r * x.cost_ratio, 2))
     returning id into v_reg;  -- id de la variante (reuso de variable)
@@ -501,7 +502,9 @@ begin
 
       foreach v_at in array v_times loop
         -- 1 a 3 renglones, elegidos por popularidad entre lo que hay en la tienda.
-        select jsonb_agg(jsonb_build_object('variant_id', variant_id, 'qty', qty)), sum(price * qty)
+        -- Total con IVA, redondeado por línea como en register_sale.
+        select jsonb_agg(jsonb_build_object('variant_id', variant_id, 'qty', qty)),
+               sum(round(price * qty, 2) + round(round(price * qty, 2) * 0.16, 2))
         into v_items, v_total
         from (
           select c.variant_id, c.price, least(c.pack * (1 + floor(random()::numeric * 1.4)::int), floor(s.on_hand)::int) as qty
@@ -513,7 +516,7 @@ begin
         continue when v_items is null;
         -- Algunas ventas llevan instalación (concepto manual, sin stock).
         if random()::numeric < 0.07 then
-          v_items := v_items || jsonb_build_array(jsonb_build_object('manual', true, 'kind', 'servicio', 'description', 'Instalación', 'price', 5, 'qty', 1));
+          v_items := v_items || jsonb_build_array(jsonb_build_object('manual', true, 'kind', 'servicio', 'description', 'Instalación', 'price', 4.31, 'qty', 1));
           v_total := v_total + 5;
         end if;
         v_r := random()::numeric;
@@ -603,7 +606,7 @@ begin
   -- anula con la caja abierta).
   v_session := (app.open_cash_session(v_reg_cab, '[{"currency":"USD","amount":20},{"currency":"VES","amount":3000}]'::jsonb, null) ->> 'session_id')::uuid;
   for k in 1..2 loop
-    select c.variant_id, c.price * c.pack into v_reg, v_total
+    select c.variant_id, round(c.price * c.pack, 2) + round(round(c.price * c.pack, 2) * 0.16, 2) into v_reg, v_total
     from pg_temp.demo_catalog c join public.stocks s on s.variant_id = c.variant_id and s.location_id = v_cab and s.on_hand >= c.pack
     order by c.weight desc offset k limit 1;
     v_sale := app.register_sale('demo-hoy-' || k || '-' || md5(t.id::text), v_session,
