@@ -24,6 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/core/auth";
 import { useTenant } from "@/core/tenant-context";
+import { useTabParam } from "@/lib/useTabParam";
 import { canEditCatalog, canSupervise } from "@/core/tenant-selection";
 import { registerEntry, useAdjust, useInvalidateInventory, useMovements, useSign, useStockOf, useTransfer } from "./api";
 import { LocationSelect, useDefaultLocation, VariantCard, VariantFinder } from "./components";
@@ -750,7 +751,10 @@ export default function ControlPage() {
   const editable = canEditCatalog(active?.role);
   // ?tab=reposicion&sede=<id> abre Reposición filtrada (enlace desde Reportes > Stock).
   const [params] = useSearchParams();
-  const [tab, setTab] = useState(params.get("tab") ?? "resumen");
+  const [tab, setTab] = useTabParam<string>(
+    editable ? ["resumen", "entrada", "recepcion", "ajustes", "traslados", "reposicion", "conteos", "firmas", "historial", "reportes"] : ["resumen", "conteos", "firmas", "historial", "reportes"],
+    "resumen",
+  );
   const { data: rows = [] } = useMovements();
   const pending = rows.filter((r) => r.signature_status === "pending").length;
 

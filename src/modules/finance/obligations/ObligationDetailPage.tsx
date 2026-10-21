@@ -3,9 +3,10 @@
  * src/pages/AdminObligationDetail.tsx (basicosystems@f551478b).
  */
 import { useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import AppShell from "@/components/AppShell";
+import BackLink from "@/components/BackLink";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useTenant } from "@/core/tenant-context";
@@ -53,9 +54,7 @@ export default function ObligationDetailPage() {
 
   return (
     <AppShell wide>
-      <Link to="/administracion" className="text-sm text-primary underline">
-        ← Administración
-      </Link>
+      <BackLink to="/administracion?tab=obligations">Obligaciones</BackLink>
       {isLoading && <p className="mono-cap text-xs text-muted-foreground">Cargando…</p>}
       {error && <p className="text-sm text-destructive">No se pudo cargar: {error.message}</p>}
       {!isLoading && !o && !error && <p className="text-sm text-muted-foreground">No se encontró la obligación.</p>}
