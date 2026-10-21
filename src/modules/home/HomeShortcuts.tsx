@@ -5,32 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import {
-  ArrowDown,
-  ArrowLeftRight,
-  ArrowUp,
-  BarChart3,
-  CalendarClock,
-  ClipboardCheck,
-  HandCoins,
-  Landmark,
-  ListChecks,
-  MapPin,
-  Package,
-  PackagePlus,
-  Receipt,
-  RefreshCw,
-  Scale,
-  Settings,
-  ShoppingCart,
-  SlidersHorizontal,
-  Upload,
-  UserCog,
-  Clock,
-  Sparkles,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import { ArrowDown, ArrowLeftRight, ArrowUp, BarChart3, CalendarClock, ClipboardCheck, Clock, HandCoins, Landmark, Layers, ListChecks, type LucideIcon, MapPin, Package, PackagePlus, Receipt, RefreshCw, Scale, Settings, ShoppingCart, SlidersHorizontal, Sparkles, Upload, UserCog, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -63,6 +38,7 @@ const ICONS: Record<ShortcutIcon, LucideIcon> = {
   "user-cog": UserCog,
   clock: Clock,
   sparkles: Sparkles,
+  layers: Layers,
 };
 
 const TZ = "America/Caracas";

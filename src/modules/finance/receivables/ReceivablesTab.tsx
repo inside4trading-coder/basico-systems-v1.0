@@ -4,6 +4,7 @@
  * SublimeAdminReceivables (AdminCashea.tsx, basicosystems@f551478b).
  */
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,6 @@ import { usePaymentMethods, useTenantSettings } from "@/modules/settings/api";
 import { useAccounts } from "../api";
 import { formatDay } from "../lib";
 import { useFinancingEnabled, useProviderLedger, useReceivables, useReceivablesSummary, useVoidProviderEntry, type Receivable } from "./api";
-import FinancingImportCard from "./FinancingImportCard";
 import { NewCreditDialog, ProviderInvoiceDialog, SettleDialog } from "./dialogs";
 import { installmentLeft, nextDue } from "./lib";
 import ReceivableSheet from "./ReceivableSheet";
@@ -60,11 +60,18 @@ function matches(r: Receivable, f: Filter, today: string) {
 }
 
 
-export default function ReceivablesTab() {
+/**
+ * scope "all": Por cobrar de Administración (crédito y financiadoras).
+ * scope "financing": el módulo de la financiadora (solo sus ventas, su
+ * cuenta corriente y sin crédito propio).
+ */
+export default function ReceivablesTab({ scope = "all" }: { scope?: "all" | "financing" }) {
+  const only = scope === "financing";
   const { active } = useTenant();
   const supervisor = canSupervise(active?.role);
   const today = caracasToday();
-  const { data: receivables = [], isLoading, error } = useReceivables();
+  const { data: allReceivables = [], isLoading, error } = useReceivables();
+  const receivables = useMemo(() => (only ? allReceivables.filter((r) => r.kind === "financing") : allReceivables), [allReceivables, only]);
   const { data: summary } = useReceivablesSummary();
   const { data: ledger = [] } = useProviderLedger();
   const { data: accounts = [] } = useAccounts();
@@ -103,6 +110,25 @@ export default function ReceivablesTab() {
   const opened = receivables.find((r) => r.id === openId) ?? null;
 
   const balances = summary?.providers ?? [];
+  const financingKpis = useMemo(() => {
+    const open = receivables.filter((r) => r.status === "open");
+    let overdue = 0;
+    let overdueCount = 0;
+    for (const r of open)
+      for (const i of r.installments)
+        if (i.due_date < today && installmentLeft(i) > 0.005) {
+          overdue += installmentLeft(i);
+          overdueCount++;
+        }
+    return {
+      open: open.length,
+      pending: open.reduce((a, r) => a + Math.max(0, r.amount - r.collected), 0),
+      collected: receivables.reduce((a, r) => a + r.collected, 0),
+      overdue,
+      overdueCount,
+      balance: balances.filter((b) => b.currency === base).reduce((a, b) => a + b.balance, 0),
+    };
+  }, [receivables, balances, today, base]);
   const providerCards = [...new Set([...balances.map((b) => b.provider), ...providers.filter((p) => receivables.some((r) => r.provider === p))])];
 
   const exportRows = () =>
@@ -129,31 +155,59 @@ export default function ReceivablesTab() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Kpi label="Por cobrar" value={formatMoney(summary?.total ?? 0, base)} hint={`${summary?.open ?? 0} ${summary?.open === 1 ? "abierta" : "abiertas"}`} strong />
-        <Kpi
-          label="Vencido"
-          value={formatMoney(summary?.overdue_total ?? 0, base)}
-          hint={`${summary?.overdue_count ?? 0} ${summary?.overdue_count === 1 ? "cuota" : "cuotas"}`}
-          negative={(summary?.overdue_count ?? 0) > 0}
-        />
-        <Kpi label="Crédito a clientes" value={formatMoney(summary?.credit_total ?? 0, base)} />
-        {financing && <Kpi label="Con financiadoras" value={formatMoney(summary?.financing_total ?? 0, base)} />}
+        {only ? (
+          <>
+            <Kpi label="Por cobrar" value={formatMoney(financingKpis.pending, base)} hint={`${financingKpis.open} ${financingKpis.open === 1 ? "abierta" : "abiertas"}`} strong />
+            <Kpi
+              label="Vencido"
+              value={formatMoney(financingKpis.overdue, base)}
+              hint={`${financingKpis.overdueCount} ${financingKpis.overdueCount === 1 ? "cuota" : "cuotas"}`}
+              negative={financingKpis.overdueCount > 0}
+            />
+            <Kpi label="Cobrado" value={formatMoney(financingKpis.collected, base)} />
+            <Kpi
+              label="Cuenta corriente"
+              value={formatMoney(Math.abs(financingKpis.balance), base)}
+              hint={financingKpis.balance >= 0 ? "A tu favor" : "Le debes"}
+              negative={financingKpis.balance < 0}
+            />
+          </>
+        ) : (
+          <>
+            <Kpi label="Por cobrar" value={formatMoney(summary?.total ?? 0, base)} hint={`${summary?.open ?? 0} ${summary?.open === 1 ? "abierta" : "abiertas"}`} strong />
+            <Kpi
+              label="Vencido"
+              value={formatMoney(summary?.overdue_total ?? 0, base)}
+              hint={`${summary?.overdue_count ?? 0} ${summary?.overdue_count === 1 ? "cuota" : "cuotas"}`}
+              negative={(summary?.overdue_count ?? 0) > 0}
+            />
+            <Kpi label="Crédito a clientes" value={formatMoney(summary?.credit_total ?? 0, base)} />
+            {financing && <Kpi label="Con financiadoras" value={formatMoney(summary?.financing_total ?? 0, base)} />}
+          </>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={() => setCreating(true)}>
-          Nuevo crédito
-        </Button>
+        {!only && (
+          <Button size="sm" onClick={() => setCreating(true)}>
+            Nuevo crédito
+          </Button>
+        )}
         <Button size="sm" variant="outline" disabled={shown.length === 0} onClick={exportRows}>
           Excel
         </Button>
       </div>
 
-      {financing && <FinancingImportCard />}
+      {financing && !only && (
+        <Link to="/cashea" className="block rounded-xl border border-dashed bg-card p-3 text-sm hover:border-primary">
+          <span className="font-semibold">{providers[0] ?? "Financiadora"}</span>
+          <span className="text-muted-foreground"> · importar órdenes y pagos, cuenta corriente e historial en su módulo →</span>
+        </Link>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap gap-1" role="group" aria-label="Estado">
-          {(Object.keys(FILTER_LABEL) as Filter[]).filter((f) => financing || f !== "financing").map((f) => (
+          {(Object.keys(FILTER_LABEL) as Filter[]).filter((f) => (only ? f !== "credit" && f !== "financing" : financing || f !== "financing")).map((f) => (
             <Button key={f} size="sm" variant={filter === f ? "default" : "outline"} onClick={() => setFilter(f)} aria-pressed={filter === f}>
               {FILTER_LABEL[f]} ({counts[f]})
             </Button>
@@ -206,7 +260,7 @@ export default function ReceivablesTab() {
         })}
       </ul>
 
-      {financing && providerCards.length > 0 && (
+      {financing && only && providerCards.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-sm">Cuenta corriente con financiadoras</h2>
           <p className="text-xs text-muted-foreground">

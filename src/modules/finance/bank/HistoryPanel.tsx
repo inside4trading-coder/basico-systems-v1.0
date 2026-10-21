@@ -14,7 +14,8 @@ interface Row {
   issues: { row: number; reason: string }[];
 }
 
-export default function HistoryPanel() {
+/** financingOnly: solo las cargas de la financiadora (su módulo). */
+export default function HistoryPanel({ financingOnly = false }: { financingOnly?: boolean }) {
   const { data: accounts = [] } = useAccounts();
   const { data: batches = [], isLoading } = useBankBatches(ALL_ACCOUNTS);
   const financing = useFinancingEnabled();
@@ -22,7 +23,7 @@ export default function HistoryPanel() {
   const { data: payments = [] } = useFinancingPaymentImports(financing);
 
   const rows: Row[] = [
-    ...batches.map((b) => ({
+    ...(financingOnly ? [] : batches).map((b) => ({
       id: b.id,
       at: b.created_at,
       source: accounts.find((a) => a.id === b.account_id)?.name ?? "Cuenta",

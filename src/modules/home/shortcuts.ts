@@ -29,7 +29,8 @@ export type ShortcutIcon =
   | "settings"
   | "user-cog"
   | "clock"
-  | "sparkles";
+  | "sparkles"
+  | "layers";
 
 export interface Shortcut {
   key: string;
@@ -60,6 +61,7 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "administracion", label: "Administración", caption: "Tesorería", to: "/administracion", icon: "landmark", visible: canSeeReports, module: "administracion" },
   { key: "obligaciones", label: "Obligaciones", caption: "Administración", to: "/administracion?tab=obligations", icon: "calendar", visible: canSeeReports, module: "administracion" },
   { key: "estudio", label: "Estudio IA", caption: "Fotos de producto", to: "/estudio", icon: "sparkles", visible: canEditCatalog, module: "estudio" },
+  { key: "cashea", label: "Cashea", caption: "Ventas en cuotas", to: "/cashea", icon: "layers", visible: canSeeReports, module: "cashea" },
   { key: "fichaje", label: "Fichaje", caption: "Personal", to: "/fichaje", icon: "clock", visible: canSeeReports, module: "fichaje" },
   { key: "por-cobrar", label: "Por cobrar", caption: "Administración", to: "/administracion?tab=receivables", icon: "hand-coins", visible: canSeeReports, module: "administracion" },
   { key: "conciliacion", label: "Conciliación", caption: "Administración", to: "/administracion?tab=reconciliation", icon: "scale", visible: canSeeReports, module: "administracion" },

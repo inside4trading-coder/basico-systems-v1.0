@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { allowedShortcuts, moveKey, pushRecent, selectShortcuts, shortcutForPath, SHORTCUTS } from "./shortcuts";
 
-const all = { pos: true, inventario: true, administracion: true, reportes: true, fichaje: true, estudio: true };
+const all = { pos: true, inventario: true, administracion: true, reportes: true, fichaje: true, estudio: true, cashea: true };
 const keys = (rows: { key: string }[]) => rows.map((r) => r.key);
 
 describe("catálogo de accesos de Inicio", () => {
