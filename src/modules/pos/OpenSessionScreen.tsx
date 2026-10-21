@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import { useTenant } from "@/core/tenant-context";
 import { canSupervise } from "@/core/tenant-selection";
 import { useLocations } from "@/modules/inventory/api";
+import { useCashiers } from "@/modules/settings/api";
+import { cn } from "@/lib/utils";
 import { useOpenSession, useOpenSessions, useRegisters, type Register } from "./api";
 import { useAllowedLocations } from "@/core/locationAccess";
 import { cashCurrencyLabel } from "@/core/money";
@@ -81,14 +83,19 @@ function OpenForm({ register, onOpened }: { register: Register; onOpened: (id: s
   const { currencies } = usePosMoney();
   const open = useOpenSession();
   const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const { data: allCashiers = [] } = useCashiers();
+  const cashiers = allCashiers.filter((c) => c.is_active && c.works_pos && (!c.location_id || c.location_id === register.location_id));
+  const [cashierId, setCashierId] = useState<string | null>(null);
+  const needsCashier = cashiers.length > 0;
 
   // mutateAsync y no callbacks de mutate: al refrescar las sesiones esta tarjeta
   // pasa a "Continuar" y se desmonta antes de que corra un onSuccess por llamada.
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const opening = currencies.map((currency) => ({ currency, amount: parseAmount(amounts[currency] ?? "") })).filter((o) => o.amount > 0);
+    if (needsCashier && !cashierId) return toast.error("Elige quién abre la caja");
     try {
-      const res = await open.mutateAsync({ registerId: register.id, opening });
+      const res = await open.mutateAsync({ registerId: register.id, opening, cashierId });
       toast.success(`Caja abierta · ${res.number}`);
       onOpened(res.session_id);
     } catch (err) {
@@ -98,6 +105,28 @@ function OpenForm({ register, onOpened }: { register: Register; onOpened: (id: s
 
   return (
     <form onSubmit={submit} className="space-y-3">
+      {needsCashier && (
+        <fieldset className="space-y-2">
+          <legend className="mono-cap text-[10px] text-muted-foreground">¿Quién abre la caja?</legend>
+          <div className="flex flex-wrap gap-2">
+            {cashiers.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                aria-pressed={cashierId === c.id}
+                onClick={() => setCashierId(c.id)}
+                className={cn(
+                  "rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                  cashierId === c.id ? "border-primary bg-primary/10 font-semibold text-primary" : "hover:border-primary",
+                )}
+              >
+                {c.name}
+                {c.job_title && <span className="block text-[11px] font-normal text-muted-foreground">{c.job_title}</span>}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
       <p className="mono-cap text-[10px] text-muted-foreground">Fondo de caja</p>
       <div className="grid grid-cols-2 gap-2">
         {currencies.map((c) => (
@@ -116,7 +145,7 @@ function OpenForm({ register, onOpened }: { register: Register; onOpened: (id: s
           </div>
         ))}
       </div>
-      <Button type="submit" className="h-11 w-full" disabled={open.isPending}>
+      <Button type="submit" className="h-11 w-full" disabled={open.isPending || (needsCashier && !cashierId)}>
         {open.isPending ? "Abriendo…" : "Abrir caja"}
       </Button>
     </form>
