@@ -13,7 +13,7 @@ import { canSupervise } from "@/core/tenant-selection";
 import { useLocations } from "@/modules/inventory/api";
 import { useOpenSession, useOpenSessions, useRegisters, type Register } from "./api";
 import { useAllowedLocations } from "@/core/locationAccess";
-import { currencySymbol } from "./cart";
+import { cashCurrencyLabel } from "@/core/money";
 import { parseAmount, usePosMoney } from "./usePosMoney";
 
 export default function OpenSessionScreen({ onSelect }: { onSelect: (sessionId: string) => void }) {
@@ -103,7 +103,7 @@ function OpenForm({ register, onOpened }: { register: Register; onOpened: (id: s
         {currencies.map((c) => (
           <div key={c} className="space-y-1">
             <Label htmlFor={`open-${register.id}-${c}`}>
-              Efectivo {currencySymbol(c)}
+              Efectivo {cashCurrencyLabel(c)}
             </Label>
             <Input
               id={`open-${register.id}-${c}`}

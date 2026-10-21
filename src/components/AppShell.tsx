@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, NavLink } from "react-router-dom";
 import BrandMark from "@/components/BrandMark";
+import RateBadge from "@/components/RateBadge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/core/auth";
 import type { ModuleKey } from "@/core/entitlements";
@@ -9,7 +10,6 @@ import { useTenant } from "@/core/tenant-context";
 import { canEditCatalog, canManageTeam, canSeeReports, canSupervise, type TenantRole } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
 import { useTrackRecent } from "@/modules/home/recent";
-import { useCurrentRate } from "@/modules/settings/api";
 import { useRateAutoSync } from "@/modules/settings/useRateAutoSync";
 
 export const ROLE_LABELS: Record<TenantRole, string> = {
@@ -92,19 +92,5 @@ export default function AppShell({ children, wide = false }: { children: ReactNo
       </header>
       <main className={cn("mx-auto space-y-6 p-4", wide ? "max-w-[1400px]" : "max-w-3xl")}>{children}</main>
     </div>
-  );
-}
-
-/** Tasa vigente siempre a la vista: el cajero cobra con ella. */
-function RateBadge() {
-  const { data: rate } = useCurrentRate();
-  if (!rate) return null;
-  return (
-    <span
-      className={cn("num rounded-md border px-2 py-0.5 text-xs", rate.stale ? "border-destructive text-destructive" : "text-muted-foreground")}
-      title={rate.stale ? "Tasa vieja" : `Rige desde ${rate.effective_date}`}
-    >
-      Tasa {rate.rate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-    </span>
   );
 }
