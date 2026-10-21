@@ -10,6 +10,7 @@ import CountsTab from "./CountsTab";
 import RestockTab from "./RestockTab";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeftRight, ClipboardCheck, PenLine, ScanLine, Undo2 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import AppShell from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
@@ -748,6 +749,8 @@ function Summary({ rows, go, editable }: { rows: MovementRow[]; go: (t: string) 
 export default function ControlPage() {
   const { active } = useTenant();
   const editable = canEditCatalog(active?.role);
+  // ?tab=reposicion&sede=<id> abre Reposición filtrada (enlace desde Reportes > Stock).
+  const [params] = useSearchParams();
   const [tab, setTab] = useTabParam<string>(
     editable ? ["resumen", "entrada", "recepcion", "ajustes", "traslados", "reposicion", "conteos", "firmas", "historial", "reportes"] : ["resumen", "conteos", "firmas", "historial", "reportes"],
     "resumen",
@@ -798,7 +801,7 @@ export default function ControlPage() {
               <Transfers />
             </TabsContent>
             <TabsContent value="reposicion">
-              <RestockTab />
+              <RestockTab initialLocationId={params.get("sede")} />
             </TabsContent>
           </>
         )}
