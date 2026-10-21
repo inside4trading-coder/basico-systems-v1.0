@@ -104,6 +104,9 @@ export function useSaveBankProfile() {
   });
 }
 
+/** Todas las cuentas a la vez en las vistas del centro de conciliación. */
+export const ALL_ACCOUNTS = "*";
+
 export function useBankLines(accountId: string | null) {
   const tenant = useTenantKey();
   return useQuery({
@@ -115,7 +118,7 @@ export function useBankLines(accountId: string | null) {
         .select(
           "id, account_id, batch_id, row_number, line_date, line_time, direction, amount, currency, reference, operation_number, description, balance, status, movement_id, match_kind, ignore_reason",
         )
-        .eq("account_id", accountId)
+        .match(accountId === ALL_ACCOUNTS ? {} : { account_id: accountId })
         .order("line_date", { ascending: false })
         .order("row_number", { ascending: true })
         .limit(2000);
@@ -134,9 +137,9 @@ export function useBankBatches(accountId: string | null) {
       const { data, error } = await supabase
         .from("bank_import_batches")
         .select("id, account_id, profile_id, file_name, rows_read, rows_new, rows_duplicate, rows_error, issues, created_at")
-        .eq("account_id", accountId)
+        .match(accountId === ALL_ACCOUNTS ? {} : { account_id: accountId })
         .order("created_at", { ascending: false })
-        .limit(50);
+        .limit(accountId === ALL_ACCOUNTS ? 200 : 50);
       if (error) throw asError(error);
       return (data ?? []) as BankBatch[];
     },
@@ -362,3 +365,71 @@ export const useCollectFromLine = () =>
   useLineRpc<{ p_line_id: string; p_receivable_id: string; p_applied?: number | null; p_payer?: "customer" | "provider" }>(
     "collect_receivable_from_bank_line",
   );
+
+// ---------------------------------------------------------------------------
+// Centro de conciliación
+// ---------------------------------------------------------------------------
+
+export type GuideKey = `account:${string}` | "financing:orders" | "financing:payments";
+
+export interface ImportGuide {
+  source_key: GuideKey;
+  steps: string;
+  updated_at: string;
+}
+
+export function useImportGuides() {
+  const tenant = useTenantKey();
+  return useQuery({
+    queryKey: ["fin", tenant, "bank", "guides"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("import_guides").select("source_key, steps, updated_at");
+      if (error) throw asError(error);
+      return (data ?? []) as ImportGuide[];
+    },
+  });
+}
+
+/** Guarda los pasos de una fuente; vacío vuelve a los pasos por defecto. */
+export function useSaveImportGuide() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: async ({ key, steps }: { key: GuideKey; steps: string }) => {
+      const clean = steps.trim();
+      const { error } = clean
+        ? await supabase.from("import_guides").upsert({ source_key: key, steps: clean }, { onConflict: "tenant_id,source_key" })
+        : await supabase.from("import_guides").delete().eq("source_key", key);
+      if (error) throw asError(error);
+    },
+    onSuccess: invalidate,
+  });
+}
+
+export interface FinancingImport {
+  id: string;
+  provider: string;
+  file_name: string;
+  rows_total: number;
+  created_count: number;
+  updated_count: number;
+  linked_count: number;
+  created_at: string;
+}
+
+/** Cargas de reportes de financiadoras, la más reciente primero. */
+export function useFinancingImports(enabled = true) {
+  const tenant = useTenantKey();
+  return useQuery({
+    enabled,
+    queryKey: ["fin", tenant, "bank", "financing_imports"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("receivable_imports")
+        .select("id, provider, file_name, rows_total, created_count, updated_count, linked_count, created_at")
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) throw asError(error);
+      return (data ?? []) as FinancingImport[];
+    },
+  });
+}
