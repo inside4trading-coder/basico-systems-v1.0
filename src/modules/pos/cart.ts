@@ -116,6 +116,12 @@ export function cartTotals(lines: CartLine[], cartDiscount: number, pricesInclud
   };
 }
 
+/** Precio por unidad que paga el cliente (PVP): con el IVA sumado si el precio se carga sin IVA. */
+export function shelfPrice(price: number, taxRate: number, pricesIncludeTax: boolean): number {
+  if (pricesIncludeTax) return round2(price);
+  return round2(round2(price) + round2((price * taxRate) / 100));
+}
+
 /** Agrega una unidad (o la cantidad dada) sin pasar del disponible conocido. */
 export function addToCart(lines: CartLine[], item: Omit<CartLine, "qty" | "discount">, qty = 1): CartLine[] {
   const found = lines.find((l) => l.variantId === item.variantId);

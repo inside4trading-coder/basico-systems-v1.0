@@ -271,7 +271,7 @@ export function useUpdateVariant() {
 export function useUpdateProduct() {
   const invalidate = useInvalidateInventory();
   return useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: Partial<Pick<Product, "name" | "brand" | "category" | "is_active">> }) => {
+    mutationFn: async ({ id, patch }: { id: string; patch: Partial<Pick<Product, "name" | "brand" | "category" | "is_active" | "tax_rate_id">> }) => {
       const { error } = await supabase.from("products").update(patch).eq("id", id);
       if (error) throw rpcError(error);
     },

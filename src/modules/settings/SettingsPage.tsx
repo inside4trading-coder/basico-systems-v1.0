@@ -233,13 +233,10 @@ function TaxSection() {
     <Card className="space-y-4 p-4">
       <p className="mono-cap text-xs text-muted-foreground">Impuestos</p>
       <div className="space-y-3">
-        <label className="flex items-center justify-between gap-3 text-sm">
-          <span>
-            Los precios ya incluyen el IVA
-            <span className="block text-xs text-muted-foreground">Lo normal en tiendas: el precio del cartel es el que paga el cliente.</span>
-          </span>
-          <Switch checked={settings.prices_include_tax} onCheckedChange={(v) => update.mutate({ prices_include_tax: v }, { onError: errorToast("No se pudo guardar") })} />
-        </label>
+        <p className="text-xs text-muted-foreground">
+          Los precios se cargan sin IVA. La app suma el IVA de cada producto (el de por defecto si no tiene uno), muestra el PVP y
+          guarda el IVA de cada venta para el reporte de IVA.
+        </p>
         <label className="flex items-center justify-between gap-3 text-sm">
           <span>
             Contribuyente especial (cobra IGTF)
