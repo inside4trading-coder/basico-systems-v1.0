@@ -11,10 +11,11 @@ import { cn } from "@/lib/utils";
 import { usePaymentMethods } from "@/modules/settings/api";
 import { useAccounts } from "../api";
 import FinancingImportCard from "../receivables/FinancingImportCard";
-import { useFinancingEnabled } from "../receivables/api";
+import FinancingPaymentsCard from "../receivables/FinancingPaymentsCard";
+import { useFinancingEnabled, useFinancingPaymentImports } from "../receivables/api";
 import { ALL_ACCOUNTS, useBankBatches, useBankProfiles, useFinancingImports, useImportGuides } from "./api";
 import ImportGuide from "./ImportGuide";
-import { SOURCE_STATUS_LABEL, bankGuide, financingOrdersGuide, lastLoadByAccount, sourceStatus, type SourceStatus } from "./sources";
+import { SOURCE_STATUS_LABEL, bankGuide, financingOrdersGuide, financingPaymentsGuide, lastLoadByAccount, sourceStatus, type SourceStatus } from "./sources";
 import StatementImporter from "./StatementImporter";
 
 const STATUS_DOT: Record<SourceStatus, string> = {
@@ -36,6 +37,7 @@ export default function ImportCenter() {
   const { data: batches = [] } = useBankBatches(ALL_ACCOUNTS);
   const financing = useFinancingEnabled();
   const { data: financingImports = [] } = useFinancingImports(financing);
+  const { data: paymentImports = [] } = useFinancingPaymentImports(financing);
   const { data: methods = [] } = usePaymentMethods();
   const { data: guides = [] } = useImportGuides();
   const provider = methods.find((m) => m.kind === "bnpl" && m.is_active)?.name ?? "la financiadora";
@@ -45,9 +47,13 @@ export default function ImportCenter() {
     const banks = accounts
       .filter((a) => a.is_active && (a.kind === "bank" || profiles.some((p) => p.account_id === a.id && p.is_active)))
       .map((a) => ({ id: a.id, name: a.name, kind: "Estado de cuenta", last: last[a.id] ?? null }));
-    const fin = financing ? [{ id: FINANCING, name: provider, kind: "Órdenes y cuotas", last: financingImports[0]?.created_at ?? null }] : [];
+    // Al día solo si están al día los dos archivos: órdenes y pagos.
+    const orders = financingImports[0]?.created_at ?? null;
+    const payments = paymentImports[0]?.created_at ?? null;
+    const finLast = orders && payments ? (orders < payments ? orders : payments) : null;
+    const fin = financing ? [{ id: FINANCING, name: provider, kind: "Órdenes y pagos", last: finLast }] : [];
     return [...fin, ...banks];
-  }, [accounts, profiles, batches, financing, financingImports, provider]);
+  }, [accounts, profiles, batches, financing, financingImports, paymentImports, provider]);
 
   const suggested = sources.find((s) => sourceStatus(s.last) !== "ok")?.id ?? sources[0]?.id ?? null;
   const [chosen, setChosen] = useState<string | null>(null);
@@ -103,8 +109,13 @@ export default function ImportCenter() {
 
       {selected?.id === FINANCING && (
         <div className="space-y-3">
-          <ImportGuide guideKey="financing:orders" guides={guides} defaultSteps={financingOrdersGuide(provider)} canEdit={canEdit} title="¿Dónde obtengo el reporte de órdenes?" />
+          <p className="text-sm text-muted-foreground">
+            Para una conciliación completa, descarga los dos archivos de {provider} con el mismo rango de fechas: primero las órdenes y cuotas, después los pagos recibidos.
+          </p>
+          <ImportGuide guideKey="financing:orders" guides={guides} defaultSteps={financingOrdersGuide(provider)} canEdit={canEdit} title="1 · ¿Dónde obtengo el reporte de órdenes?" />
           <FinancingImportCard />
+          <ImportGuide guideKey="financing:payments" guides={guides} defaultSteps={financingPaymentsGuide(provider)} canEdit={canEdit} title="2 · ¿Dónde obtengo el archivo de pagos?" />
+          <FinancingPaymentsCard />
         </div>
       )}
       {account && (

@@ -1,6 +1,6 @@
 /** Historial de cargas: estados de cuenta de todas las cuentas y reportes de la financiadora. */
 import { useAccounts } from "../api";
-import { useFinancingEnabled } from "../receivables/api";
+import { useFinancingEnabled, useFinancingPaymentImports } from "../receivables/api";
 import { ALL_ACCOUNTS, useBankBatches, useFinancingImports } from "./api";
 
 const when = (iso: string) => new Date(iso).toLocaleString("es-VE", { timeZone: "America/Caracas", dateStyle: "short", timeStyle: "short" });
@@ -19,6 +19,7 @@ export default function HistoryPanel() {
   const { data: batches = [], isLoading } = useBankBatches(ALL_ACCOUNTS);
   const financing = useFinancingEnabled();
   const { data: fin = [] } = useFinancingImports(financing);
+  const { data: payments = [] } = useFinancingPaymentImports(financing);
 
   const rows: Row[] = [
     ...batches.map((b) => ({
@@ -35,6 +36,14 @@ export default function HistoryPanel() {
       source: f.provider,
       file: f.file_name,
       detail: `${f.rows_total} órdenes · ${f.created_count} nuevas · ${f.updated_count} actualizadas · ${f.linked_count} vinculadas`,
+      issues: [],
+    })),
+    ...payments.map((p) => ({
+      id: p.id,
+      at: p.created_at,
+      source: `${p.provider} · pagos`,
+      file: p.file_name,
+      detail: `${p.rows_total} pagos · ${p.matched} conciliados · ${p.possible} posibles · ${p.no_bank} sin banco · ${p.duplicated} repetidos`,
       issues: [],
     })),
   ].sort((a, b) => b.at.localeCompare(a.at));

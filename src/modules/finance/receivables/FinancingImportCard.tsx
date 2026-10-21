@@ -130,6 +130,16 @@ export default function FinancingImportCard({ className }: { className?: string 
             {preview.rows.length} órdenes · {preview.rows.reduce((a, r) => a + r.installments.length, 0)} cuotas
             {preview.skipped ? ` · ${preview.skipped} filas sin orden ni factura` : ""}
           </p>
+          {(() => {
+            // Comparación con lo cargado: órdenes nuevas y órdenes que se actualizan.
+            const known = new Set(receivables.filter((r) => r.provider === importProvider && r.external_ref).map((r) => r.external_ref));
+            const existing = preview.rows.filter((r) => r.external_ref && known.has(r.external_ref)).length;
+            return (
+              <p className="text-muted-foreground">
+                Contra lo cargado: {preview.rows.length - existing} nuevas · {existing} ya estaban (se actualizan cuotas y estados)
+              </p>
+            );
+          })()}
           <ul className="divide-y rounded border">
             {preview.rows.slice(0, 5).map((r, i) => (
               <li key={i} className="flex justify-between gap-2 p-2">
