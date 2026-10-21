@@ -116,6 +116,12 @@ export function cartTotals(lines: CartLine[], cartDiscount: number, pricesInclud
   };
 }
 
+/** Precio por unidad que paga el cliente (PVP): con el IVA sumado si el precio se carga sin IVA. */
+export function shelfPrice(price: number, taxRate: number, pricesIncludeTax: boolean): number {
+  if (pricesIncludeTax) return round2(price);
+  return round2(round2(price) + round2((price * taxRate) / 100));
+}
+
 /** Agrega una unidad (o la cantidad dada) sin pasar del disponible conocido. */
 export function addToCart(lines: CartLine[], item: Omit<CartLine, "qty" | "discount">, qty = 1): CartLine[] {
   const found = lines.find((l) => l.variantId === item.variantId);
@@ -143,6 +149,14 @@ export function setLineDiscount(lines: CartLine[], variantId: string, discount: 
 
 export function removeLine(lines: CartLine[], variantId: string): CartLine[] {
   return lines.filter((l) => l.variantId !== variantId);
+}
+
+/** Descuento de una línea: monto fijo o porcentaje de su bruto (precio × cantidad). */
+export function lineDiscountAmount(mode: "amount" | "percent", value: number, line: Pick<CartLine, "price" | "qty">): number {
+  if (!(value > 0)) return 0;
+  const gross = round2(line.price * line.qty);
+  const raw = mode === "percent" ? (gross * Math.min(value, 100)) / 100 : value;
+  return Math.min(round2(raw), gross);
 }
 
 /** Descuento del carrito: monto fijo o porcentaje sobre lo que queda tras los descuentos de línea. */

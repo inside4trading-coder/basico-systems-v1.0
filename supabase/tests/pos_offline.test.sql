@@ -40,6 +40,10 @@ insert into public.exchange_rates (source, base_currency, quote_currency, rate, 
 select set_config('test.mobile', (select id::text from public.payment_methods where tenant_id = 'aaaaaaaa-1111-1111-1111-111111111111' and code = 'mobile_payment'), true);
 select set_config('test.cash_usd', (select id::text from public.payment_methods where tenant_id = 'aaaaaaaa-1111-1111-1111-111111111111' and code = 'cash_base'), true);
 
+-- Estos casos se escribieron con precios con IVA incluido (ventas anteriores a
+-- 20261119000000_net_prices.sql); el cálculo sigue soportándolo.
+update public.tenants set prices_include_tax = true;
+
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000002","role":"authenticated"}', true);
 select set_config('request.headers', '{"x-tenant-id":"aaaaaaaa-1111-1111-1111-111111111111"}', true);

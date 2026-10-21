@@ -22,6 +22,7 @@ import ClosuresReport from "./ClosuresReport";
 import { PRESET_LABEL, presetRange, type DateRange, type RangePreset } from "./dates";
 import SalesReportView from "./SalesReport";
 import StockReport from "./StockReport";
+import TaxReport from "./TaxReport";
 
 const ALL = "all";
 
@@ -90,6 +91,7 @@ export default function ReportsPage() {
           <TabsTrigger value="sales">Ventas</TabsTrigger>
           <TabsTrigger value="stock">Inventario</TabsTrigger>
           <TabsTrigger value="closures">Cierres de caja</TabsTrigger>
+          <TabsTrigger value="tax">IVA</TabsTrigger>
           {entitlements.administracion && <TabsTrigger value="income">Resultado</TabsTrigger>}
         </TabsList>
         <TabsContent value="sales" className="space-y-4">
@@ -104,6 +106,10 @@ export default function ReportsPage() {
           {filters(true)}
           <ClosuresReport range={range} locationId={locationId} currency={base} businessName={active?.tenant.name ?? ""} />
           <CashMovementsPanel range={range} locationId={locationId} />
+        </TabsContent>
+        <TabsContent value="tax" className="space-y-4">
+          {filters(true)}
+          <TaxReport range={range} locationId={locationId} currency={base} />
         </TabsContent>
         {entitlements.administracion && (
           <TabsContent value="income" className="space-y-4">
