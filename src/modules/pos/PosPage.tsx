@@ -5,7 +5,7 @@
  * el que calcula register_sale en el servidor.
  */
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { ArrowLeftRight, Minus, Plus, Search, Trash2, Wallet } from "lucide-react";
+import { ArrowLeftRight, Minus, Plus, Search, Trash2, UserRound, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import AppShell from "@/components/AppShell";
 import RateBadge from "@/components/RateBadge";
@@ -20,6 +20,7 @@ import { useCashiers, usePaymentMethods, useSalesChannels, useTenantSettings } f
 import { isNetworkError } from "@/core/offline";
 import {
   newIdempotencyKey,
+  useChangeSessionCashier,
   useOpenSessions,
   useRegisterSale,
   useRegisters,
@@ -83,28 +84,6 @@ function writeStorage(key: string, value: unknown) {
   }
 }
 
-/** Cajero elegido en esta caja: se recuerda en el equipo entre ventas y recargas. */
-function useStoredCashier(registerId: string): [string | null, (id: string | null) => void] {
-  const key = `pos.cashier.${registerId}`;
-  const [value, setValue] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  });
-  const set = (id: string | null) => {
-    setValue(id);
-    try {
-      if (id) localStorage.setItem(key, id);
-      else localStorage.removeItem(key);
-    } catch {
-      // Sin almacenamiento local se elige en cada recarga.
-    }
-  };
-  return [value, set];
-}
-
 export default function PosPage() {
   const { active } = useTenant();
   const storageKey = `pos.session.${active?.tenant.id}`;
@@ -154,8 +133,10 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
   const { data: channels = [] } = useSalesChannels();
   const { data: allCashiers = [] } = useCashiers();
   const cashiers = allCashiers.filter((c) => c.is_active && c.works_pos && (!c.location_id || c.location_id === session.location_id));
-  const [cashierId, setCashierId] = useStoredCashier(session.register_id);
-  const cashier = cashiers.find((c) => c.id === cashierId) ?? null;
+  // Quién atiende: el de la sesión (se elige al abrir y se releva con «Cambiar cajero»).
+  const cashier = allCashiers.find((c) => c.id === session.cashier_id) ?? null;
+  const [changingCashier, setChangingCashier] = useState(false);
+  const changeCashier = useChangeSessionCashier();
   const { data: methods = [] } = usePaymentMethods();
   const { data: registers = [] } = useRegisters();
   const { data: locations = [] } = useLocations();
@@ -389,25 +370,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           <HeaderField label="Sesión" value={<span className="mono">{session.number}</span>} />
           <div>
             <dt className="mono-cap text-[10px] text-muted-foreground">Cajero</dt>
-            <dd>
-              {cashiers.length > 0 ? (
-                <select
-                  aria-label="Cajero"
-                  className="rounded border border-input bg-background px-1 py-0.5 text-sm font-semibold"
-                  value={cashier?.id ?? ""}
-                  onChange={(e) => setCashierId(e.target.value || null)}
-                >
-                  <option value="">Sin elegir</option>
-                  {cashiers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span className="font-semibold">—</span>
-              )}
-            </dd>
+            <dd className="font-semibold">{cashier?.name ?? "—"}</dd>
           </div>
           <div>
             <dt className="mono-cap text-[10px] text-muted-foreground">Tasa</dt>
@@ -417,6 +380,11 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           </div>
         </dl>
         <div className="flex flex-wrap gap-2">
+          {cashiers.length > 0 && (
+            <Button size="sm" variant="outline" disabled={!offline.online} title={offline.online ? undefined : "Necesita conexión"} onClick={() => setChangingCashier(true)}>
+              <UserRound className="h-4 w-4" /> Cambiar cajero
+            </Button>
+          )}
           <Button size="sm" variant="outline" disabled={!offline.online} title={offline.online ? undefined : "Necesita conexión"} onClick={() => setMoving(true)}>
             <Wallet className="h-4 w-4" /> Movimientos de caja
           </Button>
@@ -603,6 +571,41 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           </Button>
         </div>
       )}
+
+      <Dialog open={changingCashier} onOpenChange={setChangingCashier}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>¿Quién atiende la caja?</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {cashiers.map((c) => (
+              <Button
+                key={c.id}
+                variant={c.id === cashier?.id ? "default" : "outline"}
+                className="h-auto justify-start py-3 text-left"
+                disabled={changeCashier.isPending}
+                onClick={() =>
+                  changeCashier.mutate(
+                    { sessionId: session.id, cashierId: c.id },
+                    {
+                      onSuccess: () => {
+                        toast.success(`Ahora atiende ${c.name}`);
+                        setChangingCashier(false);
+                      },
+                      onError: (err) => toast.error("No se pudo cambiar el cajero", { description: err.message }),
+                    },
+                  )
+                }
+              >
+                <span>
+                  {c.name}
+                  {c.job_title && <span className="block text-[11px] font-normal opacity-70">{c.job_title}</span>}
+                </span>
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <NoteDialog open={noteOpen} onOpenChange={setNoteOpen} value={draft.note ?? ""} onSave={(note) => setDraft((d) => ({ ...d, note }))} />
 

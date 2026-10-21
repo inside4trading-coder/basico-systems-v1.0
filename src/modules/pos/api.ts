@@ -27,6 +27,8 @@ export interface CashSession {
   opened_by: string;
   opened_at: string;
   closed_at: string | null;
+  /** Quién atiende la caja ahora; se elige al abrir. */
+  cashier_id: string | null;
 }
 
 export interface CashLine {
@@ -155,10 +157,37 @@ export function useSessionSummary(sessionId: string | null) {
 export function useOpenSession() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ registerId, opening, note }: { registerId: string; opening: { currency: string; amount: number }[]; note?: string }) => {
-      const { data, error } = await supabase.rpc("open_cash_session", { p_register_id: registerId, p_opening: opening, p_note: note ?? null });
+    mutationFn: async ({
+      registerId,
+      opening,
+      note,
+      cashierId,
+    }: {
+      registerId: string;
+      opening: { currency: string; amount: number }[];
+      note?: string;
+      cashierId?: string | null;
+    }) => {
+      const { data, error } = await supabase.rpc("open_cash_session", {
+        p_register_id: registerId,
+        p_opening: opening,
+        p_note: note ?? null,
+        p_cashier_id: cashierId ?? null,
+      });
       if (error) throw asError(error);
       return data as { session_id: string; number: string };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["pos"] }),
+  });
+}
+
+/** Relevo de cajero con la caja abierta. */
+export function useChangeSessionCashier() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ sessionId, cashierId }: { sessionId: string; cashierId: string }) => {
+      const { error } = await supabase.rpc("change_session_cashier", { p_session_id: sessionId, p_cashier_id: cashierId });
+      if (error) throw asError(error);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["pos"] }),
   });
