@@ -90,6 +90,17 @@ select is_empty(
   'funciones SECURITY DEFINER de public: nunca anon; authenticated solo si están marcadas @rpc'
 );
 
+-- anon entra al esquema app solo para fichar desde el teléfono: de lo que
+-- corre con permisos elevados, únicamente estas dos funciones.
+select is(
+  array(select p.proname::text
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'app' and p.prosecdef and has_function_privilege('anon', p.oid, 'EXECUTE')
+        order by 1),
+  array['clock_lookup', 'clock_punch'],
+  'anon solo ejecuta, de las funciones SECURITY DEFINER de app, clock_lookup y clock_punch'
+);
+
 -- ---------------------------------------------------------------------------
 -- 2. Datos de prueba (como postgres)
 -- ---------------------------------------------------------------------------
@@ -296,6 +307,7 @@ declare
   v_inst uuid;
   v_mov uuid;
   v_count uuid;
+  v_staff uuid;
   v_batch uuid;
   v_rcv uuid;
   v_rinst uuid;
@@ -383,7 +395,9 @@ begin
       values (t, 'cccccccc-0000-0000-0000-000000000001', v_loc);
     insert into public.bank_fee_rules (tenant_id, account_id, phrase) values (t, v_acc, 'Aislamiento');
     insert into public.customers (tenant_id, name, doc) values (t, 'Cliente aislamiento', 'V-1');
-    insert into public.cashiers (tenant_id, name) values (t, 'Cajero aislamiento');
+    insert into public.cashiers (tenant_id, name) values (t, 'Cajero aislamiento') returning id into v_staff;
+    insert into public.clock_events (tenant_id, staff_id, kind) values (t, v_staff, 'entrada');
+    insert into public.clock_pin_failures (tenant_id) values (t);
     insert into public.inventory_counts (tenant_id, number, location_id) values (t, 'ISO-C1', v_loc) returning id into v_count;
     insert into public.inventory_count_items (tenant_id, count_id, variant_id)
       select t, v_count, v.id from public.variants v where v.tenant_id = t limit 1;

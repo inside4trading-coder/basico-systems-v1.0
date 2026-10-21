@@ -35,6 +35,7 @@ const NAV: NavItem[] = [
   { to: "/clientes", label: "Clientes", visible: canSeeReports, module: "pos" },
   { to: "/reportes", label: "Reportes", visible: canSeeReports, module: "reportes" },
   { to: "/administracion", label: "Administración", visible: canSeeReports, module: "administracion" },
+  { to: "/fichaje", label: "Fichaje", visible: canSeeReports, module: "fichaje" },
   { to: "/sedes", label: "Sedes", visible: canSupervise },
   { to: "/configuracion", label: "Configuración", visible: canSupervise },
   { to: "/equipo", label: "Equipo", visible: canManageTeam },

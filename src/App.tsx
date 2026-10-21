@@ -21,6 +21,8 @@ import FinancePage from "@/modules/finance/FinancePage";
 import ObligationDetailPage from "@/modules/finance/obligations/ObligationDetailPage";
 import ModuleGate from "@/components/ModuleGate";
 import CustomersPage from "@/modules/customers/CustomersPage";
+import ClockPage from "@/modules/clock/ClockPage";
+import PunchPage from "@/modules/clock/PunchPage";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -63,6 +65,18 @@ export default function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<Login />} />
+              {/* Fichar desde el teléfono: sin sesión, con la clave del negocio y el PIN. */}
+              <Route path="/fichar/:clockKey" element={<PunchPage />} />
+              <Route
+                path="/fichaje"
+                element={
+                  <RequireTenant>
+                    <ModuleGate module="fichaje">
+                      <ClockPage />
+                    </ModuleGate>
+                  </RequireTenant>
+                }
+              />
               <Route
                 path="/equipo"
                 element={
