@@ -8,21 +8,17 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTenant } from "@/core/tenant-context";
 import { canSupervise } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
-import { hashFile } from "@/modules/inventory/import/files";
 import { formatMoney } from "@/modules/pos/cart";
 import { caracasToday } from "@/modules/reports/dates";
 import { usePaymentMethods, useTenantSettings } from "@/modules/settings/api";
 import { useAccounts } from "../api";
-import { readBankFile } from "../bank/parse";
 import { formatDay } from "../lib";
-import { useImportFinancing, useProviderLedger, useReceivables, useReceivablesSummary, useVoidProviderEntry, type Receivable } from "./api";
+import { useFinancingEnabled, useProviderLedger, useReceivables, useReceivablesSummary, useVoidProviderEntry, type Receivable } from "./api";
+import FinancingImportCard from "./FinancingImportCard";
 import { NewCreditDialog, ProviderInvoiceDialog, SettleDialog } from "./dialogs";
-import { parseFinancingTable, type FinancingRow } from "./financingFile";
 import { installmentLeft, nextDue } from "./lib";
 import ReceivableSheet from "./ReceivableSheet";
 
@@ -62,12 +58,6 @@ function matches(r: Receivable, f: Filter, today: string) {
   }
 }
 
-interface Preview {
-  fileName: string;
-  hash: string;
-  rows: FinancingRow[];
-  skipped: number;
-}
 
 export default function ReceivablesTab() {
   const { active } = useTenant();
@@ -79,9 +69,9 @@ export default function ReceivablesTab() {
   const { data: accounts = [] } = useAccounts();
   const { data: methods = [] } = usePaymentMethods();
   const { data: settings } = useTenantSettings();
-  const importFinancing = useImportFinancing();
   const voidEntry = useVoidProviderEntry();
   const usable = accounts.filter((a) => a.is_active);
+  const financing = useFinancingEnabled();
   const base = settings?.base_currency ?? "USD";
 
   const providers = useMemo(() => {
@@ -96,11 +86,6 @@ export default function ReceivablesTab() {
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [provider, setProvider] = useState<string | null>(null);
-  const importProvider = provider ?? providers[0] ?? "";
-  const [preview, setPreview] = useState<Preview | null>(null);
-  const [reading, setReading] = useState(false);
-  const [lastIssues, setLastIssues] = useState<{ row: number; reason: string }[]>([]);
   const [ledgerDialog, setLedgerDialog] = useState<{ provider: string; currency: string; kind: "entry" | "settle"; balance: number } | null>(null);
 
   const counts = useMemo(() => {
@@ -119,36 +104,6 @@ export default function ReceivablesTab() {
   const balances = summary?.providers ?? [];
   const providerCards = [...new Set([...balances.map((b) => b.provider), ...providers.filter((p) => receivables.some((r) => r.provider === p))])];
 
-  const pickFile = async (file: File) => {
-    setReading(true);
-    try {
-      const { rows, skipped } = parseFinancingTable(await readBankFile(file));
-      setPreview({ fileName: file.name, hash: await hashFile(file), rows, skipped });
-    } catch (err) {
-      toast.error("No se pudo leer el archivo", { description: (err as Error).message });
-      setPreview(null);
-    } finally {
-      setReading(false);
-    }
-  };
-
-  const confirmImport = () => {
-    if (!preview || !importProvider) return;
-    importFinancing.mutate(
-      { p_provider: importProvider, p_file_name: preview.fileName, p_file_hash: preview.hash, p_rows: preview.rows.map((r) => ({ ...r, currency: base })) },
-      {
-        onSuccess: (r) => {
-          toast.success(`${r.created} nuevas · ${r.updated} actualizadas · ${r.linked} vinculadas a ventas del POS`, {
-            description: r.issues.length ? `${r.issues.length} filas con avisos` : undefined,
-          });
-          setLastIssues(r.issues);
-          setPreview(null);
-        },
-        onError: (err) => toast.error("No se pudo cargar", { description: err.message }),
-      },
-    );
-  };
-
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -160,7 +115,7 @@ export default function ReceivablesTab() {
           negative={(summary?.overdue_count ?? 0) > 0}
         />
         <Kpi label="Crédito a clientes" value={formatMoney(summary?.credit_total ?? 0, base)} />
-        <Kpi label="Con financiadoras" value={formatMoney(summary?.financing_total ?? 0, base)} />
+        {financing && <Kpi label="Con financiadoras" value={formatMoney(summary?.financing_total ?? 0, base)} />}
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -169,95 +124,11 @@ export default function ReceivablesTab() {
         </Button>
       </div>
 
-      <section className="space-y-3 rounded-xl border bg-card p-4">
-        <div>
-          <h2 className="text-sm">Cargar reporte de la financiadora</h2>
-          <p className="text-xs text-muted-foreground">
-            El reporte de órdenes (Excel o CSV) trae n.º de orden, cuotas y estados. Se une con las ventas del POS cobradas con ese método por número de venta o de
-            orden; las que no estén se crean.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="space-y-1">
-            <Label htmlFor="fin-provider">Financiadora</Label>
-            {providers.length > 0 ? (
-              <Select value={importProvider} onValueChange={setProvider}>
-                <SelectTrigger id="fin-provider" className="h-10 w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {providers.map((p) => (
-                    <SelectItem key={p} value={p}>
-                      {p}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <Input id="fin-provider" className="h-10 w-48" value={provider ?? ""} onChange={(e) => setProvider(e.target.value)} placeholder="Nombre" />
-            )}
-          </div>
-          <Label
-            className={cn(
-              "inline-flex h-10 cursor-pointer items-center justify-center rounded-md border px-4 text-sm font-medium hover:bg-accent",
-              (!importProvider || reading) && "pointer-events-none opacity-50",
-            )}
-          >
-            {reading ? "Leyendo…" : "Elegir archivo"}
-            <input
-              type="file"
-              className="sr-only"
-              accept=".xlsx,.csv,.xls"
-              disabled={!importProvider || reading}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                e.target.value = "";
-                if (f) void pickFile(f);
-              }}
-            />
-          </Label>
-        </div>
-        {preview && (
-          <div className="space-y-2 rounded-lg border p-3 text-xs">
-            <p className="text-sm font-semibold">{preview.fileName}</p>
-            <p>
-              {preview.rows.length} órdenes · {preview.rows.reduce((a, r) => a + r.installments.length, 0)} cuotas
-              {preview.skipped ? ` · ${preview.skipped} filas sin orden ni factura` : ""}
-            </p>
-            <ul className="divide-y rounded border">
-              {preview.rows.slice(0, 5).map((r, i) => (
-                <li key={i} className="flex justify-between gap-2 p-2">
-                  <span className="min-w-0 truncate">
-                    Orden {r.external_ref ?? "—"} · {r.document ?? "sin factura"} · {r.customer_name ?? "—"}
-                  </span>
-                  <span className="shrink-0">{r.installments.length} cuotas</span>
-                </li>
-              ))}
-            </ul>
-            <div className="flex gap-2">
-              <Button size="sm" disabled={preview.rows.length === 0 || importFinancing.isPending} onClick={confirmImport}>
-                Cargar en {importProvider}
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setPreview(null)}>
-                Cancelar
-              </Button>
-            </div>
-          </div>
-        )}
-        {lastIssues.length > 0 && (
-          <ul className="max-h-32 space-y-0.5 overflow-y-auto text-xs text-muted-foreground">
-            {lastIssues.map((i, k) => (
-              <li key={k}>
-                Fila {i.row}: {i.reason}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {financing && <FinancingImportCard />}
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap gap-1" role="group" aria-label="Estado">
-          {(Object.keys(FILTER_LABEL) as Filter[]).map((f) => (
+          {(Object.keys(FILTER_LABEL) as Filter[]).filter((f) => financing || f !== "financing").map((f) => (
             <Button key={f} size="sm" variant={filter === f ? "default" : "outline"} onClick={() => setFilter(f)} aria-pressed={filter === f}>
               {FILTER_LABEL[f]} ({counts[f]})
             </Button>
@@ -310,7 +181,7 @@ export default function ReceivablesTab() {
         })}
       </ul>
 
-      {providerCards.length > 0 && (
+      {financing && providerCards.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-sm">Cuenta corriente con financiadoras</h2>
           <p className="text-xs text-muted-foreground">

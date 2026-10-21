@@ -10,7 +10,7 @@ import { useTenant } from "@/core/tenant-context";
 import { canSeeReports } from "@/core/tenant-selection";
 import { useTabParam } from "@/lib/useTabParam";
 import AccountsTab from "./AccountsTab";
-import ReconciliationTab from "./bank/ReconciliationTab";
+import ReconciliationCenter from "./bank/ReconciliationCenter";
 import ReceivablesTab from "./receivables/ReceivablesTab";
 import CatalogTab from "./CatalogTab";
 import MovementsTab from "./MovementsTab";
@@ -51,7 +51,7 @@ export default function FinancePage() {
           <ReceivablesTab />
         </TabsContent>
         <TabsContent value="reconciliation">
-          <ReconciliationTab />
+          <ReconciliationCenter />
         </TabsContent>
         <TabsContent value="accounts">
           <AccountsTab />

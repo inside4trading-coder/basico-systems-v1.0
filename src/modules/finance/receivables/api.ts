@@ -5,6 +5,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/core/supabase";
 import { useTenant } from "@/core/tenant-context";
+import { useEntitlements } from "@/core/useEntitlements";
+import { usePaymentMethods } from "@/modules/settings/api";
 import type { FinancingRow } from "./financingFile";
 
 export interface ReceivableInstallment {
@@ -233,3 +235,13 @@ export const useImportFinancing = () =>
     { p_provider: string; p_file_name: string; p_file_hash: string; p_rows: (FinancingRow & { currency?: string })[] },
     { rows: number; created: number; updated: number; linked: number; issues: { row: number; reason: string }[] }
   >("import_financing");
+
+/**
+ * Ventas con financiadora habilitadas: el negocio tiene el módulo y un método
+ * de pago de financiadora activo. Sin eso, Por cobrar es solo crédito propio.
+ */
+export function useFinancingEnabled(): boolean {
+  const entitlements = useEntitlements();
+  const { data: methods = [] } = usePaymentMethods();
+  return Boolean(entitlements.cashea) && methods.some((m) => m.kind === "bnpl" && m.is_active);
+}
