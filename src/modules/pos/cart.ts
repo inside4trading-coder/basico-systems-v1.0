@@ -151,6 +151,14 @@ export function removeLine(lines: CartLine[], variantId: string): CartLine[] {
   return lines.filter((l) => l.variantId !== variantId);
 }
 
+/** Descuento de una línea: monto fijo o porcentaje de su bruto (precio × cantidad). */
+export function lineDiscountAmount(mode: "amount" | "percent", value: number, line: Pick<CartLine, "price" | "qty">): number {
+  if (!(value > 0)) return 0;
+  const gross = round2(line.price * line.qty);
+  const raw = mode === "percent" ? (gross * Math.min(value, 100)) / 100 : value;
+  return Math.min(round2(raw), gross);
+}
+
 /** Descuento del carrito: monto fijo o porcentaje sobre lo que queda tras los descuentos de línea. */
 export function cartDiscountAmount(mode: "amount" | "percent", value: number, afterLineDiscounts: number): number {
   if (!(value > 0)) return 0;

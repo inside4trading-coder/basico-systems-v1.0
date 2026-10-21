@@ -3,6 +3,8 @@ import {
   saleItems,
   addToCart,
   cartDiscountAmount,
+  lineDiscountAmount,
+  shelfPrice,
   cartTotals,
   changeIn,
   igtfOf,
@@ -189,5 +191,31 @@ describe("líneas para register_sale", () => {
       { variant_id: "v1", qty: 2, discount: 1 },
       { manual: true, kind: "servicio", description: "Mano de obra", price: 15, qty: 2, discount: 1, tax_rate_id: "t0" },
     ]);
+  });
+});
+
+describe("descuento por línea", () => {
+  const line = { price: 12.5, qty: 2 };
+  it("en porcentaje sobre el bruto de la línea", () => {
+    expect(lineDiscountAmount("percent", 10, line)).toBe(2.5);
+  });
+  it("en monto, sin pasar del bruto", () => {
+    expect(lineDiscountAmount("amount", 4, line)).toBe(4);
+    expect(lineDiscountAmount("amount", 40, line)).toBe(25);
+    expect(lineDiscountAmount("percent", 150, line)).toBe(25);
+  });
+  it("vacío o negativo no descuenta", () => {
+    expect(lineDiscountAmount("percent", 0, line)).toBe(0);
+    expect(lineDiscountAmount("amount", -3, line)).toBe(0);
+  });
+});
+
+describe("PVP en pantalla", () => {
+  it("suma el IVA cuando el precio se carga sin IVA", () => {
+    expect(shelfPrice(6.59, 16, false)).toBe(7.64);
+    expect(shelfPrice(6.59, 0, false)).toBe(6.59);
+  });
+  it("no toca el precio cuando ya trae el IVA", () => {
+    expect(shelfPrice(7.65, 16, true)).toBe(7.65);
   });
 });

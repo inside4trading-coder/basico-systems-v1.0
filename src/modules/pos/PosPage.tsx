@@ -38,7 +38,9 @@ import {
   saleItems,
   setLineDiscount,
   setQty,
+  lineDiscountAmount,
   type CartLine,
+  type MoneySettings,
 } from "./cart";
 import { CashMovementDialog, CloseSessionDialog } from "./CashDialogs";
 import { HeldListDialog, HoldDialog } from "./HeldCarts";
@@ -54,6 +56,7 @@ import { ScanButton } from "@/core/scanner/CameraScanner";
 import { useScanner } from "./useScanner";
 import { parseAmount, usePosMoney } from "./usePosMoney";
 import ManualItemDialog from "./ManualItemDialog";
+import { CatalogPanel, ProductCard, ProductGrid } from "./ProductCard";
 import SessionAlerts from "./SessionAlerts";
 
 function readStorage<T>(key: string, fallback: T): T {
@@ -232,12 +235,19 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
   // Búsqueda mientras se escribe, con pausa para no consultar en cada tecla.
   useEffect(() => {
     const q = query.trim();
+    // Buscador vacío: vuelve el catálogo de la sede.
+    if (!q) setHits([]);
     if (q.length < 2) return;
     const t = setTimeout(() => runSearch(q, false), 300);
     return () => clearTimeout(t);
   }, [query, runSearch]);
 
   useScanner((code) => runSearch(code, true), !paying && !moving && !closing && !receipt);
+
+  const pick = (hit: PosHit) => {
+    add(hit);
+    searchRef.current?.focus();
+  };
 
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
@@ -330,7 +340,14 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           <p className="font-semibold">
             {register?.name ?? "Caja"} · <span className="mono">{session.number}</span>
           </p>
-          <p className="text-xs text-muted-foreground">{location?.name}</p>
+          <p className="text-xs text-muted-foreground">
+            {location?.name}
+            {money?.localCurrency && money.rate ? (
+              <span className="num ml-2 rounded-full border px-2 py-0.5 text-[11px] text-foreground">
+                Tasa {formatMoney(money.rate, money.localCurrency)}
+              </span>
+            ) : null}
+          </p>
           {cashiers.length > 0 && (
             <label className="mt-1 flex items-center gap-1 text-xs">
               <span className="text-muted-foreground">Atiende:</span>
@@ -410,34 +427,24 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           {!searching && localResults && hits.length > 0 && (
             <p className="text-xs text-muted-foreground">Sin conexión: resultados del catálogo guardado en este equipo.</p>
           )}
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {hits.map((h) => (
-              <li key={h.variant_id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    add(h);
-                    searchRef.current?.focus();
-                  }}
-                  disabled={h.available <= 0}
-                  className="w-full rounded-xl border bg-card p-3 text-left transition-colors hover:border-primary disabled:opacity-50"
-                >
-                  <p className="font-semibold">{h.product_name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {[Object.values(h.options ?? {}).join(" · "), h.brand, h.sku].filter(Boolean).join(" · ")}
-                  </p>
-                  <div className="mt-1 flex items-baseline justify-between">
-                    <span className="num font-bold">
-                      {h.price === null ? "Sin precio" : formatMoney(shelfPrice(Number(h.price), h.tax_rate, pricesIncludeTax), base)}
-                    </span>
-                    <span className={cn("num text-xs", h.available <= 0 ? "text-destructive" : "text-muted-foreground")}>
-                      {formatQty(h.available)} {h.unit}
-                    </span>
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
+          {query.trim() === "" && hits.length === 0 ? (
+            <CatalogPanel
+              locationId={session.location_id}
+              online={offline.online}
+              money={money}
+              baseCurrency={base}
+              pricesIncludeTax={pricesIncludeTax}
+              onPick={pick}
+            />
+          ) : (
+            <ProductGrid>
+              {hits.map((h) => (
+                <li key={h.variant_id}>
+                  <ProductCard hit={h} money={money} baseCurrency={base} pricesIncludeTax={pricesIncludeTax} onPick={pick} />
+                </li>
+              ))}
+            </ProductGrid>
+          )}
         </section>
 
         <section className="space-y-3 rounded-xl border bg-card p-3 lg:sticky lg:top-4 lg:self-start" aria-label="Carrito">
@@ -467,6 +474,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
                 line={l}
                 total={totals.lines.find((t) => t.variantId === l.variantId)?.total ?? 0}
                 currency={base}
+                money={money}
                 pricesIncludeTax={pricesIncludeTax}
                 onQty={(qty) => setDraft((d) => ({ ...d, lines: setQty(d.lines, l.variantId, qty) }))}
                 onDiscount={(v) => setDraft((d) => ({ ...d, lines: setLineDiscount(d.lines, l.variantId, v) }))}
@@ -619,6 +627,7 @@ function CartRow({
   line,
   total,
   currency,
+  money,
   pricesIncludeTax,
   onQty,
   onDiscount,
@@ -627,12 +636,16 @@ function CartRow({
   line: CartLine;
   total: number;
   currency: string;
+  money: MoneySettings | null;
   pricesIncludeTax: boolean;
   onQty: (qty: number) => void;
   onDiscount: (value: number) => void;
   onRemove: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [discountMode, setDiscountMode] = useState<"amount" | "percent">("amount");
+  const applyDiscount = (text: string) => onDiscount(lineDiscountAmount(discountMode, parseAmount(text), line));
+  const localTotal = money?.localCurrency ? fromBase(total, money.localCurrency, money) : null;
   const atMax = line.available !== null && line.qty >= line.available;
   return (
     <li className="space-y-2 rounded-lg border p-2">
@@ -673,24 +686,45 @@ function CartRow({
         <button type="button" className="text-xs text-primary underline" onClick={() => setEditing(!editing)}>
           {line.discount > 0 ? `−${formatMoney(line.discount, currency)}` : "Descuento"}
         </button>
-        <span className="num font-semibold">{formatMoney(total, currency)}</span>
+        <span className="text-right">
+          <span className="num block font-semibold">{formatMoney(total, currency)}</span>
+          {localTotal !== null && money?.localCurrency && (
+            <span className="num block text-[11px] text-muted-foreground">{formatMoney(localTotal, money.localCurrency)}</span>
+          )}
+        </span>
       </div>
       {editing && (
-        <Input
-          inputMode="decimal"
-          aria-label={`Descuento de ${line.name}`}
-          defaultValue={line.discount > 0 ? String(line.discount) : ""}
-          onBlur={(e) => onDiscount(parseAmount(e.target.value))}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              onDiscount(parseAmount(e.currentTarget.value));
-              setEditing(false);
-            }
-          }}
-          placeholder={`Monto en ${currency}`}
-          className="num h-9"
-          autoFocus
-        />
+        <div className="flex gap-1">
+          <Input
+            key={discountMode}
+            inputMode="decimal"
+            aria-label={`Descuento de ${line.name}`}
+            defaultValue={discountMode === "amount" && line.discount > 0 ? String(line.discount) : ""}
+            onBlur={(e) => applyDiscount(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                applyDiscount(e.currentTarget.value);
+                setEditing(false);
+              }
+            }}
+            placeholder={discountMode === "percent" ? "Porcentaje" : `Monto en ${currency}`}
+            className="num h-9"
+            autoFocus
+          />
+          {(["amount", "percent"] as const).map((m) => (
+            <Button
+              key={m}
+              type="button"
+              size="sm"
+              className="h-9"
+              variant={discountMode === m ? "default" : "outline"}
+              aria-pressed={discountMode === m}
+              onClick={() => setDiscountMode(m)}
+            >
+              {m === "percent" ? "%" : currency}
+            </Button>
+          ))}
+        </div>
       )}
     </li>
   );
