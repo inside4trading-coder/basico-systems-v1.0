@@ -6,7 +6,7 @@ import { useAuth } from "@/core/auth";
 import type { ModuleKey } from "@/core/entitlements";
 import { useEntitlements } from "@/core/useEntitlements";
 import { useTenant } from "@/core/tenant-context";
-import { canManageTeam, canSeeReports, canSupervise, type TenantRole } from "@/core/tenant-selection";
+import { canEditCatalog, canManageTeam, canSeeReports, canSupervise, type TenantRole } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
 import { useTrackRecent } from "@/modules/home/recent";
 import { useCurrentRate } from "@/modules/settings/api";
@@ -35,6 +35,7 @@ const NAV: NavItem[] = [
   { to: "/clientes", label: "Clientes", visible: canSeeReports, module: "pos" },
   { to: "/reportes", label: "Reportes", visible: canSeeReports, module: "reportes" },
   { to: "/administracion", label: "Administración", visible: canSeeReports, module: "administracion" },
+  { to: "/estudio", label: "Estudio IA", visible: canEditCatalog, module: "estudio" },
   { to: "/fichaje", label: "Fichaje", visible: canSeeReports, module: "fichaje" },
   { to: "/sedes", label: "Sedes", visible: canSupervise },
   { to: "/configuracion", label: "Configuración", visible: canSupervise },

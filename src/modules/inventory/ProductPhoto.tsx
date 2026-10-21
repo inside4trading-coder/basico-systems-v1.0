@@ -4,10 +4,12 @@
  * quitarla.
  */
 import { useRef, useState } from "react";
-import { Camera, Package } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Camera, Package, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useEntitlements } from "@/core/useEntitlements";
 import { useProductPhoto } from "./photos";
 
 export function ProductThumb({ url, className = "h-10 w-10" }: { url: string | null; className?: string }) {
@@ -35,6 +37,7 @@ export function ProductPhotoButton({
   const fileRef = useRef<HTMLInputElement>(null);
   const { upload, remove } = useProductPhoto();
   const busy = upload.isPending || remove.isPending;
+  const { estudio } = useEntitlements();
 
   if (!editable) return <ProductThumb url={url} />;
 
@@ -99,6 +102,13 @@ export function ProductPhotoButton({
               </Button>
             )}
           </div>
+          {estudio && (
+            <Button asChild variant="outline">
+              <Link to={`/estudio?producto=${productId}`}>
+                <Sparkles /> Mejorar con Estudio IA
+              </Link>
+            </Button>
+          )}
           <p className="text-xs text-muted-foreground">Se achica a 800 px antes de subir para que cargue rápido en el POS.</p>
         </DialogContent>
       </Dialog>
