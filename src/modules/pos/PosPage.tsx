@@ -65,6 +65,8 @@ import { CatalogPanel, ProductCard, ProductGrid } from "./ProductCard";
 import SessionAlerts from "./SessionAlerts";
 import DualPrice from "./DualPrice";
 import FunctionsBar, { type PosFunction } from "./FunctionsBar";
+import CouponDialog from "./CouponDialog";
+import { couponDiscount, type AppliedCoupon } from "./coupons";
 
 function readStorage<T>(key: string, fallback: T): T {
   try {
@@ -122,6 +124,8 @@ interface CartDraft {
   discountValue: string;
   /** Nota del pedido; se lleva al cobro. */
   note?: string;
+  /** Cupón aplicado (se valida otra vez en el servidor al cobrar). */
+  coupon?: AppliedCoupon | null;
 }
 
 const EMPTY_DRAFT: CartDraft = { lines: [], discountMode: "amount", discountValue: "", note: "" };
@@ -166,6 +170,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
   const [localResults, setLocalResults] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
+  const [couponOpen, setCouponOpen] = useState(false);
   const discountRef = useRef<HTMLInputElement>(null);
   const cartRef = useRef<HTMLElement>(null);
   const cartHeight = useFitToViewport(cartRef);
@@ -175,7 +180,11 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
   const sale = useRegisterSale();
 
   const afterLineDiscounts = round2(draft.lines.reduce((a, l) => a + round2(l.price * l.qty) - l.discount, 0));
-  const cartDiscount = cartDiscountAmount(draft.discountMode, parseAmount(draft.discountValue), afterLineDiscounts);
+  // El cupón va primero; el descuento manual se calcula sobre lo que queda.
+  const couponOff = couponDiscount(draft.coupon, afterLineDiscounts);
+  const couponShort = Boolean(draft.coupon) && couponOff === 0;
+  const manualDiscount = cartDiscountAmount(draft.discountMode, parseAmount(draft.discountValue), round2(afterLineDiscounts - couponOff));
+  const cartDiscount = round2(couponOff + manualDiscount);
   const totals = cartTotals(draft.lines, cartDiscount, pricesIncludeTax);
 
   const add = useCallback((hit: PosHit) => {
@@ -253,6 +262,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
     if (!money) return;
     if (draft.lines.length === 0) return toast.error("El carrito está vacío");
     if (totals.total <= 0) return toast.error("El total debe ser mayor que cero");
+    if (couponShort) return toast.error(`El cupón ${draft.coupon!.code} no aplica a esta compra`, { description: "Quítalo o agrega productos." });
     idempotencyKey.current = newIdempotencyKey();
     setPaying(true);
   };
@@ -309,9 +319,13 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
       note: result.note,
       channelId: result.channelId,
       cashierId: cashier?.id ?? null,
+      coupon: draft.coupon && couponOff > 0 ? { code: draft.coupon.code, discount: couponOff } : null,
     };
     const soldAt = new Date().toISOString();
-    if (!navigator.onLine) return queueOffline({ ...input, soldAt }, result);
+    if (!navigator.onLine) {
+      if (input.coupon) return toast.error("El cupón necesita conexión", { description: "Quítalo para cobrar sin conexión." });
+      return queueOffline({ ...input, soldAt }, result);
+    }
     try {
       const res = await sale.mutateAsync(input);
       if (Math.abs(res.total - totals.total) >= 0.01) {
@@ -322,7 +336,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
       writeStorage(lastSaleKey, res.sale_id);
       setReceipt({ saleId: res.sale_id });
     } catch (err) {
-      if (isNetworkError(err)) return queueOffline({ ...input, soldAt }, result);
+      if (isNetworkError(err) && !input.coupon) return queueOffline({ ...input, soldAt }, result);
       toast.error("No se registró la venta", { description: (err as Error).message });
     }
   };
@@ -338,6 +352,9 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
         return setNoteOpen(true);
       case "cash":
         return setMoving(true);
+      case "coupon":
+        if (!hasLines) return toast.info("Agrega productos para aplicar un cupón");
+        return setCouponOpen(true);
       case "discount":
         if (!hasLines) return toast.info("Agrega productos para aplicar un descuento");
         return discountRef.current?.focus();
@@ -410,9 +427,8 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
 
       <FunctionsBar
         online={offline.online}
-        hidden={["coupon"]}
         badges={{ resume: held.data?.length ?? 0 }}
-        active={{ note: Boolean(draft.note?.trim()) }}
+        active={{ note: Boolean(draft.note?.trim()), coupon: Boolean(draft.coupon) }}
         onAction={onFunction}
       />
 
@@ -535,6 +551,17 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
                 Nota: {draft.note}
               </button>
             )}
+            {draft.coupon && (
+              <div className={cn("flex items-center justify-between gap-2 rounded-md border px-2 py-1 text-xs", couponShort && "border-destructive text-destructive")}>
+                <span className="truncate">
+                  Cupón <span className="mono font-semibold">{draft.coupon.code}</span>
+                  {couponShort ? ` · pide compra desde ${formatMoney(draft.coupon.minPurchase, base)}` : ` · −${formatMoney(couponOff, base)}`}
+                </span>
+                <button type="button" className="shrink-0 underline" onClick={() => setDraft((d) => ({ ...d, coupon: null }))}>
+                  Quitar
+                </button>
+              </div>
+            )}
             <dl className="space-y-1 text-sm">
               <Row label="Subtotal" value={<DualInline amount={totals.subtotal} base={base} money={money} />} />
               {totals.discount > 0 && (
@@ -606,6 +633,14 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           </div>
         </DialogContent>
       </Dialog>
+
+      <CouponDialog
+        open={couponOpen}
+        onOpenChange={setCouponOpen}
+        base={afterLineDiscounts}
+        currency={base}
+        onApply={(coupon) => setDraft((d) => ({ ...d, coupon }))}
+      />
 
       <NoteDialog open={noteOpen} onOpenChange={setNoteOpen} value={draft.note ?? ""} onSave={(note) => setDraft((d) => ({ ...d, note }))} />
 

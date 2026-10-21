@@ -78,6 +78,8 @@ export interface RegisterSaleInput {
   channelId?: string | null;
   /** Personal de caja que atendió. */
   cashierId?: string | null;
+  /** Cupón aplicado: su descuento va incluido en cartDiscount. Necesita conexión. */
+  coupon?: { code: string; discount: number } | null;
 }
 
 export interface RegisterSaleResult {
@@ -223,6 +225,24 @@ export function useCloseSession() {
 }
 
 export async function registerSale(input: RegisterSaleInput): Promise<RegisterSaleResult> {
+  if (input.coupon) {
+    const { data, error } = await supabase.rpc("register_sale_coupon", {
+      p_idempotency_key: input.idempotencyKey,
+      p_session_id: input.sessionId,
+      p_items: input.items,
+      p_payments: input.payments,
+      p_cart_discount: input.cartDiscount ?? 0,
+      p_coupon_code: input.coupon.code,
+      p_coupon_discount: input.coupon.discount,
+      p_change: input.change ?? null,
+      p_customer: input.customer ?? null,
+      p_note: input.note ?? null,
+      p_channel_id: input.channelId ?? null,
+      p_cashier_id: input.cashierId ?? null,
+    });
+    if (error) throw asError(error);
+    return data as RegisterSaleResult;
+  }
   const { data, error } = await supabase.rpc("register_sale", {
     p_idempotency_key: input.idempotencyKey,
     p_session_id: input.sessionId,
