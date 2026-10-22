@@ -86,7 +86,7 @@ select is(
 );
 
 select is(
-  (select count(*)::int from jsonb_array_elements(public.report_sales(current_date, current_date) -> 'by_product') p where (p ->> 'manual')::boolean),
+  (select count(*)::int from jsonb_array_elements(public.report_sales((now() at time zone 'America/Caracas')::date, (now() at time zone 'America/Caracas')::date) -> 'by_product') p where (p ->> 'manual')::boolean),
   2,
   'el reporte por producto muestra cada concepto aparte'
 );

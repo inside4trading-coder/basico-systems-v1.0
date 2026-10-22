@@ -18,6 +18,8 @@ export interface StaffClock {
   exit_time: string | null;
   break_minutes: number;
   late_tolerance: number;
+  /** El PIN lo asignó el encargado y la persona aún no crea el suyo. */
+  pin_temporary: boolean;
 }
 
 function asError(error: { message?: string } | null): Error {
@@ -39,7 +41,7 @@ export function useStaffClock() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cashiers")
-        .select("id, name, job_title, location_id, is_active, clock_enabled, pin_set_at, work_days, entry_time, exit_time, break_minutes, late_tolerance")
+        .select("id, name, job_title, location_id, is_active, clock_enabled, pin_set_at, work_days, entry_time, exit_time, break_minutes, late_tolerance, pin_temporary")
         .order("name");
       if (error) throw asError(error);
       return (data ?? []) as StaffClock[];
@@ -123,6 +125,14 @@ export function useClockActions() {
       },
       onSuccess,
     }),
+    reviewMany: useMutation({
+      mutationFn: async ({ eventIds, status, note }: { eventIds: string[]; status: "aprobado" | "rechazado"; note: string | null }) => {
+        const { data, error } = await supabase.rpc("review_clock_events", { p_event_ids: eventIds, p_status: status, p_note: note });
+        if (error) throw asError(error);
+        return data as number;
+      },
+      onSuccess,
+    }),
     regenerateKey: useMutation({
       mutationFn: async () => {
         const { data, error } = await supabase.rpc("regenerate_clock_key");
@@ -151,6 +161,8 @@ export interface ClockLookup {
   location?: string | null;
   needs_location?: boolean;
   today?: ClockToday;
+  /** Entró con el PIN temporal: tiene que crear el suyo. */
+  needs_pin_setup?: boolean;
 }
 
 export interface ClockPunch {
@@ -186,4 +198,11 @@ export async function clockPunch(
   });
   if (error) throw asError(error);
   return data as ClockPunch;
+}
+
+/** Primera entrada: con el PIN temporal, la persona crea su PIN personal. */
+export async function clockSetPersonalPin(key: string, tempPin: string, newPin: string): Promise<ClockLookup> {
+  const { data, error } = await supabase.rpc("clock_set_personal_pin", { p_key: key, p_temp_pin: tempPin, p_new_pin: newPin });
+  if (error) throw asError(error);
+  return data as ClockLookup;
 }

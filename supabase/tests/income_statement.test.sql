@@ -44,31 +44,31 @@ insert into public.finance_accounts (id, tenant_id, name, kind, currency, openin
   ('aaaaaaaa-6666-6666-6666-666666666661', 'aaaaaaaa-1111-1111-1111-111111111111', 'Banco Bs', 'bank', 'VES', current_date - 30),
   ('aaaaaaaa-6666-6666-6666-666666666662', 'aaaaaaaa-1111-1111-1111-111111111111', 'Caja USD', 'cash', 'USD', current_date - 30);
 insert into public.finance_movements (tenant_id, account_id, direction, kind, amount, currency, occurred_on, category) values
-  ('aaaaaaaa-1111-1111-1111-111111111111', 'aaaaaaaa-6666-6666-6666-666666666661', 'out', 'manual', 3000, 'VES', current_date, 'Servicios'),
-  ('aaaaaaaa-1111-1111-1111-111111111111', 'aaaaaaaa-6666-6666-6666-666666666662', 'out', 'manual', 50, 'USD', current_date, 'Alquiler'),
-  ('aaaaaaaa-1111-1111-1111-111111111111', 'aaaaaaaa-6666-6666-6666-666666666662', 'out', 'manual', 500, 'USD', current_date, 'Proveedores'),
-  ('aaaaaaaa-1111-1111-1111-111111111111', 'aaaaaaaa-6666-6666-6666-666666666662', 'in', 'manual', 20, 'USD', current_date, 'Otros ingresos');
+  ('aaaaaaaa-1111-1111-1111-111111111111', 'aaaaaaaa-6666-6666-6666-666666666661', 'out', 'manual', 3000, 'VES', (now() at time zone 'America/Caracas')::date, 'Servicios'),
+  ('aaaaaaaa-1111-1111-1111-111111111111', 'aaaaaaaa-6666-6666-6666-666666666662', 'out', 'manual', 50, 'USD', (now() at time zone 'America/Caracas')::date, 'Alquiler'),
+  ('aaaaaaaa-1111-1111-1111-111111111111', 'aaaaaaaa-6666-6666-6666-666666666662', 'out', 'manual', 500, 'USD', (now() at time zone 'America/Caracas')::date, 'Proveedores'),
+  ('aaaaaaaa-1111-1111-1111-111111111111', 'aaaaaaaa-6666-6666-6666-666666666662', 'in', 'manual', 20, 'USD', (now() at time zone 'America/Caracas')::date, 'Otros ingresos');
 set local role authenticated;
 
 select results_eq(
-  $$ select (r -> 'sales' ->> 'net')::numeric, (r -> 'sales' ->> 'cost')::numeric from public.report_income(current_date, current_date) r $$,
+  $$ select (r -> 'sales' ->> 'net')::numeric, (r -> 'sales' ->> 'cost')::numeric from public.report_income((now() at time zone 'America/Caracas')::date, (now() at time zone 'America/Caracas')::date) r $$,
   $$ values (200.00::numeric, 120.00::numeric) $$,
   'ventas sin impuesto y su costo'
 );
 select is(
-  (select public.report_income(current_date, current_date) -> 'expenses'),
+  (select public.report_income((now() at time zone 'America/Caracas')::date, (now() at time zone 'America/Caracas')::date) -> 'expenses'),
   '[{"category": "Alquiler", "amount": 50.00}, {"category": "Servicios", "amount": 30.00}]'::jsonb,
   'gastos a la tasa del día, sin las compras de mercancía'
 );
 select is(
-  (select public.report_income(current_date, current_date) -> 'other_income'),
+  (select public.report_income((now() at time zone 'America/Caracas')::date, (now() at time zone 'America/Caracas')::date) -> 'other_income'),
   '[{"category": "Otros ingresos", "amount": 20.00}]'::jsonb,
   'y otros ingresos aparte de las ventas'
 );
 select throws_ok($$ select public.report_income(current_date, current_date - 1) $$, '23514', 'Periodo inválido', 'periodo al revés');
 
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000002","role":"authenticated"}', true);
-select throws_ok($$ select public.report_income(current_date, current_date) $$, '42501', null, 'el cajero no ve el resultado');
+select throws_ok($$ select public.report_income((now() at time zone 'America/Caracas')::date, (now() at time zone 'America/Caracas')::date) $$, '42501', null, 'el cajero no ve el resultado');
 
 select * from finish();
 rollback;
