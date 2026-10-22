@@ -70,7 +70,7 @@ select throws_ok(
 
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
 select results_eq(
-  $$ select c ->> 'channel', (c ->> 'tickets')::int from jsonb_array_elements(public.report_sales(current_date, current_date) -> 'by_channel') c order by 1 $$,
+  $$ select c ->> 'channel', (c ->> 'tickets')::int from jsonb_array_elements(public.report_sales((now() at time zone 'America/Caracas')::date, (now() at time zone 'America/Caracas')::date) -> 'by_channel') c order by 1 $$,
   $$ values ('Sin origen'::text, 1), ('WhatsApp', 1) $$,
   'el reporte suma por origen'
 );

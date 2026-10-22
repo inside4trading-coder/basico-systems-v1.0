@@ -99,7 +99,7 @@ select throws_ok(
 );
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000002","role":"authenticated"}', true);
 select throws_ok(
-  $$ select public.report_tax(current_date, current_date) $$,
+  $$ select public.report_tax((now() at time zone 'America/Caracas')::date, (now() at time zone 'America/Caracas')::date) $$,
   '42501', null,
   'el cajero no ve el reporte de IVA'
 );

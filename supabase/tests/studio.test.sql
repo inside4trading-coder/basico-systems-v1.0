@@ -49,8 +49,38 @@ select throws_ok(
   $$ select public.studio_start('bbbbbbbb-4444-4444-4444-444444444441', 'catalogo', null, 'aaaaaaaa-1111-1111-1111-111111111111/p/a.webp') $$,
   'P0002', 'Producto no encontrado', 'no se genera para un producto de otro negocio'
 );
+-- Como el ERP: formato, fotos extra, notas y producto con persona (opcional).
+select throws_ok(
+  $$ select public.studio_start('aaaaaaaa-4444-4444-4444-444444444441', 'persona', null, 'aaaaaaaa-1111-1111-1111-111111111111/p/a.webp') $$,
+  '23514', 'Activa «Producto con persona» en la configuración del Estudio', 'con persona hay que activarlo'
+);
+select throws_ok(
+  $$ select public.studio_start('aaaaaaaa-4444-4444-4444-444444444441', 'catalogo', null, 'aaaaaaaa-1111-1111-1111-111111111111/p/a.webp', null, '3:2') $$,
+  '23514', 'Formato no válido', 'solo los formatos del Estudio'
+);
+select throws_ok(
+  $$ select public.studio_start('aaaaaaaa-4444-4444-4444-444444444441', 'catalogo', null, 'aaaaaaaa-1111-1111-1111-111111111111/p/a.webp', null, '1:1',
+       array['bbbbbbbb-1111-1111-1111-111111111111/p/b.webp']) $$,
+  '23514', 'Foto extra no válida', 'las fotos extra también son de la carpeta del negocio'
+);
+select throws_ok(
+  $$ insert into public.studio_settings (people_enabled, brand_colors) values (true, array['rojo']) $$,
+  '23514', null, 'los colores de marca van en #RRGGBB'
+);
+select lives_ok(
+  $$ insert into public.studio_settings (people_enabled, brand_name, brand_colors, prompts)
+     values (true, 'Mi marca', array['#0A2BFF', '#FFFFFF'], '{"catalogo": "Foto de catálogo con fondo gris claro."}') $$,
+  'el dueño activa producto con persona y carga su marca'
+);
+select set_config('test.set', gen_random_uuid()::text, true);
 select set_config('test.job1', public.studio_start('aaaaaaaa-4444-4444-4444-444444444441', 'catalogo', null, 'aaaaaaaa-1111-1111-1111-111111111111/p/a.webp')::text, true);
-select set_config('test.job2', public.studio_start('aaaaaaaa-4444-4444-4444-444444444441', 'ambientado', 'Mesa de madera', 'aaaaaaaa-1111-1111-1111-111111111111/p/a.webp')::text, true);
+select set_config('test.job2', public.studio_start('aaaaaaaa-4444-4444-4444-444444444441', 'persona', 'Persona sonriendo en una cocina', 'aaaaaaaa-1111-1111-1111-111111111111/p/a.webp',
+  current_setting('test.set')::uuid, '4:5', array['aaaaaaaa-1111-1111-1111-111111111111/p/b.webp'], ' logo bordado ')::text, true);
+select results_eq(
+  format($$ select kind, format, cardinality(extra_paths), notes, set_id::text from public.studio_jobs where id = %L $$, current_setting('test.job2')),
+  format($$ values ('persona'::text, '4:5'::text, 1, 'logo bordado'::text, %L::text) $$, current_setting('test.set')),
+  'el trabajo guarda tipo, formato, fotos extra, notas y su set'
+);
 select throws_ok(
   $$ select public.studio_start('aaaaaaaa-4444-4444-4444-444444444441', 'catalogo', null, 'aaaaaaaa-1111-1111-1111-111111111111/p/a.webp') $$,
   '23514', 'Ya usaste las 2 fotos del Estudio de este mes', 'al llegar a la cuota no se genera más'

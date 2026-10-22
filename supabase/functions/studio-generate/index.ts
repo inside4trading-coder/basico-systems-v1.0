@@ -10,12 +10,19 @@
 //      fallidos no gastan cuota.
 // Secretos (en Supabase, nunca en Vercel ni en el repo): OPENROUTER_API_KEY y,
 // opcional, STUDIO_IMAGE_MODEL.
+//
+// Como Basico Studio del ERP (basicosystems@9cb08cd): formato de salida, hasta
+// 3 fotos extra del producto, notas a respetar, tipo «persona» y la
+// configuración del negocio (prompt base propio por tipo y colores de marca).
+// Cada llamada genera una imagen; el set de varias salidas lo arma la app.
 
 import { createClient } from "npm:@supabase/supabase-js@2.99.3";
 
 const BUCKET = "product-images";
 const DEFAULT_MODEL = "google/gemini-2.5-flash-image";
-const KINDS = ["catalogo", "transparente", "ambientado"] as const;
+const KINDS = ["catalogo", "transparente", "ambientado", "persona"] as const;
+const FORMATS = ["1:1", "4:5", "9:16", "16:9"] as const;
+type Format = (typeof FORMATS)[number];
 type Kind = (typeof KINDS)[number];
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -35,6 +42,29 @@ const KEEP_PRODUCT =
   "Usa la foto adjunta como referencia exacta del producto: misma forma, proporciones, color, materiales, marca, " +
   "etiquetas y textos, sin inventar ni cambiar ningún detalle. Quita manos, personas, cables y el fondo original. " +
   "No agregues texto, logos ni marcas de agua.";
+
+export interface StudioSettings {
+  prompts: Partial<Record<Kind, string>>;
+  brand_name: string | null;
+  brand_colors: string[];
+}
+
+/**
+ * Prompt completo: la base del tipo (la del negocio si la escribió), la regla
+ * de no cambiar el producto, las notas y, en escenas, los colores de marca.
+ */
+export function buildPrompt(kind: Kind, scene: string | null, notes: string | null, extraViews: number, settings: StudioSettings | null): string {
+  const custom = settings?.prompts?.[kind]?.trim();
+  const parts = [custom ? `${custom} ${KEEP_PRODUCT}` : promptFor(kind, scene)];
+  if (custom && kind === "ambientado" && scene) parts.push(`Ambiente: ${scene}.`);
+  if (custom && kind === "persona" && scene) parts.push(`Persona y escena: ${scene}.`);
+  if (extraViews > 0) parts.push("Las fotos adicionales son otras vistas del mismo producto: úsalas para respetar cada detalle.");
+  if (notes) parts.push(`Detalles del producto que deben verse tal cual: ${notes}.`);
+  if ((kind === "ambientado" || kind === "persona") && settings?.brand_colors?.length) {
+    parts.push(`Usa como acentos la paleta de la marca${settings.brand_name ? ` ${settings.brand_name}` : ""}: ${settings.brand_colors.join(", ")}.`);
+  }
+  return parts.join(" ");
+}
 
 export function promptFor(kind: Kind, scene: string | null): string {
   switch (kind) {
@@ -59,6 +89,13 @@ export function promptFor(kind: Kind, scene: string | null): string {
         ` Ambiente: ${scene}. El producto es el protagonista: en foco, a escala real y bien iluminado; ` +
         "el fondo lo complementa sin distraer, con luz natural creíble y profundidad de campo suave."
       );
+    case "persona":
+      return (
+        "Fotografía publicitaria realista de una persona usando o sosteniendo el producto. " +
+        KEEP_PRODUCT +
+        ` ${scene ? `Persona y escena: ${scene}.` : "Persona natural, con ropa neutra, en un ambiente sencillo y bien iluminado."} ` +
+        "El producto se ve claro y protagonista, a escala real; la persona luce natural, sin poses exageradas ni rasgos distorsionados."
+      );
   }
 }
 
@@ -81,7 +118,16 @@ Deno.serve(async (req) => {
   if (!apiKey) return json({ error: "El Estudio no está configurado (falta la clave de OpenRouter)." });
   const model = Deno.env.get("STUDIO_IMAGE_MODEL") || DEFAULT_MODEL;
 
-  let body: { product_id?: unknown; kind?: unknown; scene?: unknown; source_path?: unknown };
+  let body: {
+    product_id?: unknown;
+    kind?: unknown;
+    scene?: unknown;
+    source_path?: unknown;
+    set_id?: unknown;
+    format?: unknown;
+    extra_paths?: unknown;
+    notes?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
@@ -93,6 +139,10 @@ Deno.serve(async (req) => {
   const sourcePath = typeof body.source_path === "string" ? body.source_path : "";
   if (!UUID_RE.test(productId)) return json({ error: "Producto inválido" });
   if (!KINDS.includes(kind)) return json({ error: "Tipo de foto inválido" });
+  const format: Format = FORMATS.includes(body.format as Format) ? (body.format as Format) : "1:1";
+  const setId = typeof body.set_id === "string" && UUID_RE.test(body.set_id) ? body.set_id : null;
+  const extraPaths = Array.isArray(body.extra_paths) ? body.extra_paths.filter((p): p is string => typeof p === "string").slice(0, 3) : [];
+  const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, 500) || null : null;
 
   const url = Deno.env.get("SUPABASE_URL")!;
   const asCaller = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, {
@@ -107,6 +157,10 @@ Deno.serve(async (req) => {
     p_kind: kind,
     p_scene: scene,
     p_source_path: sourcePath,
+    p_set_id: setId,
+    p_format: format,
+    p_extra_paths: extraPaths,
+    p_notes: notes,
   });
   if (startError || typeof jobId !== "string") return json({ error: startError?.message ?? "No se pudo iniciar" });
 
@@ -116,10 +170,18 @@ Deno.serve(async (req) => {
   };
 
   try {
-    // 2. Foto de origen.
-    const { data: source, error: downloadError } = await admin.storage.from(BUCKET).download(sourcePath);
-    if (downloadError || !source) return await fail("No se pudo leer la foto de origen.");
-    const sourceUrl = await toDataUrl(new Uint8Array(await source.arrayBuffer()), source.type || "image/webp");
+    // 2. Fotos de origen (la principal y las vistas extra) y configuración del negocio.
+    const references: string[] = [];
+    for (const path of [sourcePath, ...extraPaths]) {
+      const { data: file, error: downloadError } = await admin.storage.from(BUCKET).download(path);
+      if (downloadError || !file) return await fail("No se pudo leer una de las fotos de origen.");
+      references.push(await toDataUrl(new Uint8Array(await file.arrayBuffer()), file.type || "image/webp"));
+    }
+    const { data: settings } = await admin
+      .from("studio_settings")
+      .select("prompts, brand_name, brand_colors")
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
 
     // 3. OpenRouter.
     const aiRes = await fetch("https://openrouter.ai/api/v1/images", {
@@ -127,9 +189,9 @@ Deno.serve(async (req) => {
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model,
-        prompt: promptFor(kind, scene),
-        input_references: [{ type: "image_url", image_url: { url: sourceUrl } }],
-        aspect_ratio: "1:1",
+        prompt: buildPrompt(kind, scene, notes, extraPaths.length, (settings as StudioSettings | null) ?? null),
+        input_references: references.map((url) => ({ type: "image_url", image_url: { url } })),
+        aspect_ratio: format,
         output_format: "png",
       }),
       signal: AbortSignal.timeout(150_000),
@@ -155,7 +217,7 @@ Deno.serve(async (req) => {
 
     await admin.rpc("studio_finish", { p_job_id: jobId, p_ok: true, p_result_path: resultPath, p_model: model, p_cost: cost, p_error: null });
     const publicUrl = admin.storage.from(BUCKET).getPublicUrl(resultPath).data.publicUrl;
-    return json({ jobId, url: publicUrl, path: resultPath, kind });
+    return json({ jobId, url: publicUrl, path: resultPath, kind, format });
   } catch (err) {
     return await fail("La generación falló. Intenta de nuevo.", (err as Error).message);
   }

@@ -404,6 +404,7 @@ begin
     insert into public.customers (tenant_id, name, doc) values (t, 'Cliente aislamiento', 'V-1');
     insert into public.cashiers (tenant_id, name) values (t, 'Cajero aislamiento') returning id into v_staff;
     insert into public.clock_events (tenant_id, staff_id, kind) values (t, v_staff, 'entrada');
+    insert into public.studio_settings (tenant_id) values (t);
     insert into public.import_guides (tenant_id, source_key, steps) values (t, 'financing:orders', 'Paso 1');
     insert into public.finance_movement_links (tenant_id, movement_id, obligation_instance_id, amount_allocated, amount_applied)
       values (t, v_mov, v_inst, 1, 1);

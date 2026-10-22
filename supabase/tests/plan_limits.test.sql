@@ -110,7 +110,7 @@ select throws_ok(
   'sin Administración no se crean cuentas'
 );
 select throws_ok(
-  $$ select public.report_sales(current_date, current_date) $$,
+  $$ select public.report_sales((now() at time zone 'America/Caracas')::date, (now() at time zone 'America/Caracas')::date) $$,
   '42501', 'Reportes no está incluido en el plan de este negocio',
   'sin Reportes no hay reportes'
 );
