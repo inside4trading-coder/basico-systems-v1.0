@@ -18,7 +18,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useTenant } from "@/core/tenant-context";
-import { canEditCatalog } from "@/core/tenant-selection";
 import { useCatalog, useLocations } from "./api";
 import { useApplyImport, useAttributeDefs, useImportJobs, useImportTemplates, useSaveImportTemplate, type ImportResult } from "./import/api";
 import { exportCatalog, downloadTemplate } from "./import/exportCatalog";
@@ -37,7 +36,7 @@ interface LoadedFile {
 }
 
 export default function ImportPage() {
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   // Desde el asistente inicial: volver a él y dar el paso por hecho al importar.
   const [params] = useSearchParams();
   const fromWizard = params.get("desde") === "bienvenida";
@@ -99,7 +98,7 @@ export default function ImportPage() {
     );
   }, [loaded, mapping, index, activeLocations, defs]);
 
-  if (!canEditCatalog(active?.role)) return <Navigate to="/inventario" replace />;
+  if (!can("catalogo.editar")) return <Navigate to="/inventario" replace />;
 
   const onFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

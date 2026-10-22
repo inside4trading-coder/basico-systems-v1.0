@@ -7,7 +7,8 @@ import { useAuth } from "@/core/auth";
 import type { ModuleKey } from "@/core/entitlements";
 import { useEntitlements } from "@/core/useEntitlements";
 import { useTenant } from "@/core/tenant-context";
-import { canEditCatalog, canManageTeam, canSeeReports, canSupervise, type TenantRole } from "@/core/tenant-selection";
+import type { Capability } from "@/core/capabilities";
+import type { TenantRole } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
 import { useTrackRecent } from "@/modules/home/recent";
 import { useRateAutoSync } from "@/modules/settings/useRateAutoSync";
@@ -24,35 +25,36 @@ export const ROLE_LABELS: Record<TenantRole, string> = {
 interface NavItem {
   to: string;
   label: string;
-  visible: (role: TenantRole | undefined) => boolean;
+  /** Capacidad que hace falta para verlo; sin ella, lo ve todo el equipo. */
+  capability?: Capability;
   /** Módulo del plan que tiene que estar incluido. */
   module?: ModuleKey;
 }
 
 const NAV: NavItem[] = [
-  { to: "/", label: "Inicio", visible: () => true },
-  { to: "/pos", label: "Vender", visible: () => true, module: "pos" },
-  { to: "/inventario", label: "Inventario", visible: () => true, module: "inventario" },
-  { to: "/control", label: "Control", visible: () => true, module: "inventario" },
-  { to: "/clientes", label: "Clientes", visible: canSeeReports, module: "pos" },
-  { to: "/reportes", label: "Reportes", visible: canSeeReports, module: "reportes" },
-  { to: "/administracion", label: "Administración", visible: canSeeReports, module: "administracion" },
-  { to: "/cashea", label: "Cashea", visible: canSeeReports, module: "cashea" },
-  { to: "/estudio", label: "Estudio IA", visible: canEditCatalog, module: "estudio" },
-  { to: "/fichaje", label: "Fichaje", visible: canSeeReports, module: "fichaje" },
-  { to: "/sedes", label: "Sedes", visible: canSupervise },
-  { to: "/configuracion", label: "Configuración", visible: canSupervise },
-  { to: "/equipo", label: "Equipo", visible: canManageTeam },
+  { to: "/", label: "Inicio" },
+  { to: "/pos", label: "Vender", capability: "pos.vender", module: "pos" },
+  { to: "/inventario", label: "Inventario", module: "inventario" },
+  { to: "/control", label: "Control", module: "inventario" },
+  { to: "/clientes", label: "Clientes", capability: "reportes.ver", module: "pos" },
+  { to: "/reportes", label: "Reportes", capability: "reportes.ver", module: "reportes" },
+  { to: "/administracion", label: "Administración", capability: "finanzas.operar", module: "administracion" },
+  { to: "/cashea", label: "Cashea", capability: "finanzas.operar", module: "cashea" },
+  { to: "/estudio", label: "Estudio IA", capability: "estudio.usar", module: "estudio" },
+  { to: "/fichaje", label: "Fichaje", capability: "fichaje.gestionar", module: "fichaje" },
+  { to: "/sedes", label: "Sedes", capability: "config.sedes" },
+  { to: "/configuracion", label: "Configuración", capability: "config.negocio" },
+  { to: "/equipo", label: "Equipo", capability: "equipo.gestionar" },
 ];
 
 export default function AppShell({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
   const { session, signOut } = useAuth();
-  const { active, memberships, clearTenant } = useTenant();
+  const { active, memberships, clearTenant, can } = useTenant();
   const role = active?.role;
   const entitlements = useEntitlements();
   const platform = useIsPlatformAdmin();
   const daysLeft = trialDaysLeft(active?.tenant.trial_ends_at);
-  const trialNotice = canSupervise(role) && showTrialNotice(daysLeft);
+  const trialNotice = can("config.negocio") && showTrialNotice(daysLeft);
   useRateAutoSync();
   useTrackRecent(active?.tenant.id);
 
@@ -84,7 +86,7 @@ export default function AppShell({ children, wide = false }: { children: ReactNo
           </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-2" aria-label="Secciones">
-          {NAV.filter((item) => item.visible(role) && (!item.module || entitlements[item.module])).map((item) => (
+          {NAV.filter((item) => (!item.capability || can(item.capability)) && (!item.module || entitlements[item.module])).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

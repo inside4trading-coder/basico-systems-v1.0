@@ -405,6 +405,8 @@ begin
     insert into public.cashiers (tenant_id, name) values (t, 'Cajero aislamiento') returning id into v_staff;
     insert into public.clock_events (tenant_id, staff_id, kind) values (t, v_staff, 'entrada');
     insert into public.studio_settings (tenant_id) values (t);
+    -- Igual al default: no cambia permisos, solo deja una fila por negocio.
+    insert into public.role_capabilities (tenant_id, role, capability, allowed) values (t, 'cajero', 'estudio.configurar', false);
     insert into public.import_guides (tenant_id, source_key, steps) values (t, 'financing:orders', 'Paso 1');
     insert into public.finance_movement_links (tenant_id, movement_id, obligation_instance_id, amount_allocated, amount_applied)
       values (t, v_mov, v_inst, 1, 1);

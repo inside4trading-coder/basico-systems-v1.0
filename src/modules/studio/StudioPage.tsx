@@ -19,7 +19,6 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/core/supabase";
 import { useTenant } from "@/core/tenant-context";
-import { canEditCatalog, canManageTeam } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
 import { VariantFinder } from "@/modules/inventory/components";
 import {
@@ -94,7 +93,7 @@ const fileNameOf = (product: string, kind: StudioKind, n: number) =>
   `${product.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase()}-${kind}-${n}.png`;
 
 export default function StudioPage() {
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   const [params] = useSearchParams();
   const { data: usage } = useStudioUsage();
   const { data: jobs = [] } = useStudioJobs();
@@ -105,7 +104,7 @@ export default function StudioPage() {
   const [filter, setFilter] = useState<Filter>("todos");
   const [query, setQuery] = useState("");
 
-  if (!canEditCatalog(active?.role)) return <Navigate to="/" replace />;
+  if (!can("estudio.usar")) return <Navigate to="/" replace />;
 
   const left = usage ? Math.max(0, usage.limit - usage.used) : 0;
   const kinds = (Object.keys(KIND_INFO) as StudioKind[]).filter((k) => k !== "persona" || settings.people_enabled);
@@ -131,7 +130,7 @@ export default function StudioPage() {
               {usage.used} de {usage.limit} imágenes este mes
             </Badge>
           )}
-          {canManageTeam(active?.role) && (
+          {can("estudio.configurar") && (
             <Button variant="outline" size="sm" onClick={() => setConfig(true)}>
               <Settings2 className="h-4 w-4" /> Configuración
             </Button>

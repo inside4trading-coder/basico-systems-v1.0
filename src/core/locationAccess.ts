@@ -1,6 +1,6 @@
 /**
  * Sedes en las que trabaja el usuario de la sesión (member_locations). null:
- * todas (sin asignaciones, o dueño/administrador). El servidor lo hace
+ * todas (sin asignaciones, o con el permiso de trabajar en todas las sedes). El servidor lo hace
  * cumplir; aquí solo se filtra lo que se ofrece.
  */
 import { useQuery } from "@tanstack/react-query";
@@ -10,11 +10,11 @@ import { useTenant } from "@/core/tenant-context";
 import { withOfflineCache } from "@/core/offline";
 
 export function useAllowedLocations(): Set<string> | null {
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   const { session } = useAuth();
   const tenant = active?.tenant.id ?? "none";
   const userId = session?.user.id ?? null;
-  const unrestricted = active?.role === "owner" || active?.role === "admin";
+  const unrestricted = can("inventario.todas_sedes");
   const { data } = useQuery({
     enabled: Boolean(userId) && !unrestricted,
     queryKey: ["team", tenant, "my_locations", userId],

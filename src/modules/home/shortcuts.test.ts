@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { allowedShortcuts, moveKey, pushRecent, selectShortcuts, shortcutForPath, SHORTCUTS } from "./shortcuts";
+import { roleAllows, type Capability } from "@/core/capabilities";
+import type { TenantRole } from "@/core/tenant-selection";
+
+const asRole = (role: TenantRole) => (capability: Capability) => roleAllows(role, capability, []);
 
 const all = { pos: true, inventario: true, administracion: true, reportes: true, fichaje: true, estudio: true, cashea: true };
 const keys = (rows: { key: string }[]) => rows.map((r) => r.key);
@@ -12,7 +16,7 @@ describe("catálogo de accesos de Inicio", () => {
   });
 
   it("el cajero no ve reportes, administración, sedes ni equipo", () => {
-    const k = keys(allowedShortcuts("cajero", all));
+    const k = keys(allowedShortcuts(asRole("cajero"), all));
     expect(k).toContain("pos");
     expect(k).toContain("conteos");
     expect(k).not.toContain("reportes");
@@ -23,23 +27,23 @@ describe("catálogo de accesos de Inicio", () => {
   });
 
   it("el encargado ve reportes pero no configura el negocio", () => {
-    const k = keys(allowedShortcuts("manager", all));
+    const k = keys(allowedShortcuts(asRole("manager"), all));
     expect(k).toEqual(expect.arrayContaining(["reportes", "conciliacion", "reposicion", "importar"]));
     expect(k).not.toContain("configuracion");
     expect(k).not.toContain("equipo");
   });
 
   it("el dueño ve todo el catálogo con todos los módulos", () => {
-    expect(allowedShortcuts("owner", all)).toHaveLength(SHORTCUTS.length);
+    expect(allowedShortcuts(asRole("owner"), all)).toHaveLength(SHORTCUTS.length);
   });
 
   it("Fichaje es un add-on: sin él, su acceso no aparece", () => {
-    expect(keys(allowedShortcuts("owner", { ...all, fichaje: false }))).not.toContain("fichaje");
-    expect(keys(allowedShortcuts("owner", all))).toContain("fichaje");
+    expect(keys(allowedShortcuts(asRole("owner"), { ...all, fichaje: false }))).not.toContain("fichaje");
+    expect(keys(allowedShortcuts(asRole("owner"), all))).toContain("fichaje");
   });
 
   it("sin el módulo en el plan, sus accesos no aparecen", () => {
-    const k = keys(allowedShortcuts("owner", { ...all, administracion: false, pos: false }));
+    const k = keys(allowedShortcuts(asRole("owner"), { ...all, administracion: false, pos: false }));
     expect(k).not.toContain("administracion");
     expect(k).not.toContain("conciliacion");
     expect(k).not.toContain("pos");
@@ -51,7 +55,7 @@ describe("catálogo de accesos de Inicio", () => {
 
 describe("accesos elegidos", () => {
   it("sin elección: los de siempre según lo permitido", () => {
-    expect(keys(selectShortcuts(null, allowedShortcuts("owner", all)))).toEqual([
+    expect(keys(selectShortcuts(null, allowedShortcuts(asRole("owner"), all)))).toEqual([
       "pos",
       "inventario",
       "control",
@@ -59,20 +63,20 @@ describe("accesos elegidos", () => {
       "reposicion",
       "reportes",
     ]);
-    expect(keys(selectShortcuts(undefined, allowedShortcuts("cajero", all)))).toEqual(["pos", "inventario", "control", "conteos"]);
+    expect(keys(selectShortcuts(undefined, allowedShortcuts(asRole("cajero"), all)))).toEqual(["pos", "inventario", "control", "conteos"]);
   });
 
   it("sin elección y sin inventario ni POS: lo que queda", () => {
-    expect(keys(selectShortcuts(null, allowedShortcuts("owner", { reportes: true })))).toEqual(["reportes"]);
+    expect(keys(selectShortcuts(null, allowedShortcuts(asRole("owner"), { reportes: true })))).toEqual(["reportes"]);
   });
 
   it("respeta el orden guardado y descarta lo que ya no se permite o no existe", () => {
-    const allowed = allowedShortcuts("cajero", all);
+    const allowed = allowedShortcuts(asRole("cajero"), all);
     expect(keys(selectShortcuts(["conteos", "reportes", "viejo", "pos", "conteos"], allowed))).toEqual(["conteos", "pos"]);
   });
 
   it("una lista vacía guardada es una elección: no vuelve a los de siempre", () => {
-    expect(selectShortcuts([], allowedShortcuts("owner", all))).toEqual([]);
+    expect(selectShortcuts([], allowedShortcuts(asRole("owner"), all))).toEqual([]);
   });
 
   it("mover arriba y abajo sin salirse de la lista", () => {

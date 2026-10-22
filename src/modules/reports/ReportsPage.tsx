@@ -15,7 +15,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTenant } from "@/core/tenant-context";
-import { canSeeReports } from "@/core/tenant-selection";
 import { useTabParam } from "@/lib/useTabParam";
 import { useLocations } from "@/modules/inventory/api";
 import ClosuresReport from "./ClosuresReport";
@@ -28,14 +27,14 @@ const ALL = "all";
 
 export default function ReportsPage() {
   const entitlements = useEntitlements();
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   const { data: locations = [] } = useLocations();
   const [preset, setPreset] = useState<RangePreset | null>("7d");
   const [range, setRange] = useState<DateRange>(() => presetRange("7d"));
   const [location, setLocation] = useState(ALL);
   const [tab, setTab] = useTabParam<string>(entitlements.administracion ? ["sales", "stock", "closures", "income"] : ["sales", "stock", "closures"], "sales");
 
-  if (!canSeeReports(active?.role)) return <Navigate to="/" replace />;
+  if (!can("reportes.ver")) return <Navigate to="/" replace />;
   const locationId = location === ALL ? null : location;
   const base = active?.tenant.base_currency ?? "USD";
 

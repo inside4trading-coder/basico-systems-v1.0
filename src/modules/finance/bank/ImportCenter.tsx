@@ -6,7 +6,6 @@
 import { useMemo, useState } from "react";
 import { Landmark, Layers } from "lucide-react";
 import { useTenant } from "@/core/tenant-context";
-import { canManageTeam } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
 import { usePaymentMethods } from "@/modules/settings/api";
 import { useAccounts } from "../api";
@@ -29,8 +28,8 @@ const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("es-VE", { timeZone: "America/Caracas", dateStyle: "short", timeStyle: "short" }) : null;
 
 export default function ImportCenter() {
-  const { active } = useTenant();
-  const canEdit = canManageTeam(active?.role);
+  const { active, can } = useTenant();
+  const canEdit = can("finanzas.cuentas");
   const { data: accounts = [] } = useAccounts();
   const { data: profiles = [] } = useBankProfiles();
   const { data: batches = [] } = useBankBatches(ALL_ACCOUNTS);

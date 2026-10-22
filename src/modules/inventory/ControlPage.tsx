@@ -25,7 +25,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/core/auth";
 import { useTenant } from "@/core/tenant-context";
 import { useTabParam } from "@/lib/useTabParam";
-import { canEditCatalog, canSupervise } from "@/core/tenant-selection";
 import { registerEntry, useAdjust, useInvalidateInventory, useMovements, useSign, useStockOf, useTransfer } from "./api";
 import { LocationSelect, useDefaultLocation, VariantCard, VariantFinder } from "./components";
 import {
@@ -463,10 +462,10 @@ function MovementCard({ m, actions }: { m: MovementRow; actions?: React.ReactNod
 /* ---------------- Pendientes de firma ---------------- */
 
 function PendingSignatures({ rows }: { rows: MovementRow[] }) {
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   const { session } = useAuth();
-  const canSign = canSupervise(active?.role);
-  const canCorrect = canEditCatalog(active?.role);
+  const canSign = can("inventario.firmar");
+  const canCorrect = can("inventario.mover");
   const sign = useSign();
   const adjust = useAdjust();
   const [signing, setSigning] = useState<MovementRow | null>(null);
@@ -747,8 +746,8 @@ function Summary({ rows, go, editable }: { rows: MovementRow[]; go: (t: string) 
 }
 
 export default function ControlPage() {
-  const { active } = useTenant();
-  const editable = canEditCatalog(active?.role);
+  const { active, can } = useTenant();
+  const editable = can("inventario.mover");
   // ?tab=reposicion&sede=<id> abre Reposición filtrada (enlace desde Reportes > Stock).
   const [params] = useSearchParams();
   const [tab, setTab] = useTabParam<string>(

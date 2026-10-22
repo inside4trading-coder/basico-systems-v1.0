@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useTenant } from "@/core/tenant-context";
-import { canSupervise } from "@/core/tenant-selection";
 import { formatMoney } from "@/modules/pos/cart";
 import { caracasToday } from "@/modules/reports/dates";
 import {
@@ -35,7 +34,7 @@ export default function InstanceSheet({ instance, obligation, accounts, onClose 
   accounts: FinanceAccount[];
   onClose: () => void;
 }) {
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   const today = caracasToday();
   const payments = useInstancePayments(instance?.id ?? null);
   const links = useInstanceLinks(instance?.id ?? null);
@@ -181,7 +180,7 @@ export default function InstanceSheet({ instance, obligation, accounts, onClose 
                     </div>
                     <div className="flex items-center gap-1">
                       <span className="num text-xs font-semibold">{formatMoney(p.amount, p.currency)}</span>
-                      {!p.voided_at && canSupervise(active?.role) && (
+                      {!p.voided_at && can("finanzas.anular") && (
                         <Button
                           size="sm"
                           variant="ghost"

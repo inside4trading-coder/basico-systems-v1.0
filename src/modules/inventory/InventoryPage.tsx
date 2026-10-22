@@ -18,7 +18,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useTenant } from "@/core/tenant-context";
-import { canEditCatalog } from "@/core/tenant-selection";
 import { productTaxRate, withTax } from "@/core/tax";
 import { useTaxRates } from "@/modules/settings/api";
 import { useCatalog, useLocations, useUpdateProduct, useUpdateVariant } from "./api";
@@ -28,9 +27,9 @@ import { ProductPhotoButton } from "./ProductPhoto";
 import { BulkApplyButton, CostHistoryButton } from "./VariantTools";
 
 export default function InventoryPage() {
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   const currency = active?.tenant.base_currency ?? "USD";
-  const editable = canEditCatalog(active?.role);
+  const editable = can("catalogo.editar");
   const { data, isLoading } = useCatalog();
   const { data: locations = [] } = useLocations();
   const updVariant = useUpdateVariant();

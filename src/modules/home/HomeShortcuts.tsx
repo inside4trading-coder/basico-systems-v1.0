@@ -87,9 +87,9 @@ export function Greeting() {
 }
 
 function useAllowedShortcuts(): Shortcut[] {
-  const role = useTenant().active?.role;
+  const { can } = useTenant();
   const entitlements = useEntitlements();
-  return useMemo(() => allowedShortcuts(role, entitlements), [role, entitlements]);
+  return useMemo(() => allowedShortcuts(can, entitlements), [can, entitlements]);
 }
 
 export function MyShortcuts() {

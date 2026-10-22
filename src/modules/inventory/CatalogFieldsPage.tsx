@@ -14,15 +14,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/core/tenant-context";
-import { canEditCatalog, canSupervise } from "@/core/tenant-selection";
 import { attributeKey, useApplyRubro, useAttributeDefs, useSaveAttributeDef, type AttributeDef } from "./import/api";
 import { RUBROS } from "./import/rubros";
 
 const TYPE_LABEL: Record<AttributeDef["type"], string> = { text: "Texto", number: "Número", list: "Lista" };
 
 export default function CatalogFieldsPage() {
-  const { active } = useTenant();
-  const editable = canSupervise(active?.role);
+  const { active, can } = useTenant();
+  const editable = can("catalogo.campos");
   const { data: defs = [], isLoading } = useAttributeDefs();
   const save = useSaveAttributeDef();
   const applyRubro = useApplyRubro();
@@ -31,7 +30,7 @@ export default function CatalogFieldsPage() {
   const [multi, setMulti] = useState(false);
   const [searchable, setSearchable] = useState(true);
 
-  if (!canEditCatalog(active?.role)) return <Navigate to="/" replace />;
+  if (!(can("catalogo.editar") || can("catalogo.campos"))) return <Navigate to="/" replace />;
 
   const add = (event: FormEvent) => {
     event.preventDefault();

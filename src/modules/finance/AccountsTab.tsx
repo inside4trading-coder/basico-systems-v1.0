@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/core/tenant-context";
-import { canSupervise } from "@/core/tenant-selection";
 import { formatMoney } from "@/modules/pos/cart";
 import { parseAmount } from "@/modules/pos/usePosMoney";
 import { caracasToday } from "@/modules/reports/dates";
@@ -17,8 +16,8 @@ import { useAccounts, useSaveAccount, type FinanceAccount } from "./api";
 import { ACCOUNT_KIND_LABEL, formatDay, type AccountKind } from "./lib";
 
 export default function AccountsTab() {
-  const { active } = useTenant();
-  const canEdit = canSupervise(active?.role);
+  const { active, can } = useTenant();
+  const canEdit = can("finanzas.cuentas");
   const { data: accounts = [], isLoading } = useAccounts();
   const { data: methods = [] } = usePaymentMethods();
   const saveMethod = useSavePaymentMethod();

@@ -11,7 +11,6 @@ import AppShell from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/core/supabase";
 import { useTenant } from "@/core/tenant-context";
-import { canSeeReports, canSupervise } from "@/core/tenant-selection";
 import { useEntitlements } from "@/core/useEntitlements";
 import { cn } from "@/lib/utils";
 import { useBankPending } from "@/modules/finance/bank/api";
@@ -30,18 +29,18 @@ import { Kpi, Panel } from "@/modules/reports/components";
 import { addDays, caracasToday, presetRange } from "@/modules/reports/dates";
 
 export default function Home() {
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   const entitlements = useEntitlements();
   const { data: locations, isLoading } = useLocations();
   const noLocations = !isLoading && (locations?.length ?? 0) === 0;
-  const supervisor = canSeeReports(active?.role);
-  const setupPending = canSupervise(active?.role) && active?.tenant.onboarding_completed_at === null;
+  const supervisor = can("reportes.ver");
+  const setupPending = can("config.negocio") && active?.tenant.onboarding_completed_at === null;
 
   return (
     <AppShell wide={supervisor && entitlements.reportes}>
       <Greeting />
       {setupPending && <SetupCard tenantId={active?.tenant.id} />}
-      {noLocations && canSupervise(active?.role) && !setupPending ? (
+      {noLocations && can("config.negocio") && !setupPending ? (
         <div className="space-y-3 rounded-surface border bg-card p-4">
           <p className="text-sm">Para empezar, crea al menos una sede: la tienda o el almacén donde está tu mercancía.</p>
           <Button asChild>

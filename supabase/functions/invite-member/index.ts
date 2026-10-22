@@ -1,8 +1,9 @@
 // Invita a una persona al equipo de un tenant.
 //
-// Quién puede: owner o admin del tenant (se comprueba con la sesión de quien
-// llama, antes de mandar ningún correo). El alta en tenant_members también va
-// con esa sesión, así que la RLS vuelve a validar el permiso.
+// Quién puede: quien tenga el permiso «Invitar y gestionar el equipo» (se
+// comprueba con la sesión de quien llama, antes de mandar ningún correo). El
+// alta en tenant_members también va con esa sesión, así que la RLS vuelve a
+// validar el permiso.
 //
 // Si la persona no tiene cuenta, se crea por invitación (Supabase manda el
 // correo). Si ya la tiene, solo se la agrega al equipo.
@@ -62,16 +63,13 @@ Deno.serve(async (req) => {
   const { data: userData, error: userError } = await asCaller.auth.getUser();
   if (userError || !userData.user) return json(401, { error: "Sesión inválida" });
 
-  const { data: me, error: meError } = await asCaller
-    .from("tenant_members")
-    .select("role")
-    .eq("tenant_id", tenantId)
-    .eq("user_id", userData.user.id)
-    .maybeSingle();
-  if (meError) return json(500, { error: "No se pudo comprobar el permiso" });
-  if (!me || !["owner", "admin"].includes(me.role)) {
-    return json(403, { error: "Solo owner o admin pueden invitar" });
-  }
+  // Permiso «Invitar y gestionar el equipo» de la matriz del negocio.
+  const { data: allowed, error: permError } = await asCaller.rpc("has_capability", {
+    p_tenant_id: tenantId,
+    p_capability: "equipo.gestionar",
+  });
+  if (permError) return json(500, { error: "No se pudo comprobar el permiso" });
+  if (allowed !== true) return json(403, { error: "Tu rol no tiene permiso para invitar" });
 
   const asPlatform = createClient(url, serviceKey, { auth: { persistSession: false } });
 

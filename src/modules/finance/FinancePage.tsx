@@ -7,7 +7,6 @@ import { Navigate } from "react-router-dom";
 import AppShell from "@/components/AppShell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTenant } from "@/core/tenant-context";
-import { canSeeReports } from "@/core/tenant-selection";
 import { useTabParam } from "@/lib/useTabParam";
 import AccountsTab from "./AccountsTab";
 import ReconciliationCenter from "./bank/ReconciliationCenter";
@@ -21,9 +20,9 @@ type Tab = "summary" | FinanceTab | "catalog";
 const TABS: Tab[] = ["summary", "movements", "obligations", "receivables", "reconciliation", "accounts", "catalog"];
 
 export default function FinancePage() {
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   const [tab, setTab] = useTabParam<Tab>(TABS, "summary");
-  if (!canSeeReports(active?.role)) return <Navigate to="/" replace />;
+  if (!can("finanzas.operar")) return <Navigate to="/" replace />;
 
   return (
     <AppShell wide>

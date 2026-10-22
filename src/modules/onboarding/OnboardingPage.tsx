@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/core/tenant-context";
-import { canSupervise } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
 import NewProductDialog from "@/modules/inventory/NewProductDialog";
 import { useLocations } from "@/modules/inventory/api";
@@ -334,7 +333,7 @@ function DoneStep({ done, onFinish, finishing }: { done: Record<string, string>;
 
 /** /bienvenida: asistente inicial del dueño o administrador. */
 export default function OnboardingPage() {
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   const navigate = useNavigate();
   const tenantId = active?.tenant.id;
   const state = useOnboardingState(tenantId);
@@ -346,7 +345,7 @@ export default function OnboardingPage() {
     if (state.data && step === null) setStep(firstPendingStep(state.data.onboarding_steps));
   }, [state.data, step]);
 
-  if (!canSupervise(active?.role)) return <Navigate to="/" replace />;
+  if (!can("config.negocio")) return <Navigate to="/" replace />;
 
   const next = async (from: "productos" | "equipo") => {
     try {

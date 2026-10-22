@@ -46,7 +46,7 @@ function Loading() {
 /** Sesión, luego tenant elegido, luego tenant activo. Cada paso tiene su pantalla. */
 function RequireTenant({ children }: { children: ReactNode }) {
   const { session, loading: authLoading } = useAuth();
-  const { memberships, active, loading, error } = useTenant();
+  const { memberships, active, loading, error, capabilitiesLoading } = useTenant();
 
   if (authLoading) return <Loading />;
   if (!session) return <Navigate to="/login" replace />;
@@ -72,6 +72,8 @@ function RequireTenant({ children }: { children: ReactNode }) {
   if (memberships.length === 0) return <NoAccess reason="no-tenant" />;
   if (!active) return <SelectTenant />;
   if (active.tenant.status === "suspended") return <NoAccess reason="suspended" />;
+  // Las pantallas deciden con los permisos del negocio: se espera la matriz.
+  if (capabilitiesLoading) return <Loading />;
   return <>{children}</>;
 }
 

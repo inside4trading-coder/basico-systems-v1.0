@@ -7,10 +7,12 @@ import { supabase } from "@/core/supabase";
 import { useAuth } from "@/core/auth";
 import { assignableRoles, canEditMember, teamErrorMessage } from "@/core/team";
 import { useTenant } from "@/core/tenant-context";
-import { canManageTeam, type TenantRole } from "@/core/tenant-selection";
+import { type TenantRole } from "@/core/tenant-selection";
 import AppShell, { ROLE_LABELS } from "@/components/AppShell";
 import { Checkbox } from "@/components/ui/checkbox";
 import InviteForm from "@/components/InviteForm";
+import PermissionsMatrix from "@/components/PermissionsMatrix";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useLocations } from "@/modules/inventory/api";
 
@@ -21,7 +23,7 @@ interface TeamMember {
 }
 
 export default function Team() {
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   const { session } = useAuth();
   const queryClient = useQueryClient();
   const tenantId = active?.tenant.id;
@@ -75,12 +77,21 @@ export default function Team() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  if (!canManageTeam(active?.role)) return <Navigate to="/" replace />;
+  if (!can("equipo.gestionar")) return <Navigate to="/" replace />;
 
   return (
     <AppShell>
         <h1 className="text-2xl">Equipo</h1>
 
+        <Tabs defaultValue="personas">
+          <TabsList>
+            <TabsTrigger value="personas">Personas</TabsTrigger>
+            <TabsTrigger value="permisos">Permisos por rol</TabsTrigger>
+          </TabsList>
+          <TabsContent value="permisos">
+            <PermissionsMatrix />
+          </TabsContent>
+          <TabsContent value="personas" className="space-y-6">
         <InviteForm />
 
         <ul className="divide-y rounded-surface border bg-card">
@@ -137,6 +148,8 @@ export default function Team() {
           ))}
           {team.isError && <li className="px-4 py-3 text-sm text-destructive">No se pudo cargar el equipo.</li>}
         </ul>
+          </TabsContent>
+        </Tabs>
         {editing && tenantId && (
           <LocationsDialog
             member={editing}
