@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inviteEntitlements, parseSignupCode, showTrialNotice, signupUrl, trialDaysLeft } from "./lib";
+import { doneCount, firstPendingStep, inviteEntitlements, parseSignupCode, showTrialNotice, signupUrl, trialDaysLeft } from "./lib";
 
 describe("trialDaysLeft", () => {
   const now = new Date("2026-10-22T12:00:00Z");
@@ -55,5 +55,27 @@ describe("parseSignupCode", () => {
 
   it("arma la URL del enlace", () => {
     expect(signupUrl(code, "https://app.test")).toBe(`https://app.test/alta/${code}`);
+  });
+});
+
+describe("firstPendingStep", () => {
+  it("arranca por el negocio", () => {
+    expect(firstPendingStep(null)).toBe("negocio");
+    expect(firstPendingStep({})).toBe("negocio");
+  });
+
+  it("retoma donde quedó, aunque haya saltos", () => {
+    expect(firstPendingStep({ negocio: "2026-10-22" })).toBe("productos");
+    expect(firstPendingStep({ negocio: "x", equipo: "x" })).toBe("productos");
+    expect(firstPendingStep({ negocio: "x", productos: "x" })).toBe("equipo");
+  });
+
+  it("con los tres pasos hechos queda en «listo»", () => {
+    expect(firstPendingStep({ negocio: "x", productos: "x", equipo: "x" })).toBe("listo");
+  });
+
+  it("cuenta los pasos hechos", () => {
+    expect(doneCount({ negocio: "x", equipo: "x", listo: "x" })).toBe(2);
+    expect(doneCount(undefined)).toBe(0);
   });
 });

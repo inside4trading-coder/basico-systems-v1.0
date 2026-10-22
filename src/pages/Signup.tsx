@@ -82,7 +82,7 @@ export default function Signup() {
     // así arranca directo en él.
     selectTenant(tenantId);
     await qc.refetchQueries({ queryKey: ["memberships"] });
-    navigate("/", { replace: true });
+    navigate("/bienvenida", { replace: true });
     return accountEmail;
   };
 

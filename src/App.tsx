@@ -8,6 +8,7 @@ import Login from "@/pages/Login";
 import ResetPassword from "@/pages/ResetPassword";
 import Signup from "@/pages/Signup";
 import Platform from "@/pages/Platform";
+import OnboardingPage from "@/modules/onboarding/OnboardingPage";
 import NewPasswordForm from "@/components/NewPasswordForm";
 import SelectTenant from "@/pages/SelectTenant";
 import NoAccess from "@/pages/NoAccess";
@@ -105,6 +106,14 @@ export default function App() {
                     <ModuleGate module="fichaje">
                       <ClockPage />
                     </ModuleGate>
+                  </RequireTenant>
+                }
+              />
+              <Route
+                path="/bienvenida"
+                element={
+                  <RequireTenant>
+                    <OnboardingPage />
                   </RequireTenant>
                 }
               />
