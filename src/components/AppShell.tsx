@@ -11,6 +11,8 @@ import { canEditCatalog, canManageTeam, canSeeReports, canSupervise, type Tenant
 import { cn } from "@/lib/utils";
 import { useTrackRecent } from "@/modules/home/recent";
 import { useRateAutoSync } from "@/modules/settings/useRateAutoSync";
+import { useIsPlatformAdmin } from "@/modules/onboarding/api";
+import { showTrialNotice, trialDaysLeft } from "@/modules/onboarding/lib";
 
 export const ROLE_LABELS: Record<TenantRole, string> = {
   owner: "Dueño",
@@ -48,6 +50,9 @@ export default function AppShell({ children, wide = false }: { children: ReactNo
   const { active, memberships, clearTenant } = useTenant();
   const role = active?.role;
   const entitlements = useEntitlements();
+  const platform = useIsPlatformAdmin();
+  const daysLeft = trialDaysLeft(active?.tenant.trial_ends_at);
+  const trialNotice = canSupervise(role) && showTrialNotice(daysLeft);
   useRateAutoSync();
   useTrackRecent(active?.tenant.id);
 
@@ -65,6 +70,11 @@ export default function AppShell({ children, wide = false }: { children: ReactNo
             {memberships.length > 1 && (
               <Button size="sm" variant="ghost" onClick={clearTenant}>
                 Cambiar
+              </Button>
+            )}
+            {platform.data && (
+              <Button asChild size="sm" variant="ghost">
+                <Link to="/plataforma">Plataforma</Link>
               </Button>
             )}
             <span className="hidden text-muted-foreground md:inline">{session?.user.email}</span>
@@ -91,6 +101,13 @@ export default function AppShell({ children, wide = false }: { children: ReactNo
           ))}
         </nav>
       </header>
+      {trialNotice && daysLeft !== null && (
+        <div role="status" className="border-b bg-amber-50 px-4 py-2 text-center text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+          {daysLeft > 0
+            ? `Tu prueba gratis termina en ${daysLeft} día${daysLeft === 1 ? "" : "s"}. Escríbenos para activar tu plan.`
+            : "Tu prueba gratis terminó. Escríbenos para activar tu plan."}
+        </div>
+      )}
       <main className={cn("mx-auto space-y-6 p-4", wide ? "max-w-[1400px]" : "max-w-3xl")}>{children}</main>
     </div>
   );

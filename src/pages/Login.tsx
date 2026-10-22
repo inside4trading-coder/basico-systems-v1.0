@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import BrandMark from "@/components/BrandMark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,13 +17,16 @@ const TITLES: Record<Mode, string> = {
 
 export default function Login() {
   const { session, loading } = useAuth();
+  const [params] = useSearchParams();
+  // Viene de un enlace de alta con una cuenta que ya existía: al entrar, vuelve al alta.
+  const alta = params.get("alta");
   const [mode, setMode] = useState<Mode>("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [message, setMessage] = useState("");
 
-  if (!loading && session) return <Navigate to="/" replace />;
+  if (!loading && session) return <Navigate to={alta && /^[0-9a-f]{24}$/i.test(alta) ? `/alta/${alta}` : "/"} replace />;
 
   const switchMode = (next: Mode) => {
     setMode(next);
