@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/core/auth";
 import { TenantProvider, useTenant } from "@/core/tenant-context";
 import Login from "@/pages/Login";
+import ResetPassword from "@/pages/ResetPassword";
+import NewPasswordForm from "@/components/NewPasswordForm";
 import SelectTenant from "@/pages/SelectTenant";
 import NoAccess from "@/pages/NoAccess";
 import Home from "@/pages/Home";
@@ -45,6 +47,17 @@ function RequireTenant({ children }: { children: ReactNode }) {
 
   if (authLoading) return <Loading />;
   if (!session) return <Navigate to="/login" replace />;
+  // Equipo invitado por correo: entra sin contraseña y la crea antes de usar la app.
+  if (session.user.user_metadata?.needs_password) {
+    return (
+      <NewPasswordForm
+        title="Crea tu contraseña"
+        description={`La usarás para entrar como ${session.user.email}`}
+        data={{ needs_password: false }}
+        onDone={() => undefined}
+      />
+    );
+  }
   if (loading) return <Loading />;
   if (error) {
     return (
@@ -67,6 +80,7 @@ export default function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/restablecer" element={<ResetPassword />} />
               {/* Fichar desde el teléfono: sin sesión, con la clave del negocio y el PIN. */}
               <Route path="/fichar/:clockKey" element={<PunchPage />} />
               <Route

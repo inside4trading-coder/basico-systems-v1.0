@@ -87,7 +87,8 @@ Deno.serve(async (req) => {
     const appUrl = Deno.env.get("APP_URL");
     const { data: inviteData, error: inviteError } = await asPlatform.auth.admin.inviteUserByEmail(
       email,
-      appUrl ? { redirectTo: appUrl } : undefined,
+      // needs_password: al entrar por primera vez la app le pide crear su contraseña.
+      { data: { needs_password: true }, ...(appUrl ? { redirectTo: appUrl } : {}) },
     );
     if (inviteError || !inviteData.user) return json(502, { error: "No se pudo enviar la invitación" });
     userId = inviteData.user.id;
