@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useTenant } from "@/core/tenant-context";
-import { canSupervise } from "@/core/tenant-selection";
 import { useLocations } from "@/modules/inventory/api";
 import { useCashiers } from "@/modules/settings/api";
 import { cn } from "@/lib/utils";
@@ -19,7 +18,7 @@ import { cashCurrencyLabel } from "@/core/money";
 import { parseAmount, usePosMoney } from "./usePosMoney";
 
 export default function OpenSessionScreen({ onSelect }: { onSelect: (sessionId: string) => void }) {
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   const registers = useRegisters();
   const sessions = useOpenSessions();
   const { data: locations = [] } = useLocations();
@@ -39,7 +38,7 @@ export default function OpenSessionScreen({ onSelect }: { onSelect: (sessionId: 
       {usable.length === 0 && (
         <div className="rounded-xl border bg-card p-4 text-sm">
           <p>No hay cajas activas.</p>
-          {canSupervise(active?.role) ? (
+          {can("config.sedes") ? (
             <Link to="/sedes" className="text-primary underline">
               Crear una caja en Sedes
             </Link>

@@ -10,7 +10,6 @@ import BackLink from "@/components/BackLink";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useTenant } from "@/core/tenant-context";
-import { canSeeReports } from "@/core/tenant-selection";
 import { formatMoney } from "@/modules/pos/cart";
 import { caracasToday } from "@/modules/reports/dates";
 import { useAccounts, useObligation, useSaveObligation } from "../api";
@@ -22,7 +21,7 @@ import InstanceSheet from "./InstanceSheet";
 
 export default function ObligationDetailPage() {
   const { id } = useParams();
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   const { data, isLoading, error } = useObligation(id);
   const { data: accounts = [] } = useAccounts();
   const save = useSaveObligation();
@@ -32,7 +31,7 @@ export default function ObligationDetailPage() {
   const [showAll, setShowAll] = useState(false);
   const today = caracasToday();
 
-  if (!canSeeReports(active?.role)) return <Navigate to="/" replace />;
+  if (!can("finanzas.operar")) return <Navigate to="/" replace />;
   const o = data?.obligation;
 
   const setStatus = (status: ObligationStatus) => {

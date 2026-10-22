@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTenant } from "@/core/tenant-context";
-import { canManageTeam, canSeeReports } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
 import { useLocations, useSaveLocation } from "@/modules/inventory/api";
 import type { Location } from "@/modules/inventory/lib";
@@ -60,7 +59,7 @@ const PRESENCE: Record<PresenceState, { label: string; className: string }> = {
 };
 
 export default function ClockPage() {
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   const [period, setPeriod] = useState<ClockPeriod>("week");
   const [staffFilter, setStaffFilter] = useState<string>("");
   const range = useMemo<DateRange>(() => clockPeriodRange(period), [period]);
@@ -88,7 +87,7 @@ export default function ClockPage() {
     [days, events, staff, radius, today],
   );
 
-  if (!canSeeReports(active?.role)) return <Navigate to="/" replace />;
+  if (!can("fichaje.gestionar")) return <Navigate to="/" replace />;
 
   const nameOf = (id: string) => staff.find((s) => s.id === id)?.name ?? "—";
   const locationName = (id: string | null) => (id ? (locations.find((l) => l.id === id)?.name ?? "—") : "—");
@@ -168,7 +167,7 @@ export default function ClockPage() {
           <MetricsPanel days={days} incidents={incidents} staff={staff} nameOf={nameOf} range={range} />
         </TabsContent>
         <TabsContent value="horarios" className="space-y-4">
-          <LinkCard canRegenerate={canManageTeam(active?.role)} />
+          <LinkCard canRegenerate={can("fichaje.enlace")} />
           <StaffPanel staff={staff} locationName={locationName} />
         </TabsContent>
         <TabsContent value="sedes">

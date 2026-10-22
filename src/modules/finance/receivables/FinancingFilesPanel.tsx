@@ -4,7 +4,6 @@
  * centro de conciliación.
  */
 import { useTenant } from "@/core/tenant-context";
-import { canManageTeam } from "@/core/tenant-selection";
 import { useImportGuides } from "../bank/api";
 import ImportGuide from "../bank/ImportGuide";
 import { financingOrdersGuide, financingPaymentsGuide } from "../bank/sources";
@@ -13,8 +12,8 @@ import FinancingImportCard from "./FinancingImportCard";
 import FinancingPaymentsCard from "./FinancingPaymentsCard";
 
 export default function FinancingFilesPanel() {
-  const { active } = useTenant();
-  const canEdit = canManageTeam(active?.role);
+  const { active, can } = useTenant();
+  const canEdit = can("finanzas.cuentas");
   const provider = useFinancingProvider();
   const { data: guides = [] } = useImportGuides();
   return (

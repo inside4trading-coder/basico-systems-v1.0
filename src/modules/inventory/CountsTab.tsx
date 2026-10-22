@@ -16,7 +16,6 @@ import { ScanButton } from "@/core/scanner/CameraScanner";
 import { useScanner } from "@/core/scanner/useScanner";
 import { supabase } from "@/core/supabase";
 import { useTenant } from "@/core/tenant-context";
-import { canEditCatalog } from "@/core/tenant-selection";
 import { useLocations } from "./api";
 import { formatDateTime, formatQty } from "./lib";
 
@@ -106,8 +105,8 @@ const itemName = (i: CountItem) =>
   [i.variants?.products?.name ?? "Producto", ...Object.values(i.variants?.options ?? {})].join(" · ");
 
 export default function CountsTab() {
-  const { active } = useTenant();
-  const supervisor = canEditCatalog(active?.role);
+  const { active, can } = useTenant();
+  const supervisor = can("inventario.conteos");
   const { data: counts = [] } = useCounts();
   const { data: locations = [] } = useLocations();
   const [openId, setOpenId] = useState<string | null>(null);

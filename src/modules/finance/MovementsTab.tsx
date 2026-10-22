@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTenant } from "@/core/tenant-context";
-import { canSupervise } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
 import { downloadXlsx } from "@/modules/inventory/import/files";
 import { formatMoney } from "@/modules/pos/cart";
@@ -31,7 +30,7 @@ function matchesDirection(m: FinanceMovement, filter: DirectionFilter): boolean 
 }
 
 export default function MovementsTab() {
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   const { data: accounts = [] } = useAccounts();
   const today = caracasToday();
   const [accountId, setAccountId] = useState(ALL);
@@ -189,7 +188,7 @@ export default function MovementsTab() {
                 {m.direction === "in" ? "+" : "−"}
                 {formatMoney(Math.abs(signedAmount(m)), m.currency)}
               </span>
-              {canSupervise(active?.role) && !m.voided_at && !["sale", "cash_close"].includes(m.kind) && (
+              {can("finanzas.anular") && !m.voided_at && !["sale", "cash_close"].includes(m.kind) && (
                 <Button size="sm" variant="ghost" onClick={() => setVoiding(m)}>
                   Anular
                 </Button>

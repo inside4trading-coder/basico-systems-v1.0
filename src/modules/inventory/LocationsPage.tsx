@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/core/tenant-context";
 import { useEntitlements } from "@/core/useEntitlements";
-import { canSupervise } from "@/core/tenant-selection";
 import { useLocations, useSaveLocation } from "./api";
 import { useRegisters, useSaveRegister } from "@/modules/pos/api";
 import type { Location } from "./lib";
@@ -49,13 +48,13 @@ const EMPTY: Draft = {
 };
 
 export default function LocationsPage() {
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   const { data: locations = [], isLoading } = useLocations();
   const save = useSaveLocation();
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const { fichaje } = useEntitlements();
 
-  if (!canSupervise(active?.role)) return <Navigate to="/" replace />;
+  if (!can("config.sedes")) return <Navigate to="/" replace />;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();

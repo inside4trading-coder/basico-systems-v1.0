@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTenant } from "@/core/tenant-context";
-import { canSupervise } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
 import { downloadXlsx } from "@/modules/inventory/import/files";
 import { formatMoney } from "@/modules/pos/cart";
@@ -67,8 +66,8 @@ function matches(r: Receivable, f: Filter, today: string) {
  */
 export default function ReceivablesTab({ scope = "all" }: { scope?: "all" | "financing" }) {
   const only = scope === "financing";
-  const { active } = useTenant();
-  const supervisor = canSupervise(active?.role);
+  const { active, can } = useTenant();
+  const supervisor = can("finanzas.anular");
   const today = caracasToday();
   const { data: allReceivables = [], isLoading, error } = useReceivables();
   const receivables = useMemo(() => (only ? allReceivables.filter((r) => r.kind === "financing") : allReceivables), [allReceivables, only]);

@@ -16,7 +16,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/core/tenant-context";
-import { canSeeReports } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
 import { useCurrentRate, type PaymentMethod } from "@/modules/settings/api";
 import { formatMoney, formatQty } from "../cart";
@@ -35,8 +34,8 @@ export default function SalesSheet({ open, onOpenChange, sessionId, sessionOpen,
   methods: PaymentMethod[];
   onReprint: (saleId: string) => void;
 }) {
-  const { active } = useTenant();
-  const supervisor = canSeeReports(active?.role);
+  const { active, can } = useTenant();
+  const supervisor = can("ventas.corregir");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { data: sales = [], isLoading } = useSales(sessionId, query);

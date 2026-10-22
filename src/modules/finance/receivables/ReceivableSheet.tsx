@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useTenant } from "@/core/tenant-context";
-import { canSupervise } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/modules/pos/cart";
 import { caracasToday } from "@/modules/reports/dates";
@@ -29,7 +28,7 @@ const STATE_CLASS = {
 const COLLECTION_LABEL = { cash: "Cobro", provider_credit: "Cubierta por la financiadora", commission: "Comisión" } as const;
 
 export default function ReceivableSheet({ receivable, accounts, onClose }: { receivable: Receivable | null; accounts: FinanceAccount[]; onClose: () => void }) {
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   const today = caracasToday();
   const { data: collections = [] } = useReceivableCollections(receivable?.id ?? null);
   const { data: providerPayments = [] } = useReceivableFinancingPayments(receivable?.id ?? null, receivable?.kind === "financing");
@@ -42,7 +41,7 @@ export default function ReceivableSheet({ receivable, accounts, onClose }: { rec
   const r = receivable;
   const left = Math.max(r.amount - r.collected, 0);
   const open = r.status === "open";
-  const supervisor = canSupervise(active?.role);
+  const supervisor = can("finanzas.anular");
   const fail = (title: string) => (err: Error) => toast.error(title, { description: err.message });
 
   return (

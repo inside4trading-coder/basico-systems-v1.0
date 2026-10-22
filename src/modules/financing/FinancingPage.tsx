@@ -9,7 +9,6 @@ import { Link, Navigate } from "react-router-dom";
 import AppShell from "@/components/AppShell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTenant } from "@/core/tenant-context";
-import { canSeeReports, canSupervise } from "@/core/tenant-selection";
 import { useTabParam } from "@/lib/useTabParam";
 import HistoryPanel from "@/modules/finance/bank/HistoryPanel";
 import { useFinancingEnabled, useFinancingProvider } from "@/modules/finance/receivables/api";
@@ -20,11 +19,11 @@ type Tab = "operations" | "files" | "history";
 const TABS: Tab[] = ["operations", "files", "history"];
 
 export default function FinancingPage() {
-  const { active } = useTenant();
+  const { active, can } = useTenant();
   const [tab, setTab] = useTabParam<Tab>(TABS, "operations");
   const enabled = useFinancingEnabled();
   const provider = useFinancingProvider();
-  if (!canSeeReports(active?.role)) return <Navigate to="/" replace />;
+  if (!can("finanzas.operar")) return <Navigate to="/" replace />;
 
   return (
     <AppShell wide>
@@ -35,7 +34,7 @@ export default function FinancingPage() {
       {!enabled ? (
         <div className="space-y-2 rounded-xl border bg-card p-4 text-sm">
           <p>Activa el método de pago de la financiadora para vender con ella en el POS y conciliar sus cuotas.</p>
-          {canSupervise(active?.role) && (
+          {can("config.negocio") && (
             <Link to="/configuracion" className="text-primary underline">
               Ir a Configuración → Métodos de pago
             </Link>

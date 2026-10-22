@@ -15,7 +15,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/core/tenant-context";
-import { canManageTeam, canSupervise } from "@/core/tenant-selection";
 import BusinessSection from "./BusinessSection";
 import CashiersSection from "./CashiersSection";
 import ChannelsSection from "./ChannelsSection";
@@ -56,21 +55,25 @@ const fmtRate = (n: number) => n.toLocaleString("es-VE", { minimumFractionDigits
 const errorToast = (title: string) => (err: Error) => toast.error(title, { description: err.message });
 
 export default function SettingsPage() {
-  const { active } = useTenant();
-  if (!canSupervise(active?.role)) return <Navigate to="/" replace />;
+  const { active, can } = useTenant();
+  if (!(can("config.negocio") || can("caja.cupones") || can("caja.cajeros"))) return <Navigate to="/" replace />;
   return (
     <AppShell>
       <h1 className="text-2xl">Configuración</h1>
-      {canManageTeam(active?.role) && <BusinessSection />}
-      <RateSection />
-      <TaxSection />
-      <PaymentMethodsSection />
-      {canManageTeam(active?.role) && <CashiersSection />}
-      {canManageTeam(active?.role) && <ChannelsSection />}
-      {canSupervise(active?.role) && <CouponsSection />}
-      {canManageTeam(active?.role) && <ClosingReminderSection />}
-      {canManageTeam(active?.role) && <PlanSection />}
-      {canManageTeam(active?.role) && <ExportSection />}
+      {can("config.negocio") && <BusinessSection />}
+      {can("config.negocio") && (
+        <>
+          <RateSection />
+          <TaxSection />
+          <PaymentMethodsSection />
+        </>
+      )}
+      {can("caja.cajeros") && <CashiersSection />}
+      {can("config.negocio") && <ChannelsSection />}
+      {can("caja.cupones") && <CouponsSection />}
+      {can("config.negocio") && <ClosingReminderSection />}
+      {can("config.negocio") && <PlanSection />}
+      {can("config.negocio") && <ExportSection />}
     </AppShell>
   );
 }

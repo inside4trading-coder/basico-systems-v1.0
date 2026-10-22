@@ -5,6 +5,7 @@ import { useAuth } from "./auth";
 import { withOfflineCache } from "./offline";
 import { getActiveTenantId, setActiveTenantId } from "./tenant";
 import { pickInitialTenant, type Membership } from "./tenant-selection";
+import { resolveCapabilities, type Capability, type CapabilityOverride } from "./capabilities";
 
 interface TenantState {
   memberships: Membership[];
@@ -13,6 +14,12 @@ interface TenantState {
   active: Membership | null;
   selectTenant: (tenantId: string) => void;
   clearTenant: () => void;
+  /** ¿El rol de este usuario, con la matriz del negocio, permite esto? */
+  can: (capability: Capability) => boolean;
+  /** Excepciones de la matriz de permisos del negocio activo. */
+  capabilityOverrides: CapabilityOverride[];
+  /** La matriz del negocio activo todavía no cargó (las pantallas esperan). */
+  capabilitiesLoading: boolean;
 }
 
 const TenantContext = createContext<TenantState | undefined>(undefined);
@@ -72,6 +79,23 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
   const active = memberships.find((m) => m.tenant.id === activeId) ?? null;
 
+  // Matriz de permisos del negocio activo (solo excepciones). Con copia local:
+  // el menú del POS no puede depender de la conexión.
+  const activeTenantId = active?.tenant.id;
+  const overridesQuery = useQuery({
+    queryKey: ["capabilities", activeTenantId],
+    queryFn: withOfflineCache(`capabilities:${activeTenantId}`, async () => {
+      const { data, error } = await supabase.from("role_capabilities").select("role, capability, allowed");
+      if (error) throw error;
+      return (data ?? []) as CapabilityOverride[];
+    }),
+    enabled: Boolean(activeTenantId),
+    staleTime: 5 * 60_000,
+  });
+  const capabilityOverrides = useMemo(() => overridesQuery.data ?? [], [overridesQuery.data]);
+  const allowed = useMemo(() => resolveCapabilities(active?.role, capabilityOverrides), [active?.role, capabilityOverrides]);
+  const can = useCallback((capability: Capability) => allowed.has(capability), [allowed]);
+
   return (
     <TenantContext.Provider
       value={{
@@ -81,6 +105,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         active,
         selectTenant,
         clearTenant,
+        can,
+        capabilityOverrides,
+        capabilitiesLoading: Boolean(activeTenantId) && overridesQuery.isLoading,
       }}
     >
       {children}
