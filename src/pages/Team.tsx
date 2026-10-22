@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
+import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/core/supabase";
+import { useAuth } from "@/core/auth";
+import { assignableRoles, canEditMember, teamErrorMessage } from "@/core/team";
 import { useTenant } from "@/core/tenant-context";
 import { canManageTeam, type TenantRole } from "@/core/tenant-selection";
 import AppShell, { ROLE_LABELS } from "@/components/AppShell";
@@ -19,7 +22,11 @@ interface TeamMember {
 
 export default function Team() {
   const { active } = useTenant();
+  const { session } = useAuth();
+  const queryClient = useQueryClient();
   const tenantId = active?.tenant.id;
+  const myRole = active?.role;
+  const myUserId = session?.user.id;
 
   const team = useQuery({
     queryKey: ["team", tenantId],
@@ -51,6 +58,23 @@ export default function Team() {
     return ids.length === 0 ? "Todas las sedes" : locations.filter((l) => ids.includes(l.id)).map((l) => l.name).join(", ");
   };
 
+  // Cambiar el rol o quitar a alguien: la RLS y keep_one_owner validan en la base.
+  const changeMember = useMutation({
+    mutationFn: async (change: { member: TeamMember; role?: TenantRole; remove?: boolean }) => {
+      const query = change.remove
+        ? supabase.from("tenant_members").delete().eq("tenant_id", tenantId!).eq("user_id", change.member.user_id).select("user_id")
+        : supabase.from("tenant_members").update({ role: change.role }).eq("tenant_id", tenantId!).eq("user_id", change.member.user_id).select("user_id");
+      const { data, error } = await query;
+      if (error) throw new Error(teamErrorMessage(error.message));
+      if (!data?.length) throw new Error(teamErrorMessage("permiso"));
+    },
+    onSuccess: (_data, change) => {
+      toast.success(change.remove ? `${change.member.email ?? "La persona"} ya no está en el equipo` : "Rol actualizado");
+      queryClient.invalidateQueries({ queryKey: ["team", tenantId] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   if (!canManageTeam(active?.role)) return <Navigate to="/" replace />;
 
   return (
@@ -74,7 +98,40 @@ export default function Team() {
                     Sedes
                   </Button>
                 )}
-                <span className="mono-cap text-[10px] text-muted-foreground">{ROLE_LABELS[m.role]}</span>
+                {canEditMember(myRole, myUserId, m) ? (
+                  <>
+                    <select
+                      aria-label={`Rol de ${m.email ?? "este usuario"}`}
+                      value={m.role}
+                      disabled={changeMember.isPending}
+                      onChange={(e) => changeMember.mutate({ member: m, role: e.target.value as TenantRole })}
+                      className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                    >
+                      {assignableRoles(myRole).map((r) => (
+                        <option key={r} value={r}>
+                          {ROLE_LABELS[r]}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={changeMember.isPending}
+                      onClick={() => {
+                        if (window.confirm(`¿Quitar a ${m.email ?? "esta persona"} del equipo? Ya no podrá entrar a este negocio.`)) {
+                          changeMember.mutate({ member: m, remove: true });
+                        }
+                      }}
+                    >
+                      Quitar
+                    </Button>
+                  </>
+                ) : (
+                  <span className="mono-cap text-[10px] text-muted-foreground">
+                    {ROLE_LABELS[m.role]}
+                    {m.user_id === myUserId && " · tú"}
+                  </span>
+                )}
               </span>
             </li>
           ))}
