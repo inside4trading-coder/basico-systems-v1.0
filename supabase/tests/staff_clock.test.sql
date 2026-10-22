@@ -39,10 +39,11 @@ select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-0000000
 -- PIN
 select throws_ok($$ select public.set_staff_pin('aaaaaaaa-6666-6666-6666-666666666661', '1234') $$, '23514', 'El PIN son 6 números', 'el PIN son 6 números');
 select throws_ok($$ select public.set_staff_pin('aaaaaaaa-6666-6666-6666-666666666661', '111111') $$, '23514', 'Ese PIN es muy fácil de adivinar', 'no acepta PIN obvios');
-select lives_ok($$ select public.set_staff_pin('aaaaaaaa-6666-6666-6666-666666666661', '482913') $$, 'el dueño asigna el PIN de Ana');
-select lives_ok($$ select public.set_staff_pin('aaaaaaaa-6666-6666-6666-666666666662', '730164') $$, 'y el de Beto');
-select lives_ok($$ select public.set_staff_pin('aaaaaaaa-6666-6666-6666-666666666663', '905127') $$, 'y el de Carla');
-select throws_ok($$ select public.set_staff_pin('aaaaaaaa-6666-6666-6666-666666666663', '482913') $$, '23505', null, 'dos personas no comparten PIN');
+select lives_ok($$ select public.set_staff_pin('aaaaaaaa-6666-6666-6666-666666666661', '271830') $$, 'el dueño asigna el PIN temporal de Ana');
+select lives_ok($$ select public.set_staff_pin('aaaaaaaa-6666-6666-6666-666666666662', '314159') $$, 'y el de Beto');
+select lives_ok($$ select public.set_staff_pin('aaaaaaaa-6666-6666-6666-666666666663', '161803') $$, 'y el de Carla');
+select throws_ok($$ select public.set_staff_pin('aaaaaaaa-6666-6666-6666-666666666663', '271830') $$, '23505', null, 'dos personas no comparten PIN');
+select is((select pin_temporary from public.cashiers where id = 'aaaaaaaa-6666-6666-6666-666666666661'), true, 'el PIN del encargado queda como temporal');
 select throws_ok($$ select pin_hash from public.cashiers limit 1 $$, '42501', null, 'el hash del PIN no se lee desde la app');
 select is((select clock_enabled from public.cashiers where id = 'aaaaaaaa-6666-6666-6666-666666666661'), true, 'con PIN queda habilitada para fichar');
 select is(public.clock_key(), current_setting('test.key'), 'el encargado ve el enlace de fichaje');
@@ -55,6 +56,21 @@ select set_config('request.headers', '{}', true);
 
 select is(public.clock_lookup('clave-inventada', '482913') ->> 'ok', 'false', 'una clave inventada no sirve');
 select is(public.clock_lookup(current_setting('test.key'), '000001') ->> 'error', 'PIN incorrecto', 'PIN equivocado');
+
+-- Primera entrada: con el PIN temporal se crea el personal.
+select results_eq(
+  $$ select r ->> 'ok', (r ->> 'needs_pin_setup')::boolean, r ->> 'name' from (select public.clock_lookup(current_setting('test.key'), '271830') r) x $$,
+  $$ values ('false'::text, true, 'Ana'::text) $$,
+  'con el PIN temporal pide crear el PIN personal'
+);
+select is(public.clock_punch(current_setting('test.key'), '271830', 'entrada', 10.0503, -69.3002, 15) ->> 'needs_pin_setup', 'true', 'con el PIN temporal no se ficha');
+select is(public.clock_set_personal_pin(current_setting('test.key'), '000002', '482913') ->> 'error', 'PIN incorrecto', 'crear el PIN pide el temporal correcto');
+select is(public.clock_set_personal_pin(current_setting('test.key'), '271830', '271830') ->> 'error', 'Elige un PIN distinto al que te dieron', 'el PIN personal no repite el temporal');
+select is(public.clock_set_personal_pin(current_setting('test.key'), '271830', '314159') ->> 'error', 'Ese PIN ya lo usa otra persona del equipo', 'ni el de otra persona');
+select is(public.clock_set_personal_pin(current_setting('test.key'), '271830', '482913') ->> 'name', 'Ana', 'Ana crea su PIN personal');
+select is(public.clock_set_personal_pin(current_setting('test.key'), '314159', '730164') ->> 'name', 'Beto', 'Beto también');
+select is(public.clock_set_personal_pin(current_setting('test.key'), '161803', '905127') ->> 'name', 'Carla', 'y Carla');
+select is(public.clock_lookup(current_setting('test.key'), '271830') ->> 'error', 'PIN incorrecto', 'el PIN temporal ya no sirve');
 select results_eq(
   $$ select r ->> 'name', (r -> 'today' -> 'allowed')::text, (r ->> 'needs_location')::boolean from (select public.clock_lookup(current_setting('test.key'), '482913') r) x $$,
   $$ values ('Ana'::text, '["entrada"]'::text, true) $$,
@@ -78,9 +94,9 @@ select ok(
 select is(public.clock_punch(current_setting('test.key'), '730164', 'entrada') ->> 'status', 'revisar', 'en una sede sin ubicación ficha, pero queda por revisar');
 select is(public.clock_punch(current_setting('test.key'), '905127', 'entrada', 10.0501, -69.3001, 5) ->> 'location', 'Tienda', 'quien trabaja en todas las sedes ficha en la más cercana con ubicación');
 
--- Límite de intentos: 20 fallos en 15 minutos bloquean el enlace.
+-- Límite de intentos: 20 fallos en 15 minutos bloquean el enlace (3 ya van arriba).
 select ok(
-  (select bool_and(public.clock_lookup(current_setting('test.key'), lpad(g::text, 6, '0')) ->> 'error' = 'PIN incorrecto') from generate_series(100, 118) g),
+  (select bool_and(public.clock_lookup(current_setting('test.key'), lpad(g::text, 6, '0')) ->> 'error' = 'PIN incorrecto') from generate_series(100, 116) g),
   'los intentos fallidos se cuentan'
 );
 select is(public.clock_lookup(current_setting('test.key'), '482913') ->> 'error', 'Demasiados intentos. Espera unos minutos.', 'después de 20 fallos se bloquea un rato, aun con el PIN correcto');

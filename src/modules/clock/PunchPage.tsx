@@ -4,7 +4,9 @@
  * manda su ubicación; la base decide si está dentro de la sede. Portado de
  * SublimeFichajePublico.tsx (basicosystems@f551478b).
  *
- * El PIN solo vive en memoria y se olvida a los dos minutos sin uso.
+ * El PIN solo vive en memoria y se olvida a los dos minutos sin uso. Con el
+ * PIN temporal que da el encargado, la persona crea primero el suyo (dos
+ * veces, para confirmarlo), como en el ERP.
  */
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -12,7 +14,7 @@ import { Delete } from "lucide-react";
 import BrandMark from "@/components/BrandMark";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { clockLookup, clockPunch, type ClockLookup, type ClockToday } from "./api";
+import { clockLookup, clockPunch, clockSetPersonalPin, type ClockLookup, type ClockToday } from "./api";
 import { KIND_LABEL, type ClockKind } from "./lib";
 
 const IDLE_MS = 120_000;
@@ -47,6 +49,8 @@ export default function PunchPage() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const idle = useRef<number>();
+  // Primera entrada: PIN temporal, nombre y el PIN nuevo ya escrito una vez.
+  const [setup, setSetup] = useState<{ temp: string; name: string; first: string | null } | null>(null);
 
   const reset = () => {
     setPin("");
@@ -54,6 +58,7 @@ export default function PunchPage() {
     setToday(null);
     setError(null);
     setDone(null);
+    setSetup(null);
   };
 
   // Olvida el PIN tras un rato sin uso.
@@ -61,7 +66,7 @@ export default function PunchPage() {
     window.clearTimeout(idle.current);
     if (pin || who) idle.current = window.setTimeout(reset, IDLE_MS);
     return () => window.clearTimeout(idle.current);
-  }, [pin, who, today]);
+  }, [pin, who, today, setup]);
 
   const press = async (digit: string) => {
     if (busy || pin.length >= 6) return;
@@ -71,7 +76,37 @@ export default function PunchPage() {
     if (next.length < 6) return;
     setBusy(true);
     try {
+      if (setup) {
+        if (!setup.first) {
+          setSetup({ ...setup, first: next });
+          setPin("");
+          return;
+        }
+        if (setup.first !== next) {
+          setError("Los PIN no coinciden. Escríbelo de nuevo.");
+          setSetup({ ...setup, first: null });
+          setPin("");
+          return;
+        }
+        const created = await clockSetPersonalPin(clockKey, setup.temp, next);
+        if (!created.ok) {
+          setError(created.error ?? "No se pudo crear el PIN");
+          setSetup({ ...setup, first: null });
+          setPin("");
+          return;
+        }
+        setSetup(null);
+        setDone("PIN personal creado. Ya puedes fichar con él.");
+        setWho(created);
+        setToday(created.today ?? null);
+        return;
+      }
       const res = await clockLookup(clockKey, next);
+      if (res.needs_pin_setup) {
+        setSetup({ temp: next, name: res.name ?? "", first: null });
+        setPin("");
+        return;
+      }
       if (!res.ok) {
         setError(res.error ?? "No se pudo verificar");
         setPin("");
@@ -120,8 +155,19 @@ export default function PunchPage() {
       {!who ? (
         <section className="space-y-5" aria-label="Ingresar PIN">
           <div className="space-y-1 text-center">
-            <h1 className="text-2xl">Pon tu PIN</h1>
-            <p className="text-sm text-muted-foreground">Los 6 números que te dio tu encargado.</p>
+            {setup ? (
+              <>
+                <h1 className="text-2xl">{setup.first ? "Repite tu PIN nuevo" : `Hola, ${setup.name}: crea tu PIN`}</h1>
+                <p className="text-sm text-muted-foreground">
+                  {setup.first ? "Escríbelo otra vez para confirmarlo." : "6 números que solo sepas tú. Con este PIN vas a fichar de ahora en adelante."}
+                </p>
+              </>
+            ) : (
+              <>
+                <h1 className="text-2xl">Pon tu PIN</h1>
+                <p className="text-sm text-muted-foreground">Tus 6 números. La primera vez, los que te dio tu encargado.</p>
+              </>
+            )}
           </div>
           <div className="flex justify-center gap-2" aria-live="polite" aria-label={`${pin.length} de 6 números`}>
             {Array.from({ length: 6 }, (_, i) => (

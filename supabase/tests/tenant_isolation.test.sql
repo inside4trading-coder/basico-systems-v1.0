@@ -97,8 +97,8 @@ select is(
         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'app' and p.prosecdef and has_function_privilege('anon', p.oid, 'EXECUTE')
         order by 1),
-  array['clock_lookup', 'clock_punch'],
-  'anon solo ejecuta, de las funciones SECURITY DEFINER de app, clock_lookup y clock_punch'
+  array['clock_lookup', 'clock_punch', 'clock_set_personal_pin'],
+  'anon solo ejecuta, de las funciones SECURITY DEFINER de app, clock_lookup, clock_punch y clock_set_personal_pin'
 );
 
 -- ---------------------------------------------------------------------------

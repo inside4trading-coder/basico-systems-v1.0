@@ -171,3 +171,173 @@ export function formatMinutes(total: number): string {
   const m = Math.round(total % 60);
   return h > 0 ? `${h} h ${String(m).padStart(2, "0")} min` : `${m} min`;
 }
+
+// ---------------------------------------------------------------------------
+// Horario, incidencias y métricas (como SublimeAdminFichaje, basicosystems@9cb08cd)
+// ---------------------------------------------------------------------------
+
+export interface StaffSchedule {
+  id: string;
+  work_days: number[];
+  entry_time: string | null;
+  exit_time: string | null;
+  break_minutes: number;
+  late_tolerance: number;
+}
+
+const toMinutes = (hhmm: string | null) => {
+  if (!hhmm) return null;
+  const [h, m] = hhmm.split(":").map(Number);
+  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
+};
+
+const caracasClock = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Caracas", hour: "2-digit", minute: "2-digit", hour12: false });
+/** Minutos desde la medianoche de Caracas de un instante. */
+export function caracasMinutes(iso: string): number {
+  const [h, m] = caracasClock.format(new Date(iso)).split(":").map(Number);
+  return (h % 24) * 60 + m;
+}
+
+/** Día de la semana (0 = domingo) de un aaaa-mm-dd. */
+export function weekdayOf(day: string): number {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+/** Minutos que la persona debía trabajar ese día según su horario (0 si no le toca o no tiene horario). */
+export function expectedMinutes(s: StaffSchedule | undefined, day: string): number {
+  if (!s || !s.work_days.includes(weekdayOf(day))) return 0;
+  const a = toMinutes(s.entry_time);
+  const b = toMinutes(s.exit_time);
+  if (a === null || b === null || b <= a) return 0;
+  return Math.max(0, b - a - s.break_minutes);
+}
+
+export type DayStatus = "completa" | "en_turno" | "no_cerro" | "pendiente";
+
+export const DAY_STATUS_LABEL: Record<DayStatus, string> = {
+  completa: "Completa",
+  en_turno: "En turno",
+  no_cerro: "No cerró turno",
+  pendiente: "Pendiente revisión",
+};
+
+export function dayStatus(d: DaySummary, today: string): DayStatus {
+  if (d.pending > 0) return "pendiente";
+  if (d.open) return d.day === today ? "en_turno" : "no_cerro";
+  return "completa";
+}
+
+export type IncidentKind = "retraso" | "salida_anticipada" | "sin_salida" | "fuera_de_radio" | "pendiente";
+
+export const INCIDENT_LABEL: Record<IncidentKind, string> = {
+  retraso: "Retraso",
+  salida_anticipada: "Salida anticipada",
+  sin_salida: "Sin salida marcada",
+  fuera_de_radio: "Fuera de radio",
+  pendiente: "Pendiente de revisión",
+};
+
+export interface Incident {
+  kind: IncidentKind;
+  staffId: string;
+  day: string;
+  /** Minutos de retraso o de salida anticipada. */
+  minutes: number | null;
+  detail: string | null;
+}
+
+/** Radio de fichaje de cada sede, para saber si una marca quedó fuera. */
+export type RadiusByLocation = Record<string, number | null>;
+
+/** Incidencias de un día de una persona. */
+export function dayIncidents(
+  d: DaySummary,
+  dayEvents: ClockEvent[],
+  schedule: StaffSchedule | undefined,
+  radius: RadiusByLocation,
+  today: string,
+): Incident[] {
+  const out: Incident[] = [];
+  const base = { staffId: d.staffId, day: d.day };
+  if (d.lateMinutes > 0) out.push({ ...base, kind: "retraso", minutes: d.lateMinutes, detail: null });
+  const exit = toMinutes(schedule?.exit_time ?? null);
+  if (!d.open && d.lastOut && exit !== null && expectedMinutes(schedule, d.day) > 0) {
+    const early = exit - caracasMinutes(d.lastOut);
+    if (early > (schedule?.late_tolerance ?? 0)) out.push({ ...base, kind: "salida_anticipada", minutes: early, detail: null });
+  }
+  if (d.open && d.day < today) out.push({ ...base, kind: "sin_salida", minutes: null, detail: null });
+  for (const e of dayEvents) {
+    const r = e.location_id ? radius[e.location_id] : null;
+    if (e.status !== "rechazado" && e.distance_m !== null && r && e.distance_m > r) {
+      out.push({ ...base, kind: "fuera_de_radio", minutes: null, detail: `${KIND_LABEL[e.kind]} a ${Math.round(e.distance_m)} m (radio ${r} m)` });
+    }
+  }
+  if (d.pending > 0) out.push({ ...base, kind: "pendiente", minutes: null, detail: `${d.pending} ${d.pending === 1 ? "marca" : "marcas"}` });
+  return out;
+}
+
+export interface StaffMetrics {
+  staffId: string;
+  shifts: number;
+  closedShifts: number;
+  workedMinutes: number;
+  expectedMinutes: number;
+  overtimeMinutes: number;
+  lateCount: number;
+  lateMinutes: number;
+  earlyCount: number;
+  openCount: number;
+  outOfRange: number;
+  pending: number;
+  /** Entradas a tiempo sobre entradas, en %; null sin entradas. */
+  punctuality: number | null;
+}
+
+/** Métricas del periodo por persona. Las horas extra son lo trabajado por encima de lo que debía cada día. */
+export function staffMetrics(days: DaySummary[], incidents: Incident[], schedules: StaffSchedule[]): StaffMetrics[] {
+  const by = new Map<string, StaffMetrics>();
+  const empty = (staffId: string): StaffMetrics => ({
+    staffId,
+    shifts: 0,
+    closedShifts: 0,
+    workedMinutes: 0,
+    expectedMinutes: 0,
+    overtimeMinutes: 0,
+    lateCount: 0,
+    lateMinutes: 0,
+    earlyCount: 0,
+    openCount: 0,
+    outOfRange: 0,
+    pending: 0,
+    punctuality: null,
+  });
+  for (const d of days) {
+    const m = by.get(d.staffId) ?? empty(d.staffId);
+    const expected = expectedMinutes(schedules.find((s) => s.id === d.staffId), d.day);
+    by.set(d.staffId, {
+      ...m,
+      shifts: m.shifts + (d.firstIn ? 1 : 0),
+      closedShifts: m.closedShifts + (d.firstIn && !d.open ? 1 : 0),
+      workedMinutes: m.workedMinutes + d.workedMinutes,
+      expectedMinutes: m.expectedMinutes + expected,
+      overtimeMinutes: m.overtimeMinutes + Math.max(0, d.workedMinutes - expected),
+      lateMinutes: m.lateMinutes + d.lateMinutes,
+    });
+  }
+  for (const i of incidents) {
+    const m = by.get(i.staffId) ?? empty(i.staffId);
+    by.set(i.staffId, {
+      ...m,
+      lateCount: m.lateCount + (i.kind === "retraso" ? 1 : 0),
+      earlyCount: m.earlyCount + (i.kind === "salida_anticipada" ? 1 : 0),
+      openCount: m.openCount + (i.kind === "sin_salida" ? 1 : 0),
+      outOfRange: m.outOfRange + (i.kind === "fuera_de_radio" ? 1 : 0),
+      pending: m.pending + (i.kind === "pendiente" ? 1 : 0),
+    });
+  }
+  return [...by.values()].map((m) => ({
+    ...m,
+    punctuality: m.shifts > 0 ? Math.round(((m.shifts - m.lateCount) / m.shifts) * 100) : null,
+  }));
+}

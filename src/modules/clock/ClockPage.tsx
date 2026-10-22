@@ -1,11 +1,12 @@
 /**
- * Fichaje (add-on): quién está trabajando, registros por periodo, horas por
- * persona y configuración del personal (PIN y horario). Portado de
- * SublimeAdminFichaje.tsx (basicosystems@f551478b).
+ * Fichaje (add-on), como SublimeAdminFichaje (basicosystems@9cb08cd): quién
+ * está en turno, historial con revisión en lote, incidencias, métricas
+ * (horas, horas extra, puntualidad), personal con PIN y horario, y la
+ * ubicación de cada sede. Filtro por periodo y por empleado.
  */
 import { useMemo, useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
-import { Copy, RefreshCw } from "lucide-react";
+import { Clock, Copy, ExternalLink, MapPin, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import AppShell from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
@@ -17,24 +18,34 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTenant } from "@/core/tenant-context";
 import { canManageTeam, canSeeReports } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
-import { useLocations } from "@/modules/inventory/api";
+import { useLocations, useSaveLocation } from "@/modules/inventory/api";
+import type { Location } from "@/modules/inventory/lib";
 import { DataTable, ExportButton, type Column } from "@/modules/reports/components";
-import { PRESET_LABEL, caracasToday, presetRange, type DateRange, type RangePreset } from "@/modules/reports/dates";
+import { caracasToday, type DateRange } from "@/modules/reports/dates";
+import { CLOCK_PERIOD_LABEL, clockPeriodRange, type ClockPeriod } from "./periods";
 import { useClockActions, useClockEvents, useClockKey, useStaffClock, type StaffClock } from "./api";
 import {
+  DAY_STATUS_LABEL,
+  INCIDENT_LABEL,
   KIND_LABEL,
   STATUS_LABEL,
   WEEKDAYS,
   attendanceDays,
   caracasDay,
+  dayIncidents,
+  dayStatus,
   formatMinutes,
   presenceOf,
-  staffTotals,
+  staffMetrics,
   type ClockEvent,
   type ClockKind,
+  type DayStatus,
   type DaySummary,
+  type Incident,
+  type IncidentKind,
   type PresenceState,
-  type StaffTotals,
+  type RadiusByLocation,
+  type StaffMetrics,
 } from "./lib";
 
 const timeFmt = new Intl.DateTimeFormat("es-VE", { timeZone: "America/Caracas", hour: "2-digit", minute: "2-digit" });
@@ -50,60 +61,488 @@ const PRESENCE: Record<PresenceState, { label: string; className: string }> = {
 
 export default function ClockPage() {
   const { active } = useTenant();
-  const [preset, setPreset] = useState<RangePreset>("7d");
-  const range = useMemo<DateRange>(() => presetRange(preset), [preset]);
+  const [period, setPeriod] = useState<ClockPeriod>("week");
+  const [staffFilter, setStaffFilter] = useState<string>("");
+  const range = useMemo<DateRange>(() => clockPeriodRange(period), [period]);
   const today = caracasToday();
   const { data: staff = [] } = useStaffClock();
-  const { data: events = [], isLoading } = useClockEvents(range);
+  const { data: allEvents = [], isLoading } = useClockEvents(range);
+  const { data: todayAll = [] } = useClockEvents(useMemo(() => ({ from: today, to: today }), [today]));
   const { data: locations = [] } = useLocations();
+  const { data: key } = useClockKey();
+
+  const events = useMemo(() => (staffFilter ? allEvents.filter((e) => e.staff_id === staffFilter) : allEvents), [allEvents, staffFilter]);
+  const days = useMemo(() => attendanceDays(events), [events]);
+  const radius = useMemo<RadiusByLocation>(() => Object.fromEntries(locations.map((l) => [l.id, l.latitude !== null ? l.clock_radius_m : null])), [locations]);
+  const incidents = useMemo(
+    () =>
+      days.flatMap((d) =>
+        dayIncidents(
+          d,
+          events.filter((e) => e.staff_id === d.staffId && caracasDay(e.event_at) === d.day),
+          staff.find((s) => s.id === d.staffId),
+          radius,
+          today,
+        ),
+      ),
+    [days, events, staff, radius, today],
+  );
 
   if (!canSeeReports(active?.role)) return <Navigate to="/" replace />;
 
   const nameOf = (id: string) => staff.find((s) => s.id === id)?.name ?? "—";
   const locationName = (id: string | null) => (id ? (locations.find((l) => l.id === id)?.name ?? "—") : "—");
   const pending = events.filter((e) => e.status === "revisar").length;
+  const publicUrl = key ? `/fichar/${key}` : null;
+
+  const filters = (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap gap-1" role="group" aria-label="Periodo">
+        {(Object.keys(CLOCK_PERIOD_LABEL) as ClockPeriod[]).map((p) => (
+          <Button key={p} size="sm" variant={period === p ? "default" : "outline"} onClick={() => setPeriod(p)}>
+            {CLOCK_PERIOD_LABEL[p]}
+          </Button>
+        ))}
+      </div>
+      <select
+        aria-label="Empleado"
+        className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+        value={staffFilter}
+        onChange={(e) => setStaffFilter(e.target.value)}
+      >
+        <option value="">Todos los empleados</option>
+        {staff.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.name}
+          </option>
+        ))}
+      </select>
+      <span className="text-xs text-muted-foreground">
+        {range.from === range.to ? range.from : `${range.from} a ${range.to}`}
+      </span>
+    </div>
+  );
 
   return (
     <AppShell wide>
-      <div>
-        <h1 className="text-2xl">Fichaje</h1>
-        <p className="text-sm text-muted-foreground">Entradas, salidas y descansos del personal, desde su teléfono.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-primary/10">
+            <Clock className="h-5 w-5 text-primary" aria-hidden />
+          </div>
+          <div>
+            <h1 className="text-2xl">Fichaje</h1>
+            <p className="text-sm text-muted-foreground">Control de asistencia del equipo, desde su teléfono.</p>
+          </div>
+        </div>
+        {publicUrl && (
+          <Button asChild variant="outline">
+            <a href={publicUrl} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="h-4 w-4" /> Vista pública
+            </a>
+          </Button>
+        )}
       </div>
-      <Tabs defaultValue="hoy" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="hoy">Hoy</TabsTrigger>
-          <TabsTrigger value="registros">Registros{pending > 0 ? ` (${pending})` : ""}</TabsTrigger>
-          <TabsTrigger value="horas">Horas</TabsTrigger>
-          <TabsTrigger value="personal">Personal</TabsTrigger>
+      <Tabs defaultValue="turno" className="space-y-4">
+        <TabsList className="h-auto flex-wrap">
+          <TabsTrigger value="turno">En turno</TabsTrigger>
+          <TabsTrigger value="historial">Historial{pending > 0 ? ` (${pending})` : ""}</TabsTrigger>
+          <TabsTrigger value="incidencias">Incidencias{incidents.length > 0 ? ` (${incidents.length})` : ""}</TabsTrigger>
+          <TabsTrigger value="metricas">Métricas</TabsTrigger>
+          <TabsTrigger value="horarios">Personal y horarios</TabsTrigger>
+          <TabsTrigger value="sedes">Sedes</TabsTrigger>
         </TabsList>
-        <TabsContent value="hoy">
-          <TodayPanel staff={staff} events={events.filter((e) => caracasDay(e.event_at) === today)} locationName={locationName} />
+        <TabsContent value="turno">
+          <TodayPanel staff={staff} events={todayAll} locationName={locationName} />
         </TabsContent>
-        <TabsContent value="registros" className="space-y-3">
-          <PresetPicker value={preset} onChange={setPreset} />
-          <RecordsPanel events={events} staff={staff} loading={isLoading} nameOf={nameOf} locationName={locationName} />
+        <TabsContent value="historial" className="space-y-3">
+          {filters}
+          <HistoryPanel days={days} events={events} staff={staff} loading={isLoading} today={today} nameOf={nameOf} locationName={locationName} range={range} />
         </TabsContent>
-        <TabsContent value="horas" className="space-y-3">
-          <PresetPicker value={preset} onChange={setPreset} />
-          <HoursPanel events={events} nameOf={nameOf} range={range} />
+        <TabsContent value="incidencias" className="space-y-3">
+          {filters}
+          <IncidentsPanel incidents={incidents} nameOf={nameOf} />
         </TabsContent>
-        <TabsContent value="personal" className="space-y-4">
+        <TabsContent value="metricas" className="space-y-3">
+          {filters}
+          <MetricsPanel days={days} incidents={incidents} staff={staff} nameOf={nameOf} range={range} />
+        </TabsContent>
+        <TabsContent value="horarios" className="space-y-4">
           <LinkCard canRegenerate={canManageTeam(active?.role)} />
           <StaffPanel staff={staff} locationName={locationName} />
+        </TabsContent>
+        <TabsContent value="sedes">
+          <SitesPanel locations={locations.filter((l) => l.is_active && !l.deleted_at)} />
         </TabsContent>
       </Tabs>
     </AppShell>
   );
 }
 
-function PresetPicker({ value, onChange }: { value: RangePreset; onChange: (p: RangePreset) => void }) {
+const DAY_STATUS_CLASS: Record<DayStatus, string> = {
+  completa: "border-emerald-500/50 text-emerald-700 dark:text-emerald-400",
+  en_turno: "border-primary text-primary",
+  no_cerro: "border-destructive/50 text-destructive",
+  pendiente: "border-amber-500/50 text-amber-700 dark:text-amber-400",
+};
+
+function HistoryPanel({
+  days,
+  events,
+  staff,
+  loading,
+  today,
+  nameOf,
+  locationName,
+  range,
+}: {
+  days: DaySummary[];
+  events: ClockEvent[];
+  staff: StaffClock[];
+  loading: boolean;
+  today: string;
+  nameOf: (id: string) => string;
+  locationName: (id: string | null) => string;
+  range: DateRange;
+}) {
+  const cols: Column<DaySummary>[] = [
+    { header: "Fecha", value: (r) => r.day },
+    { header: "Empleado", value: (r) => nameOf(r.staffId) },
+    { header: "Entrada", value: (r) => hhmm(r.firstIn), align: "right" },
+    { header: "Salida", value: (r) => (r.open ? "sin marcar" : hhmm(r.lastOut)), align: "right" },
+    { header: "Horas", value: (r) => Math.round((r.workedMinutes / 60) * 100) / 100, render: (r) => formatMinutes(r.workedMinutes), align: "right" },
+    {
+      header: "Estado",
+      value: (r) => DAY_STATUS_LABEL[dayStatus(r, today)],
+      render: (r) => (
+        <Badge variant="outline" className={DAY_STATUS_CLASS[dayStatus(r, today)]}>
+          {DAY_STATUS_LABEL[dayStatus(r, today)]}
+        </Badge>
+      ),
+    },
+  ];
   return (
-    <div className="flex flex-wrap gap-1" role="group" aria-label="Periodo">
-      {(Object.keys(PRESET_LABEL) as RangePreset[]).map((p) => (
-        <Button key={p} size="sm" variant={value === p ? "default" : "outline"} onClick={() => onChange(p)}>
-          {PRESET_LABEL[p]}
+    <div className="space-y-4">
+      <Card className="space-y-2 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold">Registros</p>
+            <p className="text-xs text-muted-foreground">
+              {days.length} {days.length === 1 ? "turno" : "turnos"} en el periodo
+            </p>
+          </div>
+          <ExportButton fileName={`fichajes-${range.from}-${range.to}`} rows={days} columns={cols} />
+        </div>
+        {loading ? <p className="mono-cap text-xs text-muted-foreground">Cargando…</p> : <DataTable rows={days} columns={cols} rowKey={(r) => `${r.staffId}-${r.day}`} empty="Sin fichajes en este periodo." />}
+      </Card>
+      <MarksPanel events={events} staff={staff} nameOf={nameOf} locationName={locationName} />
+    </div>
+  );
+}
+
+/** Marcas sueltas: revisar una o varias a la vez y registrar a mano. */
+function MarksPanel({
+  events,
+  staff,
+  nameOf,
+  locationName,
+}: {
+  events: ClockEvent[];
+  staff: StaffClock[];
+  nameOf: (id: string) => string;
+  locationName: (id: string | null) => string;
+}) {
+  const { reviewMany } = useClockActions();
+  const [onlyPending, setOnlyPending] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const shown = (onlyPending ? events.filter((e) => e.status === "revisar") : events).slice(0, 500);
+  const allSelected = shown.length > 0 && shown.every((e) => selected.has(e.id));
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const decide = (status: "aprobado" | "rechazado", ids: string[]) => {
+    const note = status === "rechazado" ? window.prompt(`Motivo para rechazar ${ids.length === 1 ? "el fichaje" : `${ids.length} fichajes`}`) : null;
+    if (status === "rechazado" && !note?.trim()) return;
+    reviewMany.mutate(
+      { eventIds: ids, status, note },
+      {
+        onSuccess: (n) => {
+          toast.success(`${n} ${n === 1 ? "fichaje" : "fichajes"} ${status === "aprobado" ? "aprobados" : "rechazados"}`);
+          setSelected(new Set());
+        },
+        onError: (err) => toast.error("No se pudo guardar", { description: err.message }),
+      },
+    );
+  };
+
+  return (
+    <Card className="space-y-3 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold">Marcas</p>
+        <ManualEventForm staff={staff} />
+      </div>
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            aria-label="Seleccionar todos"
+            checked={allSelected}
+            onChange={() => setSelected(allSelected ? new Set() : new Set(shown.map((e) => e.id)))}
+          />
+          Seleccionar todos
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={onlyPending} onChange={(e) => setOnlyPending(e.target.checked)} />
+          Solo pendientes de revisión
+        </label>
+        {selected.size > 0 && (
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" disabled={reviewMany.isPending} onClick={() => decide("aprobado", [...selected])}>
+              Aprobar {selected.size}
+            </Button>
+            <Button size="sm" variant="ghost" className="text-destructive" disabled={reviewMany.isPending} onClick={() => decide("rechazado", [...selected])}>
+              Rechazar {selected.size}
+            </Button>
+          </div>
+        )}
+      </div>
+      {shown.length === 0 && <p className="text-sm text-muted-foreground">Sin marcas en el periodo.</p>}
+      <ul className="divide-y rounded-xl border">
+        {shown.map((e) => (
+          <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+            <label className="flex min-w-0 items-start gap-2">
+              <input type="checkbox" aria-label="Seleccionar fichaje" className="mt-1" checked={selected.has(e.id)} onChange={() => toggle(e.id)} />
+              <span className="min-w-0">
+                <span className="block">
+                  <b>{nameOf(e.staff_id)}</b> · {KIND_LABEL[e.kind]} · <span className="num">{dateTimeFmt.format(new Date(e.event_at))}</span>
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  {[
+                    locationName(e.location_id),
+                    e.source === "admin" ? "Registrado a mano" : e.distance_m !== null ? `a ${Math.round(e.distance_m)} m` : "sin ubicación de la sede",
+                    e.late_minutes ? `${e.late_minutes} min tarde` : null,
+                    e.note,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              </span>
+            </label>
+            <div className="flex items-center gap-2">
+              {e.status !== "ok" && <Badge variant={e.status === "rechazado" ? "outline" : "secondary"}>{STATUS_LABEL[e.status]}</Badge>}
+              {e.status === "revisar" && (
+                <>
+                  <Button size="sm" variant="outline" onClick={() => decide("aprobado", [e.id])}>
+                    Aprobar
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => decide("rechazado", [e.id])}>
+                    Rechazar
+                  </Button>
+                </>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+function IncidentsPanel({ incidents, nameOf }: { incidents: Incident[]; nameOf: (id: string) => string }) {
+  const [kind, setKind] = useState<IncidentKind | "all">("all");
+  const counts = useMemo(() => {
+    const c = {} as Record<IncidentKind, number>;
+    (Object.keys(INCIDENT_LABEL) as IncidentKind[]).forEach((k) => (c[k] = incidents.filter((i) => i.kind === k).length));
+    return c;
+  }, [incidents]);
+  const shown = (kind === "all" ? incidents : incidents.filter((i) => i.kind === kind)).sort((a, b) => b.day.localeCompare(a.day));
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-1" role="group" aria-label="Tipo de incidencia">
+        <Button size="sm" variant={kind === "all" ? "default" : "outline"} onClick={() => setKind("all")}>
+          Todas ({incidents.length})
         </Button>
-      ))}
+        {(Object.keys(INCIDENT_LABEL) as IncidentKind[]).map((k) => (
+          <Button key={k} size="sm" variant={kind === k ? "default" : "outline"} onClick={() => setKind(k)}>
+            {INCIDENT_LABEL[k]} ({counts[k]})
+          </Button>
+        ))}
+      </div>
+      {shown.length === 0 && <p className="text-sm text-muted-foreground">Sin incidencias en este periodo.</p>}
+      <ul className="divide-y rounded-xl border bg-card">
+        {shown.map((i, n) => (
+          <li key={`${i.staffId}-${i.day}-${i.kind}-${n}`} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+            <span>
+              <b>{nameOf(i.staffId)}</b> · {i.day}
+              {i.detail ? <span className="text-muted-foreground"> · {i.detail}</span> : null}
+            </span>
+            <span className="flex items-center gap-2">
+              {i.minutes !== null && <span className="num text-xs">{i.minutes} min</span>}
+              <Badge variant="outline" className={i.kind === "pendiente" ? "" : "border-destructive/40 text-destructive"}>
+                {INCIDENT_LABEL[i.kind]}
+              </Badge>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function MetricsPanel({
+  days,
+  incidents,
+  staff,
+  nameOf,
+  range,
+}: {
+  days: DaySummary[];
+  incidents: Incident[];
+  staff: StaffClock[];
+  nameOf: (id: string) => string;
+  range: DateRange;
+}) {
+  const rows = useMemo(() => staffMetrics(days, incidents, staff).sort((a, b) => nameOf(a.staffId).localeCompare(nameOf(b.staffId))), [days, incidents, staff, nameOf]);
+  const sum = (f: (m: StaffMetrics) => number) => rows.reduce((a, m) => a + f(m), 0);
+  const shifts = sum((m) => m.shifts);
+  const late = sum((m) => m.lateCount);
+  const worked = sum((m) => m.workedMinutes);
+  const expected = sum((m) => m.expectedMinutes);
+  const cols: Column<StaffMetrics>[] = [
+    { header: "Empleado", value: (r) => nameOf(r.staffId) },
+    { header: "Turnos", value: (r) => r.shifts, align: "right" },
+    { header: "Trabajadas", value: (r) => Math.round((r.workedMinutes / 60) * 100) / 100, render: (r) => formatMinutes(r.workedMinutes), align: "right" },
+    { header: "Debía", value: (r) => Math.round((r.expectedMinutes / 60) * 100) / 100, render: (r) => (r.expectedMinutes ? formatMinutes(r.expectedMinutes) : "Sin horario"), align: "right" },
+    {
+      header: "Cumplimiento",
+      value: (r) => (r.expectedMinutes ? Math.round((r.workedMinutes / r.expectedMinutes) * 100) : null),
+      render: (r) => (r.expectedMinutes ? `${Math.round((r.workedMinutes / r.expectedMinutes) * 100)} %` : "—"),
+      align: "right",
+    },
+    { header: "Horas extra", value: (r) => Math.round((r.overtimeMinutes / 60) * 100) / 100, render: (r) => formatMinutes(r.overtimeMinutes), align: "right" },
+    { header: "Retrasos", value: (r) => r.lateCount, align: "right" },
+    { header: "Min. de retraso", value: (r) => r.lateMinutes, align: "right" },
+    { header: "Salidas anticipadas", value: (r) => r.earlyCount, align: "right" },
+    { header: "Puntualidad", value: (r) => r.punctuality, render: (r) => (r.punctuality === null ? "—" : `${r.punctuality} %`), align: "right" },
+  ];
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Kpi label="Turnos cerrados" value={`${sum((m) => m.closedShifts)} / ${shifts}`} />
+        <Kpi label="Trabajadas / Debía" value={`${formatMinutes(worked)}`} hint={expected ? `de ${formatMinutes(expected)}` : "Sin horarios cargados"} />
+        <Kpi label="Horas extra" value={formatMinutes(sum((m) => m.overtimeMinutes))} />
+        <Kpi label="Puntualidad" value={shifts ? `${Math.round(((shifts - late) / shifts) * 100)} %` : "—"} hint={`${late} ${late === 1 ? "retraso" : "retrasos"}`} />
+        <Kpi label="Minutos de retraso" value={String(sum((m) => m.lateMinutes))} />
+        <Kpi label="Salidas anticipadas" value={String(sum((m) => m.earlyCount))} />
+        <Kpi label="Sin salida marcada" value={String(sum((m) => m.openCount))} />
+        <Kpi label="Fuera de radio" value={String(sum((m) => m.outOfRange))} />
+      </div>
+      <Card className="space-y-2 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold">Detalle por empleado</p>
+            <p className="text-xs text-muted-foreground">Las horas extra son lo trabajado por encima de lo que debía cada día según su horario.</p>
+          </div>
+          <ExportButton fileName={`metricas-fichaje-${range.from}-${range.to}`} rows={rows} columns={cols} />
+        </div>
+        <DataTable rows={rows} columns={cols} rowKey={(r) => r.staffId} empty="Sin fichajes en este periodo." />
+      </Card>
+    </div>
+  );
+}
+
+function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="min-w-0 rounded-xl border bg-card p-3">
+      <p className="mono-cap text-[10px] text-muted-foreground">{label}</p>
+      <p className="num text-lg font-bold leading-tight">{value}</p>
+      {hint && <p className="truncate text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+/** Ubicación de cada sede para fichar: tomarla desde la tienda con el teléfono y ajustar el radio. */
+function SitesPanel({ locations }: { locations: Location[] }) {
+  const save = useSaveLocation();
+  const [locating, setLocating] = useState<string | null>(null);
+  const store = (loc: Location, patch: Partial<Location>, message: string) =>
+    save.mutate({ ...loc, ...patch }, { onSuccess: () => toast.success(message), onError: (err) => toast.error("No se pudo guardar", { description: err.message }) });
+  const takeHere = (loc: Location) => {
+    if (!navigator.geolocation) return toast.error("Este equipo no da la ubicación");
+    setLocating(loc.id);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(null);
+        store(
+          loc,
+          { latitude: Number(pos.coords.latitude.toFixed(6)), longitude: Number(pos.coords.longitude.toFixed(6)) },
+          `Ubicación de ${loc.name} guardada (precisión ${Math.round(pos.coords.accuracy)} m)`,
+        );
+      },
+      (err) => {
+        setLocating(null);
+        toast.error("No se pudo obtener la ubicación", { description: err.message });
+      },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  };
+  if (locations.length === 0) return <p className="text-sm text-muted-foreground">Crea una sede en Sedes.</p>;
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        El personal solo ficha dentro del radio de su sede. Toma la ubicación estando en la tienda. Sin ubicación, los fichajes de esa sede quedan por revisar.
+      </p>
+      <ul className="grid gap-3 md:grid-cols-2">
+        {locations.map((loc) => (
+          <li key={loc.id} className="space-y-3 rounded-xl border bg-card p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" aria-hidden />
+                <p className="font-semibold">{loc.name}</p>
+              </div>
+              {loc.latitude !== null ? <Badge>Con ubicación</Badge> : <Badge variant="outline">Sin ubicación</Badge>}
+            </div>
+            {loc.latitude !== null && (
+              <p className="num text-xs text-muted-foreground">
+                {loc.latitude}, {loc.longitude} ·{" "}
+                <a className="underline" href={`https://www.openstreetmap.org/?mlat=${loc.latitude}&mlon=${loc.longitude}#map=18/${loc.latitude}/${loc.longitude}`} target="_blank" rel="noopener noreferrer">
+                  ver en el mapa
+                </a>
+              </p>
+            )}
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="space-y-1">
+                <Label htmlFor={`radius-${loc.id}`} className="text-xs">
+                  Radio (m)
+                </Label>
+                <Input
+                  id={`radius-${loc.id}`}
+                  inputMode="numeric"
+                  className="h-9 w-24"
+                  defaultValue={loc.clock_radius_m}
+                  onBlur={(e) => {
+                    const n = Math.min(2000, Math.max(20, Math.round(Number(e.target.value)) || 100));
+                    e.target.value = String(n);
+                    if (n !== loc.clock_radius_m) store(loc, { clock_radius_m: n }, `Radio de ${loc.name}: ${n} m`);
+                  }}
+                />
+              </div>
+              <Button variant="outline" disabled={locating === loc.id || save.isPending} onClick={() => takeHere(loc)}>
+                {locating === loc.id ? "Ubicando…" : loc.latitude !== null ? "Tomar de nuevo aquí" : "Usar mi ubicación"}
+              </Button>
+              {loc.latitude !== null && (
+                <Button variant="ghost" disabled={save.isPending} onClick={() => store(loc, { latitude: null, longitude: null }, `Se quitó la ubicación de ${loc.name}`)}>
+                  Quitar
+                </Button>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -144,72 +583,6 @@ function TodayPanel({ staff, events, locationName }: { staff: StaffClock[]; even
         );
       })}
     </ul>
-  );
-}
-
-function RecordsPanel({
-  events,
-  staff,
-  loading,
-  nameOf,
-  locationName,
-}: {
-  events: ClockEvent[];
-  staff: StaffClock[];
-  loading: boolean;
-  nameOf: (id: string) => string;
-  locationName: (id: string | null) => string;
-}) {
-  const { review } = useClockActions();
-  const [onlyPending, setOnlyPending] = useState(false);
-  const shown = onlyPending ? events.filter((e) => e.status === "revisar") : events;
-  const decide = (eventId: string, status: "aprobado" | "rechazado") =>
-    review.mutate({ eventId, status }, { onError: (err) => toast.error("No se pudo guardar", { description: err.message }) });
-
-  return (
-    <div className="space-y-3">
-      <ManualEventForm staff={staff} />
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={onlyPending} onChange={(e) => setOnlyPending(e.target.checked)} />
-        Solo por revisar
-      </label>
-      {loading && <p className="mono-cap text-xs text-muted-foreground">Cargando…</p>}
-      {!loading && shown.length === 0 && <p className="text-sm text-muted-foreground">Sin fichajes en el periodo.</p>}
-      <ul className="divide-y rounded-xl border bg-card">
-        {shown.slice(0, 500).map((e) => (
-          <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
-            <div>
-              <p>
-                <b>{nameOf(e.staff_id)}</b> · {KIND_LABEL[e.kind]} · <span className="num">{dateTimeFmt.format(new Date(e.event_at))}</span>
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {[
-                  locationName(e.location_id),
-                  e.source === "admin" ? "Registrado a mano" : e.distance_m !== null ? `a ${Math.round(e.distance_m)} m` : "sin ubicación de la sede",
-                  e.late_minutes ? `${e.late_minutes} min tarde` : null,
-                  e.note,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {e.status !== "ok" && <Badge variant={e.status === "rechazado" ? "outline" : "secondary"}>{STATUS_LABEL[e.status]}</Badge>}
-              {e.status === "revisar" && (
-                <>
-                  <Button size="sm" variant="outline" onClick={() => decide(e.id, "aprobado")}>
-                    Aprobar
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => decide(e.id, "rechazado")}>
-                    Rechazar
-                  </Button>
-                </>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }
 
@@ -270,47 +643,6 @@ function ManualEventForm({ staff }: { staff: StaffClock[] }) {
         Cancelar
       </Button>
     </form>
-  );
-}
-
-function HoursPanel({ events, nameOf, range }: { events: ClockEvent[]; nameOf: (id: string) => string; range: DateRange }) {
-  const days = useMemo(() => attendanceDays(events), [events]);
-  const totals = useMemo(() => staffTotals(days).sort((a, b) => nameOf(a.staffId).localeCompare(nameOf(b.staffId))), [days, nameOf]);
-  const totalCols: Column<StaffTotals>[] = [
-    { header: "Persona", value: (r) => nameOf(r.staffId) },
-    { header: "Días", value: (r) => r.days, align: "right" },
-    { header: "Horas", value: (r) => Math.round((r.workedMinutes / 60) * 100) / 100, render: (r) => formatMinutes(r.workedMinutes), align: "right" },
-    { header: "Días con atraso", value: (r) => r.lateDays, align: "right" },
-    { header: "Minutos de atraso", value: (r) => r.lateMinutes, align: "right" },
-    { header: "Días sin salida", value: (r) => r.openDays, align: "right" },
-  ];
-  const dayCols: Column<DaySummary>[] = [
-    { header: "Día", value: (r) => r.day },
-    { header: "Persona", value: (r) => nameOf(r.staffId) },
-    { header: "Entrada", value: (r) => hhmm(r.firstIn), align: "right" },
-    { header: "Salida", value: (r) => (r.open ? "Sin salida" : hhmm(r.lastOut)), align: "right" },
-    { header: "Descanso", value: (r) => r.breakMinutes, render: (r) => formatMinutes(r.breakMinutes), align: "right" },
-    { header: "Trabajado", value: (r) => Math.round((r.workedMinutes / 60) * 100) / 100, render: (r) => formatMinutes(r.workedMinutes), align: "right" },
-    { header: "Atraso (min)", value: (r) => r.lateMinutes, align: "right" },
-  ];
-  return (
-    <div className="space-y-4">
-      <Card className="space-y-2 p-4">
-        <div className="flex items-center justify-between gap-2">
-          <p className="mono-cap text-xs text-muted-foreground">Totales por persona</p>
-          <ExportButton fileName={`horas-${range.from}-${range.to}`} rows={totals} columns={totalCols} />
-        </div>
-        <DataTable rows={totals} columns={totalCols} rowKey={(r) => r.staffId} />
-      </Card>
-      <Card className="space-y-2 p-4">
-        <div className="flex items-center justify-between gap-2">
-          <p className="mono-cap text-xs text-muted-foreground">Por día</p>
-          <ExportButton fileName={`fichajes-${range.from}-${range.to}`} rows={days} columns={dayCols} />
-        </div>
-        <DataTable rows={days} columns={dayCols} rowKey={(r) => `${r.staffId}-${r.day}`} />
-        <p className="text-xs text-muted-foreground">Sale de las marcas de cada día; las rechazadas no cuentan. Un día sin salida cuenta hasta la última marca.</p>
-      </Card>
-    </div>
   );
 }
 
@@ -383,7 +715,13 @@ function StaffRow({ staff, locationName }: { staff: StaffClock; locationName: st
           <p className="font-semibold">{staff.name}</p>
           <p className="text-xs text-muted-foreground">{[staff.job_title, locationName === "—" ? "Todas las sedes" : locationName].filter(Boolean).join(" · ")}</p>
         </div>
-        {staff.clock_enabled ? <Badge>Ficha con PIN</Badge> : <Badge variant="outline">Sin PIN</Badge>}
+        {!staff.clock_enabled ? (
+          <Badge variant="outline">Sin PIN</Badge>
+        ) : staff.pin_temporary ? (
+          <Badge variant="secondary" title="La persona crea su PIN personal la primera vez que entra al enlace">PIN temporal</Badge>
+        ) : (
+          <Badge>PIN personal</Badge>
+        )}
       </div>
       <form
         className="flex flex-wrap items-end gap-2"
@@ -393,7 +731,7 @@ function StaffRow({ staff, locationName }: { staff: StaffClock; locationName: st
             { staffId: staff.id, pin },
             {
               onSuccess: () => {
-                toast.success(`PIN asignado a ${staff.name}. Dáselo en persona.`);
+                toast.success(`PIN temporal asignado a ${staff.name}. Dáselo en persona: al entrar crea el suyo.`);
                 setPinText("");
               },
               onError: fail,
@@ -403,7 +741,7 @@ function StaffRow({ staff, locationName }: { staff: StaffClock; locationName: st
       >
         <div className="space-y-1">
           <Label htmlFor={`pin-${staff.id}`} className="text-xs">
-            {staff.clock_enabled ? "Cambiar PIN" : "Asignar PIN"} (6 números)
+            {staff.clock_enabled ? "Nuevo PIN temporal" : "Asignar PIN temporal"} (6 números)
           </Label>
           <Input
             id={`pin-${staff.id}`}
