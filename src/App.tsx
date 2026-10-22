@@ -6,6 +6,8 @@ import { AuthProvider, useAuth } from "@/core/auth";
 import { TenantProvider, useTenant } from "@/core/tenant-context";
 import Login from "@/pages/Login";
 import ResetPassword from "@/pages/ResetPassword";
+import Signup from "@/pages/Signup";
+import Platform from "@/pages/Platform";
 import NewPasswordForm from "@/components/NewPasswordForm";
 import SelectTenant from "@/pages/SelectTenant";
 import NoAccess from "@/pages/NoAccess";
@@ -81,6 +83,9 @@ export default function App() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/restablecer" element={<ResetPassword />} />
+              {/* Alta de un negocio con el enlace de la plataforma. */}
+              <Route path="/alta/:code" element={<Signup />} />
+              <Route path="/plataforma" element={<Platform />} />
               {/* Fichar desde el teléfono: sin sesión, con la clave del negocio y el PIN. */}
               <Route path="/fichar/:clockKey" element={<PunchPage />} />
               <Route

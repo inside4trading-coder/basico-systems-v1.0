@@ -3,7 +3,15 @@ export type TenantStatus = "active" | "suspended";
 
 export interface Membership {
   role: TenantRole;
-  tenant: { id: string; name: string; slug: string; status: TenantStatus; base_currency: string };
+  tenant: {
+    id: string;
+    name: string;
+    slug: string;
+    status: TenantStatus;
+    base_currency: string;
+    trial_ends_at?: string | null;
+    onboarding_completed_at?: string | null;
+  };
 }
 
 /**

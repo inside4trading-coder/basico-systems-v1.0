@@ -90,15 +90,15 @@ select is_empty(
   'funciones SECURITY DEFINER de public: nunca anon; authenticated solo si están marcadas @rpc'
 );
 
--- anon entra al esquema app solo para fichar desde el teléfono: de lo que
--- corre con permisos elevados, únicamente estas dos funciones.
+-- anon entra al esquema app solo para fichar desde el teléfono y para ver un
+-- enlace de alta: de lo que corre con permisos elevados, únicamente estas.
 select is(
   array(select p.proname::text
         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'app' and p.prosecdef and has_function_privilege('anon', p.oid, 'EXECUTE')
         order by 1),
-  array['clock_lookup', 'clock_punch', 'clock_set_personal_pin'],
-  'anon solo ejecuta, de las funciones SECURITY DEFINER de app, clock_lookup, clock_punch y clock_set_personal_pin'
+  array['clock_lookup', 'clock_punch', 'clock_set_personal_pin', 'signup_invite_info'],
+  'anon solo ejecuta, de las funciones SECURITY DEFINER de app, las de fichar y signup_invite_info'
 );
 
 -- ---------------------------------------------------------------------------
