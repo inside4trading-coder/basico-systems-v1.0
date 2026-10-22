@@ -73,7 +73,7 @@ select throws_ok(
 
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
 select results_eq(
-  $$ select c ->> 'seller', (c ->> 'tickets')::int from jsonb_array_elements(public.report_sales(current_date, current_date) -> 'by_seller') c order by 1 $$,
+  $$ select c ->> 'seller', (c ->> 'tickets')::int from jsonb_array_elements(public.report_sales((now() at time zone 'America/Caracas')::date, (now() at time zone 'America/Caracas')::date) -> 'by_seller') c order by 1 $$,
   $$ values ('Luis'::text, 1), ('Yolimar', 2) $$,
   'por cajero: el personal por su nombre; la venta sin cajero explícito queda con el de la sesión'
 );
