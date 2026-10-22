@@ -175,3 +175,88 @@ export function useExtendTrial() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["platform"] }),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Asistente inicial
+// ---------------------------------------------------------------------------
+
+export interface OnboardingState {
+  onboarding_steps: Record<string, string>;
+  onboarding_completed_at: string | null;
+}
+
+export function useOnboardingState(tenantId: string | undefined) {
+  return useQuery({
+    queryKey: ["onboarding", tenantId],
+    enabled: Boolean(tenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenants")
+        .select("onboarding_steps, onboarding_completed_at")
+        .eq("id", tenantId!)
+        .single();
+      if (error) fail(error, "No se pudo cargar el asistente");
+      return data as OnboardingState;
+    },
+  });
+}
+
+export interface BusinessSetup {
+  name: string;
+  legalName: string;
+  taxId: string;
+  phone: string;
+  address: string;
+  locationName: string;
+  rateSource: "bcv" | "manual";
+  manualRate: number | null;
+  specialTaxpayer: boolean;
+}
+
+export function useSetupBusiness() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: BusinessSetup) => {
+      const { error } = await supabase.rpc("onboarding_setup_business", {
+        p_name: input.name,
+        p_legal_name: input.legalName,
+        p_tax_id: input.taxId,
+        p_phone: input.phone,
+        p_address: input.address,
+        p_location_name: input.locationName,
+        p_rate_source: input.rateSource,
+        p_manual_rate: input.manualRate,
+        p_special_taxpayer: input.specialTaxpayer,
+      });
+      if (error) fail(error, "No se pudo guardar el negocio");
+    },
+    // Cambian el nombre, la tasa, las sedes y las cajas.
+    onSuccess: () => qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "platform-admin" }),
+  });
+}
+
+export function useMarkStep() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (step: "productos" | "equipo" | "listo") => {
+      const { error } = await supabase.rpc("onboarding_mark", { p_step: step });
+      if (error) fail(error, "No se pudo guardar el avance");
+    },
+    onSuccess: (_data, step) => {
+      qc.invalidateQueries({ queryKey: ["onboarding"] });
+      if (step === "listo") qc.invalidateQueries({ queryKey: ["memberships"] });
+    },
+  });
+}
+
+export function useProductCount(tenantId: string | undefined) {
+  return useQuery({
+    queryKey: ["onboarding", tenantId, "products"],
+    enabled: Boolean(tenantId),
+    queryFn: async () => {
+      const { count, error } = await supabase.from("products").select("id", { count: "exact", head: true }).is("deleted_at", null);
+      if (error) fail(error, "No se pudieron contar los productos");
+      return count ?? 0;
+    },
+  });
+}

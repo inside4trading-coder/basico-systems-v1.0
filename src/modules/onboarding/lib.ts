@@ -34,3 +34,16 @@ export function parseSignupCode(raw: string): string | null {
 export function signupUrl(code: string, origin: string = window.location.origin): string {
   return `${origin}/alta/${code}`;
 }
+
+export const WIZARD_STEPS = ["negocio", "productos", "equipo", "listo"] as const;
+export type WizardStep = (typeof WIZARD_STEPS)[number];
+
+/** Primer paso pendiente del asistente según lo guardado en tenants.onboarding_steps. */
+export function firstPendingStep(done: Record<string, unknown> | null | undefined): WizardStep {
+  return WIZARD_STEPS.find((step) => step !== "listo" && !done?.[step]) ?? "listo";
+}
+
+/** Pasos hechos de los tres que se configuran (para «2/3» en el inicio). */
+export function doneCount(done: Record<string, unknown> | null | undefined): number {
+  return WIZARD_STEPS.filter((step) => step !== "listo" && done?.[step]).length;
+}

@@ -5,7 +5,8 @@
  * plantilla para la próxima vez.
  */
 import { useMemo, useState, type ChangeEvent } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
+import { useMarkStep } from "@/modules/onboarding/api";
 import { Download, FileSpreadsheet, Upload } from "lucide-react";
 import { toast } from "sonner";
 import AppShell from "@/components/AppShell";
@@ -37,6 +38,10 @@ interface LoadedFile {
 
 export default function ImportPage() {
   const { active } = useTenant();
+  // Desde el asistente inicial: volver a él y dar el paso por hecho al importar.
+  const [params] = useSearchParams();
+  const fromWizard = params.get("desde") === "bienvenida";
+  const markStep = useMarkStep();
   const { data: catalog } = useCatalog();
   const { data: locations = [] } = useLocations();
   const { data: defs = [] } = useAttributeDefs();
@@ -150,6 +155,7 @@ export default function ImportPage() {
           setResult(r);
           if (r.already_applied) toast.info("Este archivo ya se había importado; no se aplicó otra vez.");
           else toast.success("Importación aplicada");
+          if (fromWizard) markStep.mutate("productos");
         },
         onError: (err) => toast.error("La importación no se aplicó", { description: `${err.message}. No se guardó ningún cambio.` }),
       },
@@ -174,7 +180,7 @@ export default function ImportPage() {
     <AppShell wide>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <BackLink to="/inventario">Inventario</BackLink>
+          {fromWizard ? <BackLink to="/bienvenida">Primeros pasos</BackLink> : <BackLink to="/inventario">Inventario</BackLink>}
           <h1 className="text-2xl">Importar y exportar</h1>
           <p className="text-sm text-muted-foreground">Carga tu catálogo y existencias desde Excel o CSV</p>
         </div>
@@ -379,6 +385,11 @@ export default function ImportPage() {
               {result.already_applied ? "Este archivo ya estaba importado. " : "Listo: "}
               {result.products_created} productos nuevos, {result.variants_created} variantes nuevas, {result.variants_updated} actualizadas,{" "}
               {result.stock_rows_applied} existencias ajustadas.
+              {fromWizard && (
+                <Button asChild size="sm" className="ml-3">
+                  <Link to="/bienvenida">Volver a los primeros pasos</Link>
+                </Button>
+              )}
             </Card>
           )}
         </Card>

@@ -20,6 +20,8 @@ import { useReceivablesSummary } from "@/modules/finance/receivables/api";
 import { Greeting, MyShortcuts, RecentActivity } from "@/modules/home/HomeShortcuts";
 import { growers, topProfit, topSellers } from "@/modules/home/lib";
 import { useLocations } from "@/modules/inventory/api";
+import { useOnboardingState } from "@/modules/onboarding/api";
+import { doneCount } from "@/modules/onboarding/lib";
 import { useRestock } from "@/modules/inventory/restockApi";
 import { formatMoney, formatQty } from "@/modules/pos/cart";
 import { elapsedSince, isStaleSession } from "@/modules/pos/sessionRules";
@@ -33,11 +35,13 @@ export default function Home() {
   const { data: locations, isLoading } = useLocations();
   const noLocations = !isLoading && (locations?.length ?? 0) === 0;
   const supervisor = canSeeReports(active?.role);
+  const setupPending = canSupervise(active?.role) && active?.tenant.onboarding_completed_at === null;
 
   return (
     <AppShell wide={supervisor && entitlements.reportes}>
       <Greeting />
-      {noLocations && canSupervise(active?.role) ? (
+      {setupPending && <SetupCard tenantId={active?.tenant.id} />}
+      {noLocations && canSupervise(active?.role) && !setupPending ? (
         <div className="space-y-3 rounded-surface border bg-card p-4">
           <p className="text-sm">Para empezar, crea al menos una sede: la tienda o el almacén donde está tu mercancía.</p>
           <Button asChild>
@@ -52,6 +56,23 @@ export default function Home() {
         </>
       )}
     </AppShell>
+  );
+}
+
+/** Mientras el dueño no termine los primeros pasos, el inicio lo lleva al asistente. */
+function SetupCard({ tenantId }: { tenantId: string | undefined }) {
+  const { data } = useOnboardingState(tenantId);
+  const count = doneCount(data?.onboarding_steps);
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-primary/40 bg-primary/5 p-4">
+      <div className="space-y-0.5">
+        <p className="font-medium">Termina de configurar tu negocio</p>
+        <p className="text-sm text-muted-foreground">{count} de 3 pasos listos: datos y sede, productos y equipo.</p>
+      </div>
+      <Button asChild>
+        <Link to="/bienvenida">{count === 0 ? "Empezar" : "Continuar"}</Link>
+      </Button>
+    </div>
   );
 }
 
