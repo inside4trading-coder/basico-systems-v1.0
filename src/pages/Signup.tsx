@@ -45,6 +45,7 @@ export default function Signup() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [existing, setExisting] = useState(false);
+  const [accepted, setAccepted] = useState(false);
 
   if (authLoading || info.isLoading) {
     return (
@@ -90,6 +91,7 @@ export default function Signup() {
     event.preventDefault();
     setError("");
     if (businessName.trim().length < 2) return setError("Escribe el nombre de tu negocio");
+    if (!accepted) return setError("Para continuar, acepta los términos y la política de privacidad");
 
     if (session) {
       setBusy(true);
@@ -203,6 +205,26 @@ export default function Signup() {
             <p className="text-xs text-muted-foreground">Al menos 8 caracteres, con letras y números.</p>
           </>
         )}
+
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 accent-[hsl(var(--primary))]"
+            checked={accepted}
+            onChange={(e) => setAccepted(e.target.checked)}
+          />
+          <span>
+            Acepto los{" "}
+            <Link to="/terminos" target="_blank" className="underline underline-offset-4">
+              términos y condiciones
+            </Link>{" "}
+            y la{" "}
+            <Link to="/privacidad" target="_blank" className="underline underline-offset-4">
+              política de privacidad
+            </Link>
+            .
+          </span>
+        </label>
 
         {error && (
           <p role="alert" className="text-sm text-destructive">
