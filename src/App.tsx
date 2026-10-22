@@ -8,6 +8,8 @@ import Login from "@/pages/Login";
 import ResetPassword from "@/pages/ResetPassword";
 import Signup from "@/pages/Signup";
 import Platform from "@/pages/Platform";
+import TermsPage from "@/pages/legal/TermsPage";
+import PrivacyPage from "@/pages/legal/PrivacyPage";
 import OnboardingPage from "@/modules/onboarding/OnboardingPage";
 import NewPasswordForm from "@/components/NewPasswordForm";
 import SelectTenant from "@/pages/SelectTenant";
@@ -89,6 +91,8 @@ export default function App() {
               {/* Alta de un negocio con el enlace de la plataforma. */}
               <Route path="/alta/:code" element={<Signup />} />
               <Route path="/plataforma" element={<Platform />} />
+              <Route path="/terminos" element={<TermsPage />} />
+              <Route path="/privacidad" element={<PrivacyPage />} />
               {/* Fichar desde el teléfono: sin sesión, con la clave del negocio y el PIN. */}
               <Route path="/fichar/:clockKey" element={<PunchPage />} />
               <Route

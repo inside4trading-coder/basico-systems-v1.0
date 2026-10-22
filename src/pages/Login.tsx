@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Navigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import BrandMark from "@/components/BrandMark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -165,6 +165,15 @@ export default function Login() {
             </button>
           )}
           <p>El acceso es por invitación del administrador de tu negocio.</p>
+          <p>
+            <Link to="/terminos" className="underline-offset-4 hover:underline">
+              Términos
+            </Link>
+            {" · "}
+            <Link to="/privacidad" className="underline-offset-4 hover:underline">
+              Privacidad
+            </Link>
+          </p>
         </div>
       </div>
     </main>
