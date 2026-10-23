@@ -11,13 +11,13 @@ import { supabase } from "@/core/supabase";
 import { useTenant } from "@/core/tenant-context";
 import { createSignupAccount, INVALID_REASONS, redeemInvite, useInviteInfo } from "@/modules/onboarding/api";
 
-function Card({ children }: { children: ReactNode }) {
+function Card({ children, kicker = "Crea tu negocio" }: { children: ReactNode; kicker?: string }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-6 rounded-surface border bg-card p-8 shadow-sm">
         <div className="flex flex-col items-center gap-3">
           <BrandMark className="text-4xl" />
-          <p className="mono-cap text-xs text-muted-foreground">Crea tu negocio</p>
+          <p className="mono-cap text-xs text-muted-foreground">{kicker}</p>
         </div>
         {children}
       </div>
@@ -28,6 +28,8 @@ function Card({ children }: { children: ReactNode }) {
 /**
  * /alta/:code: alta de un negocio con el enlace que manda la plataforma.
  * Sin sesión crea la cuenta y el negocio; con sesión solo crea el negocio.
+ * Si el negocio ya se creó con este enlace, los demás correos de la lista
+ * entran a él con su rol (modo «unirse»).
  */
 export default function Signup() {
   const { code = "" } = useParams();
@@ -75,22 +77,23 @@ export default function Signup() {
   }
 
   const invite = info.data;
+  const joining = invite.mode === "unirse";
   const loginWithCode = `/login?alta=${encodeURIComponent(code)}`;
 
   const finish = async (accountEmail: string) => {
-    const tenantId = await redeemInvite(code, businessName.trim());
-    // Primero se recuerda el negocio nuevo y luego se recargan las membresías:
+    const tenantId = await redeemInvite(code, joining ? "" : businessName.trim());
+    // Primero se recuerda el negocio y luego se recargan las membresías:
     // así arranca directo en él.
     selectTenant(tenantId);
     await qc.refetchQueries({ queryKey: ["memberships"] });
-    navigate("/bienvenida", { replace: true });
+    navigate(joining ? "/" : "/bienvenida", { replace: true });
     return accountEmail;
   };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
-    if (businessName.trim().length < 2) return setError("Escribe el nombre de tu negocio");
+    if (!joining && businessName.trim().length < 2) return setError("Escribe el nombre de tu negocio");
     if (!accepted) return setError("Para continuar, acepta los términos y la política de privacidad");
 
     if (session) {
@@ -130,7 +133,8 @@ export default function Signup() {
     return (
       <Card>
         <p className="text-sm text-muted-foreground">
-          Ya tienes una cuenta con este correo. Entra con tu contraseña y crearás el negocio con este mismo enlace.
+          Ya tienes una cuenta con este correo. Entra con tu contraseña y {joining ? "entrarás al negocio" : "crearás el negocio"} con
+          este mismo enlace.
         </p>
         <Button asChild className="w-full">
           <Link to={loginWithCode}>Entrar para continuar</Link>
@@ -140,21 +144,32 @@ export default function Signup() {
   }
 
   return (
-    <Card>
+    <Card kicker={joining ? "Únete al equipo" : undefined}>
       <div className="space-y-1 text-center">
-        <h1 className="text-lg font-semibold">Bienvenido a B Systems</h1>
-        <p className="text-sm text-muted-foreground">Alta para {invite.label}. En un minuto tienes tu negocio listo.</p>
+        {joining ? (
+          <>
+            <h1 className="text-lg font-semibold">Únete a {invite.tenant_name}</h1>
+            <p className="text-sm text-muted-foreground">Te invitaron al equipo de {invite.tenant_name} en B Systems.</p>
+          </>
+        ) : (
+          <>
+            <h1 className="text-lg font-semibold">Bienvenido a B Systems</h1>
+            <p className="text-sm text-muted-foreground">Alta para {invite.label}. En un minuto tienes tu negocio listo.</p>
+          </>
+        )}
       </div>
 
       <form onSubmit={submit} className="space-y-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="business">Nombre del negocio</Label>
-          <Input id="business" required value={businessName} onChange={(e) => setBusinessName(e.target.value)} maxLength={80} />
-        </div>
+        {!joining && (
+          <div className="space-y-1.5">
+            <Label htmlFor="business">Nombre del negocio</Label>
+            <Input id="business" required value={businessName} onChange={(e) => setBusinessName(e.target.value)} maxLength={80} />
+          </div>
+        )}
 
         {session ? (
           <p className="text-sm text-muted-foreground">
-            Lo crearás con tu cuenta {session.user.email}.{" "}
+            {joining ? "Entrarás" : "Lo crearás"} con tu cuenta {session.user.email}.{" "}
             <button type="button" className="underline underline-offset-4" onClick={signOut}>
               Usar otra cuenta
             </button>
@@ -177,6 +192,9 @@ export default function Signup() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="tu@negocio.com"
               />
+              {invite.restricted && !invite.email && (
+                <p className="text-xs text-muted-foreground">Usa el correo al que te enviaron este enlace.</p>
+              )}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -232,7 +250,7 @@ export default function Signup() {
           </p>
         )}
         <Button type="submit" className="w-full" disabled={busy}>
-          {busy ? "Creando tu negocio…" : "Crear mi negocio"}
+          {busy ? (joining ? "Entrando…" : "Creando tu negocio…") : joining ? "Entrar al negocio" : "Crear mi negocio"}
         </Button>
       </form>
 

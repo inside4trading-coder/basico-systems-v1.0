@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { doneCount, firstPendingStep, inviteEntitlements, parseSignupCode, showTrialNotice, signupUrl, trialDaysLeft } from "./lib";
+import {
+  cleanRecipients,
+  doneCount,
+  firstPendingStep,
+  inviteEntitlements,
+  parseSignupCode,
+  recipientsProblem,
+  showTrialNotice,
+  signupUrl,
+  trialDaysLeft,
+} from "./lib";
 
 describe("trialDaysLeft", () => {
   const now = new Date("2026-10-22T12:00:00Z");
@@ -77,5 +87,24 @@ describe("firstPendingStep", () => {
   it("cuenta los pasos hechos", () => {
     expect(doneCount({ negocio: "x", equipo: "x", listo: "x" })).toBe(2);
     expect(doneCount(undefined)).toBe(0);
+  });
+});
+
+describe("recipientsProblem", () => {
+  it("sin correos el enlace queda abierto", () => {
+    expect(recipientsProblem([{ email: " ", role: "owner" }])).toBeNull();
+  });
+  it("pide un dueño, correos válidos y sin repetir", () => {
+    expect(recipientsProblem([{ email: "a@x.co", role: "admin" }])).toBe("Al menos un correo tiene que ser de un dueño");
+    expect(recipientsProblem([{ email: "a@x", role: "owner" }])).toBe("Correo no válido: a@x");
+    expect(recipientsProblem([{ email: "a@x.co", role: "owner" }, { email: "A@x.co ", role: "admin" }])).toBe("Correo repetido: a@x.co");
+    expect(recipientsProblem([{ email: "a@x.co", role: "owner" }, { email: "b@x.co", role: "admin" }])).toBeNull();
+  });
+  it("hasta 5 correos", () => {
+    const six = Array.from({ length: 6 }, (_, i) => ({ email: `u${i}@x.co`, role: i === 0 ? ("owner" as const) : ("admin" as const) }));
+    expect(recipientsProblem(six)).toBe("Hasta 5 correos por enlace");
+  });
+  it("limpia espacios, mayúsculas y filas vacías", () => {
+    expect(cleanRecipients([{ email: " A@X.co ", role: "owner" }, { email: "", role: "admin" }])).toEqual([{ email: "a@x.co", role: "owner" }]);
   });
 });

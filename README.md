@@ -142,13 +142,14 @@ si tocas la base.
 
 ## Alta de un negocio nuevo
 
-1. Un administrador de plataforma abre **Plataforma** y crea un **enlace de alta**: etiqueta, correo (opcional),
-   complementos, cupos, días de prueba y validez.
-2. El cliente abre `/alta/<código>`, acepta los términos y la privacidad y crea su cuenta y su negocio.
+1. Un administrador de plataforma abre **Plataforma** y crea un **enlace de alta**: etiqueta, hasta 5 correos con su
+   rol (dueño o administrador, opcional), complementos, cupos, días de prueba y validez.
+2. Un dueño de la lista abre `/alta/<código>`, acepta los términos y la privacidad y crea su cuenta y su negocio. Los
+   demás correos abren el mismo enlace después y entran al negocio con su rol.
 3. El **asistente de primeros pasos** (`/bienvenida`) guía los datos del negocio y la tasa, los productos y el equipo.
 4. Desde Plataforma se ve el estado de cada negocio, y se puede suspender, reactivar o extender la prueba.
 
-Cada enlace crea un solo negocio; con correo fijo solo sirve para ese correo.
+Cada enlace crea un solo negocio. Con correos, solo sirve para los de su lista; sin correos, cualquiera lo usa una vez.
 
 ## Alcance fiscal
 

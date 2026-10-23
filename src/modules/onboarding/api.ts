@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/core/supabase";
 import { useAuth } from "@/core/auth";
+import type { InviteRecipient } from "./lib";
 
 function fail(error: { message: string } | null, fallback: string): never {
   throw new Error(error?.message || fallback);
@@ -11,12 +12,22 @@ function fail(error: { message: string } | null, fallback: string): never {
 // ---------------------------------------------------------------------------
 
 export type InviteInfo =
-  | { valid: true; label: string; email: string | null }
+  | {
+      valid: true;
+      label: string;
+      /** crear: un dueño crea el negocio; unirse: el negocio existe y faltan correos de la lista. */
+      mode: "crear" | "unirse";
+      tenant_name: string | null;
+      /** Solo los correos de la lista pueden usarlo. */
+      restricted: boolean;
+      /** El único correo que puede usarlo ahora, si hay uno. */
+      email: string | null;
+    }
   | { valid: false; reason: "no_existe" | "usado" | "vencido" };
 
 export const INVALID_REASONS: Record<"no_existe" | "usado" | "vencido", string> = {
   no_existe: "Este enlace de alta no existe. Revisa que esté completo o pide uno nuevo.",
-  usado: "Este enlace ya se usó para crear un negocio. Si fuiste tú, entra con tu correo y contraseña.",
+  usado: "Este enlace ya se usó. Si ya tienes cuenta, entra con tu correo y contraseña.",
   vencido: "Este enlace de alta venció. Pide uno nuevo.",
 };
 
@@ -79,12 +90,12 @@ export interface PlatformInvite {
   id: string;
   code: string;
   label: string;
-  email: string | null;
+  recipients: { email: string; role: "owner" | "admin"; joined_at: string | null }[];
   entitlements: Record<string, boolean | number>;
   trial_days: number | null;
   expires_at: string;
   signups: number;
-  state: "valido" | "usado" | "vencido";
+  state: "valido" | "unirse" | "usado" | "vencido";
   tenant_id: string | null;
   tenant_name: string | null;
   redeemed_at: string | null;
@@ -130,7 +141,7 @@ export function usePlatformTenants() {
 
 export interface NewInvite {
   label: string;
-  email: string;
+  recipients: InviteRecipient[];
   entitlements: Record<string, boolean | number>;
   trialDays: number | null;
   validDays: number;
@@ -142,7 +153,7 @@ export function useCreateInvite() {
     mutationFn: async (input: NewInvite) => {
       const { data, error } = await supabase.rpc("platform_create_invite", {
         p_label: input.label,
-        p_email: input.email,
+        p_recipients: input.recipients,
         p_entitlements: input.entitlements,
         p_trial_days: input.trialDays,
         p_valid_days: input.validDays,
