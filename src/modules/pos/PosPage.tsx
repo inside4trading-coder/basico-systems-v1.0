@@ -7,7 +7,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowLeftRight, Minus, Plus, Search, Trash2, UserRound, Wallet } from "lucide-react";
 import { toast } from "sonner";
-import AppShell from "@/components/AppShell";
 import RateBadge from "@/components/RateBadge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -51,7 +50,8 @@ import { CashMovementDialog, CloseSessionDialog } from "./CashDialogs";
 import { HeldListDialog, HoldDialog } from "./HeldCarts";
 import { notifyHoldError, useHeldCarts, useHoldCart, useResumeCart } from "./heldApi";
 import OpenSessionScreen from "./OpenSessionScreen";
-import PaymentDialog, { type PaymentResult } from "./PaymentDialog";
+import PosShell from "./PosShell";
+import PaymentDialog, { type CheckoutDraft, type PaymentResult } from "./PaymentDialog";
 import ReceiptDialog from "./ReceiptDialog";
 import SalesSheet from "./sales/SalesSheet";
 import OfflineBar from "./offline/OfflineBar";
@@ -106,7 +106,7 @@ export default function PosPage() {
   };
 
   return (
-    <AppShell wide>
+    <PosShell>
       {sessions.isLoading ? (
         <p className="mono-cap text-xs text-muted-foreground">Cargando…</p>
       ) : session ? (
@@ -114,7 +114,7 @@ export default function PosPage() {
       ) : (
         <OpenSessionScreen onSelect={choose} />
       )}
-    </AppShell>
+    </PosShell>
   );
 }
 
@@ -126,6 +126,8 @@ interface CartDraft {
   note?: string;
   /** Cupón aplicado (se valida otra vez en el servidor al cobrar). */
   coupon?: AppliedCoupon | null;
+  /** Cobro a medias: pagos registrados, cliente, origen y nota. */
+  checkout?: CheckoutDraft | null;
 }
 
 const EMPTY_DRAFT: CartDraft = { lines: [], discountMode: "amount", discountValue: "", note: "" };
@@ -655,6 +657,8 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           channelRequired={tenantSettings?.channel_required ?? false}
           busy={sale.isPending}
           initialNote={draft.note ?? ""}
+          saved={draft.checkout ?? null}
+          onSave={(checkout) => setDraft((d) => (d.lines.length > 0 ? { ...d, checkout } : d))}
           onConfirm={confirm}
         />
       )}
@@ -685,7 +689,8 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           busy={hold.isPending}
           onConfirm={(label) =>
             hold.mutate(
-              { label, payload: draft, items: draft.lines.length, total: totals.total },
+              // En espera va el cliente y la nota, no los pagos a medias.
+              { label, payload: { ...draft, checkout: draft.checkout ? { ...draft.checkout, payments: [] } : null }, items: draft.lines.length, total: totals.total },
               {
                 onSuccess: () => {
                   toast.success(`Carrito de ${label} en espera`);
