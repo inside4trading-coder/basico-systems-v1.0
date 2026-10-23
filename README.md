@@ -85,7 +85,7 @@ Requisitos: Node 22 y, para la base local, Docker.
 ```bash
 npm install
 cp .env.example .env.local   # URL y clave publicable del proyecto Supabase
-npm run dev                  # http://localhost:8092
+npm run dev -- --port 8092   # http://localhost:8092
 ```
 
 Solo se usan claves publicables en el front. Nunca pongas claves secretas ni de servicio en variables `VITE_*`
@@ -111,7 +111,7 @@ desde Equipo, con un enlace de alta (`/plataforma` → «Enlaces de alta», que 
 
 | Comando | Qué hace |
 |---|---|
-| `npm run dev` | Servidor de desarrollo. |
+| `npm run dev` | Servidor de desarrollo (puerto 8080 por defecto; usa `-- --port 8092` para que coincida con las redirecciones de Auth local). |
 | `npm run typecheck` | TypeScript estricto. |
 | `npm run lint` | ESLint. |
 | `npm test` | Vitest (lógica de carrito, dinero, permisos, menú, importación…). |
