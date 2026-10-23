@@ -2,9 +2,14 @@
  * Cobro mixto: varios métodos, cada uno en su moneda, con IGTF y vuelto.
  * Portado de PosPaymentSheet.tsx (basicosystems@f551478b); los métodos, sus
  * campos y bancos salen de la configuración del negocio.
+ *
+ * Orden de la pantalla: total y lo que falta, cliente y nota, pagos (uno por
+ * método; cada uno nuevo propone lo que falta en su moneda), vuelto y origen.
+ * Todo lo que se va registrando se guarda en el borrador del carrito: si se
+ * cierra la pestaña o se va la luz, al volver el cobro sigue donde estaba.
  */
-import { useEffect, useMemo, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -19,6 +24,7 @@ import {
   paymentSummary,
   round2,
   suggestedAmount,
+  toBase,
   type MoneySettings,
   type PaymentDraft,
 } from "./cart";
@@ -35,6 +41,15 @@ export interface PaymentResult {
   channelId: string | null;
 }
 
+/** Lo que se lleva registrado del cobro; vive en el borrador del carrito. */
+export interface CheckoutDraft {
+  payments: PaymentDraft[];
+  customer: SaleCustomer;
+  channelId: string | null;
+  note: string;
+  changeCurrency: string;
+}
+
 export default function PaymentDialog({
   open,
   onOpenChange,
@@ -45,6 +60,8 @@ export default function PaymentDialog({
   channelRequired,
   busy,
   initialNote = "",
+  saved,
+  onSave,
   onConfirm,
 }: {
   open: boolean;
@@ -58,6 +75,10 @@ export default function PaymentDialog({
   busy: boolean;
   /** Nota que ya se escribió desde el POS. */
   initialNote?: string;
+  /** Cobro a medias guardado (se retoma al abrir). */
+  saved?: CheckoutDraft | null;
+  /** Guarda el cobro a medias en el borrador del carrito. */
+  onSave?: (draft: CheckoutDraft) => void;
   onConfirm: (result: PaymentResult) => void;
 }) {
   const [payments, setPayments] = useState<PaymentDraft[]>([]);
@@ -69,21 +90,33 @@ export default function PaymentDialog({
   const [customer, setCustomer] = useState<SaleCustomer>({});
   const [channelId, setChannelId] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const loaded = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
-    setPayments([]);
+    if (!open) {
+      loaded.current = false;
+      return;
+    }
     setMethodId(null);
     setAmount(null);
     setFields({});
     setError(null);
-    setCustomer({});
-    setChannelId(null);
-    setNote(initialNote);
-    setChangeCurrency(money.baseCurrency);
-    // La nota solo se toma al abrir el cobro.
+    setPayments(saved?.payments ?? []);
+    setCustomer(saved?.customer ?? {});
+    setChannelId(saved?.channelId ?? null);
+    setNote(saved?.note ?? initialNote);
+    setChangeCurrency(saved?.changeCurrency ?? money.baseCurrency);
+    loaded.current = true;
+    // El borrador y la nota solo se toman al abrir el cobro.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, money.baseCurrency]);
+
+  // Cada cambio queda en el borrador del carrito.
+  useEffect(() => {
+    if (!open || !loaded.current || !onSave) return;
+    onSave({ payments, customer, channelId, note, changeCurrency });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payments, customer, channelId, note, changeCurrency]);
 
   const usable = useMemo(
     () => methods.filter((m) => m.is_active && (m.currency === money.baseCurrency || m.currency === money.localCurrency)),
@@ -96,6 +129,7 @@ export default function PaymentDialog({
   // El vuelto sale de la gaveta en cualquiera de las monedas del negocio (p. ej. pagan en $ y se devuelve en Bs.).
   const changeCurrencies = [money.baseCurrency, ...(money.localCurrency && money.rate ? [money.localCurrency] : [])];
   const change = summary.excess > 0 ? changeIn(summary.excess, changeCurrency, money) : null;
+  const missingLocal = money.localCurrency ? fromBase(summary.missing, money.localCurrency, money) : null;
 
   const pick = (id: string) => {
     setMethodId(id);
@@ -149,6 +183,7 @@ export default function PaymentDialog({
   };
 
   const local = fromBase(total, money.localCurrency ?? "", money);
+  const nextNumber = payments.length + 1;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
@@ -157,119 +192,161 @@ export default function PaymentDialog({
           <DialogTitle>Cobrar</DialogTitle>
         </DialogHeader>
 
-        <div className="rounded-xl border bg-card p-4">
-          <p className="mono-cap text-[10px] text-muted-foreground">Total a cobrar</p>
-          {local !== null && money.localCurrency ? (
-            <>
-              <p className="num text-3xl font-bold">{formatMoney(local, money.localCurrency)}</p>
-              <p className="num text-sm text-muted-foreground">
-                {formatMoney(total, money.baseCurrency)} · tasa {money.rate?.toLocaleString("es-VE", { maximumFractionDigits: 4 })}
-              </p>
-            </>
-          ) : (
-            <p className="num text-3xl font-bold">{formatMoney(total, money.baseCurrency)}</p>
-          )}
+        {/* Total y lo que falta: siempre arriba. */}
+        <div className="space-y-3 rounded-xl border bg-card p-4">
+          <div>
+            <p className="mono-cap text-[10px] text-muted-foreground">Total a cobrar</p>
+            {local !== null && money.localCurrency ? (
+              <>
+                <p className="num text-3xl font-bold">{formatMoney(local, money.localCurrency)}</p>
+                <p className="num text-sm text-muted-foreground">
+                  {formatMoney(total, money.baseCurrency)} · tasa {money.rate?.toLocaleString("es-VE", { maximumFractionDigits: 4 })}
+                </p>
+              </>
+            ) : (
+              <p className="num text-3xl font-bold">{formatMoney(total, money.baseCurrency)}</p>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3 border-t pt-3 sm:grid-cols-4">
+            <Amount label="Total" value={formatMoney(total, money.baseCurrency)} />
+            <Amount label="Pagado" value={formatMoney(summary.applied, money.baseCurrency)} />
+            <Amount
+              label="Falta"
+              value={formatMoney(summary.missing, money.baseCurrency)}
+              hint={summary.missing > 0 && missingLocal !== null && money.localCurrency ? formatMoney(missingLocal, money.localCurrency) : undefined}
+              tone={summary.missing > 0 ? "text-destructive" : undefined}
+            />
+            <Amount label="Vuelto" value={formatMoney(summary.excess, money.baseCurrency)} tone={summary.excess > 0 ? "text-primary" : undefined} />
+            {summary.igtf > 0 && <p className="col-span-full text-xs text-muted-foreground">Incluye IGTF {formatMoney(summary.igtf, money.baseCurrency)}</p>}
+          </div>
         </div>
 
-        {payments.length > 0 && (
-          <ul className="space-y-2" aria-label="Pagos registrados">
-            {payments.map((p) => {
-              const m = usable.find((x) => x.id === p.methodId);
-              return (
-                <li key={p.key} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
-                  <div className="min-w-0">
-                    <p className="font-semibold">{m?.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {[p.bank, p.reference ? `Ref. ${p.reference}` : null, ...Object.values(p.extra ?? {})].filter(Boolean).join(" · ") || "—"}
-                    </p>
-                  </div>
-                  <span className="num font-semibold">{formatMoney(p.amount, m?.currency ?? money.baseCurrency)}</span>
-                  <button
-                    type="button"
-                    className="text-muted-foreground hover:text-destructive"
-                    aria-label="Quitar pago"
-                    onClick={() => setPayments(payments.filter((x) => x.key !== p.key))}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-
-        {summary.missing > 0 && (
-          <div className="space-y-3 rounded-xl border p-4">
-            <p className="mono-cap text-[10px] text-muted-foreground">{payments.length === 0 ? "Método de pago" : "Otro método"}</p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {usable.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => pick(m.id)}
-                  className={cn(
-                    "min-h-16 rounded-lg border p-2 text-left text-sm font-semibold transition-colors",
-                    m.id === methodId ? "border-primary bg-accent" : "hover:border-primary/40",
-                  )}
-                >
-                  {m.name}
-                  {!m.name.includes(m.currency) && <span className="mono block text-[10px] font-normal text-muted-foreground">{m.currency}</span>}
-                </button>
-              ))}
-            </div>
-            {method && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label htmlFor="pay-amount">Monto en {method.currency}</Label>
-                  <Input
-                    id="pay-amount"
-                    inputMode="decimal"
-                    value={shown}
-                    onChange={(e) => setAmount(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && addPayment()}
-                    className="num h-12 text-lg font-bold"
-                    autoFocus
-                  />
-                </div>
-                {method.fields.map((f) => (
-                  <div key={f.id} className="space-y-1">
-                    <Label htmlFor={`pay-${f.id}`}>
-                      {f.label}
-                      {f.required ? " *" : ""}
-                    </Label>
-                    {f.type === "bank" && method.banks.length > 0 ? (
-                      <Select value={fields[f.id] ?? ""} onValueChange={(v) => setFields({ ...fields, [f.id]: v })}>
-                        <SelectTrigger id={`pay-${f.id}`} className="h-12">
-                          <SelectValue placeholder="Banco" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {method.banks.map((b) => (
-                            <SelectItem key={b} value={b}>
-                              {b}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Input id={`pay-${f.id}`} value={fields[f.id] ?? ""} onChange={(e) => setFields({ ...fields, [f.id]: e.target.value })} className="h-12" />
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            {error && <p className="text-xs font-semibold text-destructive">{error}</p>}
-            <Button className="h-12 w-full" disabled={!method} onClick={addPayment}>
-              Usar este método
-            </Button>
+        {/* Cliente y nota: arriba y abiertos. */}
+        <div className="space-y-3 rounded-xl border p-4 text-sm">
+          <p className="font-semibold">Cliente y nota (opcional)</p>
+          <CustomerPicker value={customer} onChange={setCustomer} />
+          <div className="space-y-1">
+            <Label htmlFor="pay-note">Nota</Label>
+            <Input id="pay-note" value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
-        )}
+        </div>
 
-        <div className="grid grid-cols-2 gap-3 rounded-xl border p-4 sm:grid-cols-4">
-          <Amount label="Total" value={formatMoney(total, money.baseCurrency)} />
-          <Amount label="Pagado" value={formatMoney(summary.applied, money.baseCurrency)} />
-          <Amount label="Falta" value={formatMoney(summary.missing, money.baseCurrency)} tone={summary.missing > 0 ? "text-destructive" : undefined} />
-          <Amount label="Vuelto" value={formatMoney(summary.excess, money.baseCurrency)} tone={summary.excess > 0 ? "text-primary" : undefined} />
-          {summary.igtf > 0 && <p className="col-span-full text-xs text-muted-foreground">Incluye IGTF {formatMoney(summary.igtf, money.baseCurrency)}</p>}
+        {/* Pagos: uno por método; se pueden mezclar Bs. y REF. */}
+        <div className="space-y-3 rounded-xl border p-4">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="mono-cap text-[10px] text-muted-foreground">Pagos</p>
+            {payments.length > 0 && <p className="text-xs text-muted-foreground">Se pueden combinar varios métodos y monedas.</p>}
+          </div>
+
+          {payments.length > 0 && (
+            <ol className="space-y-2" aria-label="Pagos registrados">
+              {payments.map((p, i) => {
+                const m = usable.find((x) => x.id === p.methodId);
+                const base = m ? toBase(p.amount, m.currency, money) : null;
+                return (
+                  <li key={p.key} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
+                    <span className="mono w-5 text-xs text-muted-foreground">{i + 1}.</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold">{m?.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {[p.bank, p.reference ? `Ref. ${p.reference}` : null, ...Object.values(p.extra ?? {})].filter(Boolean).join(" · ") || "—"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="num font-semibold">{formatMoney(p.amount, m?.currency ?? money.baseCurrency)}</p>
+                      {m && m.currency !== money.baseCurrency && base !== null && (
+                        <p className="num text-xs text-muted-foreground">{formatMoney(base, money.baseCurrency)}</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label={`Quitar pago ${i + 1}`}
+                      onClick={() => setPayments(payments.filter((x) => x.key !== p.key))}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+
+          {summary.missing > 0 ? (
+            <div className="space-y-3 rounded-lg bg-muted/40 p-3">
+              <p className="text-sm font-semibold">
+                {payments.length === 0 ? "Elige el método de pago" : `Pago ${nextNumber}: elige otro método para lo que falta`}
+              </p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {usable.map((m) => {
+                  const rest = suggestedAmount(summary.missing, m, money);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => pick(m.id)}
+                      className={cn(
+                        "min-h-16 rounded-lg border bg-card p-2 text-left text-sm font-semibold transition-colors",
+                        m.id === methodId ? "border-primary bg-accent" : "hover:border-primary/40",
+                      )}
+                    >
+                      {m.name}
+                      <span className="num block text-[11px] font-normal text-muted-foreground">
+                        {rest > 0 ? formatMoney(rest, m.currency) : m.currency}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {method && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="pay-amount">Monto en {method.currency}</Label>
+                    <Input
+                      id="pay-amount"
+                      inputMode="decimal"
+                      value={shown}
+                      onChange={(e) => setAmount(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && addPayment()}
+                      className="num h-12 text-lg font-bold"
+                      autoFocus
+                    />
+                    <p className="text-xs text-muted-foreground">Cambia el monto si paga solo una parte; el resto va con otro método.</p>
+                  </div>
+                  {method.fields.map((f) => (
+                    <div key={f.id} className="space-y-1">
+                      <Label htmlFor={`pay-${f.id}`}>
+                        {f.label}
+                        {f.required ? " *" : ""}
+                      </Label>
+                      {f.type === "bank" && method.banks.length > 0 ? (
+                        <Select value={fields[f.id] ?? ""} onValueChange={(v) => setFields({ ...fields, [f.id]: v })}>
+                          <SelectTrigger id={`pay-${f.id}`} className="h-12">
+                            <SelectValue placeholder="Banco" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {method.banks.map((b) => (
+                              <SelectItem key={b} value={b}>
+                                {b}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input id={`pay-${f.id}`} value={fields[f.id] ?? ""} onChange={(e) => setFields({ ...fields, [f.id]: e.target.value })} className="h-12" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {error && <p className="text-xs font-semibold text-destructive">{error}</p>}
+              <Button className="h-12 w-full" disabled={!method} onClick={addPayment}>
+                <Plus /> {payments.length === 0 ? "Agregar pago" : `Agregar pago ${nextNumber}`}
+              </Button>
+            </div>
+          ) : (
+            payments.length > 0 && <p className="text-sm font-semibold text-primary">Total cubierto.</p>
+          )}
         </div>
 
         {summary.excess > 0 && summary.hasCash && (
@@ -306,17 +383,6 @@ export default function PaymentDialog({
           </div>
         )}
 
-        <details className="rounded-xl border p-4 text-sm">
-          <summary className="cursor-pointer font-semibold">Cliente y nota (opcional)</summary>
-          <div className="mt-3 grid gap-3">
-            <CustomerPicker value={customer} onChange={setCustomer} />
-            <div className="space-y-1">
-              <Label htmlFor="pay-note">Nota</Label>
-              <Input id="pay-note" value={note} onChange={(e) => setNote(e.target.value)} />
-            </div>
-          </div>
-        </details>
-
         <Button size="lg" className="h-14 w-full text-base" disabled={Boolean(blocker) || busy} onClick={finish}>
           {busy ? "Registrando venta…" : "Finalizar venta"}
         </Button>
@@ -326,11 +392,12 @@ export default function PaymentDialog({
   );
 }
 
-function Amount({ label, value, tone }: { label: string; value: string; tone?: string }) {
+function Amount({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: string }) {
   return (
     <div>
       <p className="mono-cap text-[10px] text-muted-foreground">{label}</p>
       <p className={cn("num font-bold", tone)}>{value}</p>
+      {hint && <p className={cn("num text-xs", tone)}>{hint}</p>}
     </div>
   );
 }
