@@ -32,7 +32,7 @@ export default function ReportsPage() {
   const [preset, setPreset] = useState<RangePreset | null>("7d");
   const [range, setRange] = useState<DateRange>(() => presetRange("7d"));
   const [location, setLocation] = useState(ALL);
-  const [tab, setTab] = useTabParam<string>(entitlements.administracion ? ["sales", "stock", "closures", "income"] : ["sales", "stock", "closures"], "sales");
+  const [tab, setTab] = useTabParam<string>(entitlements.administracion ? ["sales", "stock", "closures", "tax", "income"] : ["sales", "stock", "closures", "tax"], "sales");
 
   if (!can("reportes.ver")) return <Navigate to="/" replace />;
   const locationId = location === ALL ? null : location;
