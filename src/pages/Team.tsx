@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import InviteForm from "@/components/InviteForm";
 import PermissionsMatrix from "@/components/PermissionsMatrix";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTabParam } from "@/lib/useTabParam";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useLocations } from "@/modules/inventory/api";
 
@@ -23,6 +24,7 @@ interface TeamMember {
 }
 
 export default function Team() {
+  const [tab, setTab] = useTabParam(["personas", "permisos"] as const, "personas");
   const { active, can } = useTenant();
   const { session } = useAuth();
   const queryClient = useQueryClient();
@@ -83,7 +85,7 @@ export default function Team() {
     <AppShell>
         <h1 className="text-2xl">Equipo</h1>
 
-        <Tabs defaultValue="personas">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
           <TabsList>
             <TabsTrigger value="personas">Personas</TabsTrigger>
             <TabsTrigger value="permisos">Permisos por rol</TabsTrigger>

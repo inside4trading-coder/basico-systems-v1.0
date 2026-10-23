@@ -1,14 +1,26 @@
-import { useState } from "react";
+import { useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 
 /**
- * Pestaña inicial desde `?tab=` (los accesos de Inicio llevan directo a una
- * pestaña); si no viene o no está permitida, la de siempre.
+ * Pestaña de la página guardada en `?tab=`: los accesos de Inicio y el menú
+ * lateral llevan directo a una pestaña, y cambiar de pestaña actualiza la
+ * dirección. Si no viene o no está permitida, la de siempre.
  */
-export function useTabParam<T extends string>(allowed: readonly T[], fallback: T) {
-  const [params] = useSearchParams();
-  return useState<T>(() => {
-    const requested = params.get("tab");
-    return allowed.find((t) => t === requested) ?? fallback;
-  });
+export function useTabParam<T extends string>(allowed: readonly T[], fallback: T): [T, (tab: T) => void] {
+  const [params, setParams] = useSearchParams();
+  const requested = params.get("tab");
+  const tab = allowed.find((t) => t === requested) ?? fallback;
+  const setTab = useCallback(
+    (next: T) =>
+      setParams(
+        (prev) => {
+          const updated = new URLSearchParams(prev);
+          updated.set("tab", next);
+          return updated;
+        },
+        { replace: true },
+      ),
+    [setParams],
+  );
+  return [tab, setTab];
 }

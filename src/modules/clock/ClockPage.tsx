@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTenant } from "@/core/tenant-context";
 import { cn } from "@/lib/utils";
+import { useTabParam } from "@/lib/useTabParam";
 import { useLocations, useSaveLocation } from "@/modules/inventory/api";
 import type { Location } from "@/modules/inventory/lib";
 import { DataTable, ExportButton, type Column } from "@/modules/reports/components";
@@ -60,6 +61,7 @@ const PRESENCE: Record<PresenceState, { label: string; className: string }> = {
 
 export default function ClockPage() {
   const { active, can } = useTenant();
+  const [tab, setTab] = useTabParam(["turno", "historial", "incidencias", "metricas", "horarios", "sedes"] as const, "turno");
   const [period, setPeriod] = useState<ClockPeriod>("week");
   const [staffFilter, setStaffFilter] = useState<string>("");
   const range = useMemo<DateRange>(() => clockPeriodRange(period), [period]);
@@ -142,7 +144,7 @@ export default function ClockPage() {
           </Button>
         )}
       </div>
-      <Tabs defaultValue="turno" className="space-y-4">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="space-y-4">
         <TabsList className="h-auto flex-wrap">
           <TabsTrigger value="turno">En turno</TabsTrigger>
           <TabsTrigger value="historial">Historial{pending > 0 ? ` (${pending})` : ""}</TabsTrigger>

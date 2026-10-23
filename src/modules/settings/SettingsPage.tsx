@@ -4,6 +4,7 @@
  * posPaymentMethods.ts (basicosystems@f551478b).
  */
 import { useState, type FormEvent } from "react";
+import { useHashScroll } from "@/lib/useHashScroll";
 import { Navigate } from "react-router-dom";
 import { RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
@@ -55,25 +56,32 @@ const fmtRate = (n: number) => n.toLocaleString("es-VE", { minimumFractionDigits
 const errorToast = (title: string) => (err: Error) => toast.error(title, { description: err.message });
 
 export default function SettingsPage() {
-  const { active, can } = useTenant();
+  const { can } = useTenant();
+  useHashScroll();
   if (!(can("config.negocio") || can("caja.cupones") || can("caja.cajeros"))) return <Navigate to="/" replace />;
+  // Cada sección tiene un id: el menú lateral lleva directo a ella (/configuracion#tasa).
+  const section = (id: string, node: React.ReactNode) => (
+    <div id={id} className="scroll-mt-4">
+      {node}
+    </div>
+  );
   return (
     <AppShell>
       <h1 className="text-2xl">Configuración</h1>
-      {can("config.negocio") && <BusinessSection />}
+      {can("config.negocio") && section("negocio", <BusinessSection />)}
       {can("config.negocio") && (
         <>
-          <RateSection />
-          <TaxSection />
-          <PaymentMethodsSection />
+          {section("tasa", <RateSection />)}
+          {section("impuestos", <TaxSection />)}
+          {section("pagos", <PaymentMethodsSection />)}
         </>
       )}
-      {can("caja.cajeros") && <CashiersSection />}
-      {can("config.negocio") && <ChannelsSection />}
-      {can("caja.cupones") && <CouponsSection />}
-      {can("config.negocio") && <ClosingReminderSection />}
-      {can("config.negocio") && <PlanSection />}
-      {can("config.negocio") && <ExportSection />}
+      {can("caja.cajeros") && section("cajeros", <CashiersSection />)}
+      {can("config.negocio") && section("canales", <ChannelsSection />)}
+      {can("caja.cupones") && section("cupones", <CouponsSection />)}
+      {can("config.negocio") && section("cierre", <ClosingReminderSection />)}
+      {can("config.negocio") && section("plan", <PlanSection />)}
+      {can("config.negocio") && section("exportar", <ExportSection />)}
     </AppShell>
   );
 }
