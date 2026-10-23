@@ -25,8 +25,13 @@ insert into public.stocks (tenant_id, variant_id, location_id, on_hand) values
 
 select is(
   (select array_agg(name order by position) from public.sales_channels where tenant_id = 'aaaaaaaa-1111-1111-1111-111111111111'),
-  array['Tienda', 'WhatsApp', 'Instagram', 'Delivery'],
+  array['Tienda física', 'WhatsApp', 'Instagram', 'Cashea'],
   'un negocio nuevo trae cuatro orígenes'
+);
+select is(
+  (select array_agg(name order by position) from public.sales_channels where tenant_id = 'aaaaaaaa-1111-1111-1111-111111111111' and requires_fulfillment),
+  array['WhatsApp', 'Instagram', 'Cashea'],
+  'los orígenes a distancia piden modalidad'
 );
 
 -- Estos casos se escribieron con precios con IVA incluido (ventas anteriores a
@@ -40,15 +45,43 @@ select set_config('test.session', public.open_cash_session('aaaaaaaa-3333-3333-3
 select set_config('test.cash', (select id::text from public.payment_methods where code = 'cash_base'), true);
 select set_config('test.wa', (select id::text from public.sales_channels where name = 'WhatsApp'), true);
 
-create function pg_temp.sell(p_key text, p_channel uuid) returns jsonb language sql as $$
+select set_config('test.store', (select id::text from public.sales_channels where name = 'Tienda física'), true);
+
+create function pg_temp.sell(p_key text, p_channel uuid, p_fulfillment text default null, p_delivery jsonb default null)
+returns jsonb language sql as $$
   select public.register_sale(p_key, current_setting('test.session')::uuid,
     '[{"variant_id":"aaaaaaaa-5555-5555-5555-555555555551","qty":1}]',
     jsonb_build_array(jsonb_build_object('payment_method_id', current_setting('test.cash'), 'amount', 10)),
-    0, null, null, null, null, p_channel)
+    0, null, null, null, null, p_channel, null, p_fulfillment, p_delivery)
 $$;
 
-select lives_ok($$ select pg_temp.sell('ch-venta-01', current_setting('test.wa')::uuid) $$, 'vende con origen');
-select is((select ch.name from public.sales s join public.sales_channels ch on ch.id = s.channel_id), 'WhatsApp', 'y lo guarda');
+create function pg_temp.envio(p_carrier text default 'MRW', p_drop text default null) returns jsonb language sql as $$
+  select jsonb_build_object('first_name', 'Ana', 'last_name', 'Pérez', 'phone', '0414-1234567', 'doc', 'V-12345678',
+    'address', 'Calle 5, casa 10', 'municipality', 'Iribarren', 'state', 'Lara', 'carrier', p_carrier, 'extra', 'x')
+    - coalesce(p_drop, '')
+$$;
+
+select throws_ok($$ select pg_temp.sell('ch-modal-01', current_setting('test.wa')::uuid) $$, '23514',
+  'Elige si la venta es para retirar o para enviar', 'WhatsApp sin modalidad no cobra');
+select throws_ok($$ select pg_temp.sell('ch-modal-02', current_setting('test.wa')::uuid, 'domicilio') $$, '23514',
+  'Modalidad de entrega no válida', 'solo retiro o envío');
+select throws_ok($$ select pg_temp.sell('ch-modal-03', current_setting('test.store')::uuid, 'pickup') $$, '23514',
+  'Este origen no lleva modalidad de entrega', 'la tienda física no lleva modalidad');
+select throws_ok($$ select pg_temp.sell('ch-modal-04', current_setting('test.wa')::uuid, 'envio') $$, '23514',
+  'Faltan datos del envío', 'envío sin datos no cobra');
+select throws_ok($$ select pg_temp.sell('ch-modal-05', current_setting('test.wa')::uuid, 'envio', pg_temp.envio('MRW', 'state')) $$, '23514',
+  'Faltan datos del envío', 'falta el estado');
+select throws_ok($$ select pg_temp.sell('ch-modal-06', current_setting('test.wa')::uuid, 'envio', pg_temp.envio('Tealca')) $$, '23514',
+  'Empresa de envío no válida', 'solo MRW, Zoom o Liberty');
+select lives_ok($$ select pg_temp.sell('ch-modal-07', current_setting('test.wa')::uuid, 'envio', pg_temp.envio('Zoom')) $$, 'envío completo cobra');
+select is((select fulfillment from public.sales where idempotency_key = 'ch-modal-07'), 'envio', 'guarda la modalidad');
+select is((select delivery ->> 'carrier' from public.sales where idempotency_key = 'ch-modal-07'), 'Zoom', 'y la foto del envío');
+select ok((select not (delivery ? 'extra') from public.sales where idempotency_key = 'ch-modal-07'), 'sin campos ajenos');
+select lives_ok($$ select pg_temp.sell('ch-modal-08', current_setting('test.store')::uuid) $$, 'tienda física cobra sin modalidad');
+select is((select fulfillment from public.sales where idempotency_key = 'ch-modal-08'), null, 'y sin modalidad');
+
+select lives_ok($$ select pg_temp.sell('ch-venta-01', current_setting('test.wa')::uuid, 'pickup') $$, 'vende con origen');
+select is((select ch.name from public.sales s join public.sales_channels ch on ch.id = s.channel_id where s.idempotency_key = 'ch-venta-01'), 'WhatsApp', 'y lo guarda');
 select lives_ok($$ select pg_temp.sell('ch-venta-02', null) $$, 'sin obligación, el origen es opcional');
 
 select throws_ok(
@@ -63,7 +96,7 @@ update public.sales_channels set is_active = false where name = 'WhatsApp';
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000002","role":"authenticated"}', true);
 select throws_ok($$ select pg_temp.sell('ch-venta-03', null) $$, '23514', 'Elige el origen de la venta', 'obligatorio: sin origen no cobra');
 select throws_ok(
-  $$ select pg_temp.sell('ch-venta-04', current_setting('test.wa')::uuid) $$,
+  $$ select pg_temp.sell('ch-venta-04', current_setting('test.wa')::uuid, 'pickup') $$,
   'P0002', 'Origen de venta no disponible',
   'un origen desactivado ya no se usa'
 );
@@ -71,7 +104,7 @@ select throws_ok(
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
 select results_eq(
   $$ select c ->> 'channel', (c ->> 'tickets')::int from jsonb_array_elements(public.report_sales((now() at time zone 'America/Caracas')::date, (now() at time zone 'America/Caracas')::date) -> 'by_channel') c order by 1 $$,
-  $$ values ('Sin origen'::text, 1), ('WhatsApp', 1) $$,
+  $$ values ('Sin origen'::text, 1), ('Tienda física', 1), ('WhatsApp', 2) $$,
   'el reporte suma por origen'
 );
 
