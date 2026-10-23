@@ -3,6 +3,7 @@
  * se arma qué se vende y cómo se paga. Portado de useSublimeCashSession.ts y
  * del cobro de SublimePosApp.tsx (basicosystems@f551478b).
  */
+import type { DeliveryData } from "./delivery/parse";
 import type { SaleItemPayload } from "./cart";
 import type { SaleCustomer } from "@/modules/customers/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -78,6 +79,10 @@ export interface RegisterSaleInput {
   channelId?: string | null;
   /** Personal de caja que atendió. */
   cashierId?: string | null;
+  /** Modalidad en orígenes a distancia: retiro o envío. */
+  fulfillment?: "pickup" | "envio" | null;
+  /** Datos del destinatario (solo con envío). */
+  delivery?: DeliveryData | null;
   /** Cupón aplicado: su descuento va incluido en cartDiscount. Necesita conexión. */
   coupon?: { code: string; discount: number } | null;
 }
@@ -239,6 +244,8 @@ export async function registerSale(input: RegisterSaleInput): Promise<RegisterSa
       p_note: input.note ?? null,
       p_channel_id: input.channelId ?? null,
       p_cashier_id: input.cashierId ?? null,
+      p_fulfillment: input.fulfillment ?? null,
+      p_delivery: input.fulfillment === "envio" ? (input.delivery ?? null) : null,
     });
     if (error) throw asError(error);
     return data as RegisterSaleResult;
@@ -255,6 +262,8 @@ export async function registerSale(input: RegisterSaleInput): Promise<RegisterSa
     ...(input.soldAt ? { p_sold_at: input.soldAt } : {}),
     ...(input.channelId ? { p_channel_id: input.channelId } : {}),
     ...(input.cashierId ? { p_cashier_id: input.cashierId } : {}),
+    ...(input.fulfillment ? { p_fulfillment: input.fulfillment } : {}),
+    ...(input.fulfillment === "envio" && input.delivery ? { p_delivery: input.delivery } : {}),
   });
   if (error) throw asError(error);
   return data as RegisterSaleResult;

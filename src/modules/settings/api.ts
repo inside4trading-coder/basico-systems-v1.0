@@ -48,6 +48,8 @@ export interface SalesChannel {
   name: string;
   is_active: boolean;
   position: number;
+  /** Origen a distancia: el POS pide retiro o envío. */
+  requires_fulfillment: boolean;
 }
 
 export interface TaxRate {
@@ -236,7 +238,7 @@ export function useSalesChannels() {
   return useQuery({
     queryKey: ["cfg", tenant, "sales_channels"],
     queryFn: withOfflineCache(`sales_channels:${tenant}`, async () => {
-      const { data, error } = await supabase.from("sales_channels").select("id, name, is_active, position").order("position").order("name");
+      const { data, error } = await supabase.from("sales_channels").select("id, name, is_active, position, requires_fulfillment").order("position").order("name");
       if (error) throw error;
       return (data ?? []) as SalesChannel[];
     }),
@@ -281,7 +283,7 @@ export function useSaveCashier() {
 export function useSaveSalesChannel() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { id?: string; name?: string; is_active?: boolean; position?: number }) => {
+    mutationFn: async (input: { id?: string; name?: string; is_active?: boolean; position?: number; requires_fulfillment?: boolean }) => {
       const { id, ...fields } = input;
       const { error } = id
         ? await supabase.from("sales_channels").update(fields).eq("id", id)

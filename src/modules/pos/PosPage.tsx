@@ -5,7 +5,7 @@
  * el que calcula register_sale en el servidor.
  */
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { ArrowLeftRight, Minus, Plus, Search, Trash2, UserRound, Wallet } from "lucide-react";
+import { ArrowLeftRight, Minus, Plus, Search, Store, Trash2, Truck, UserRound, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import RateBadge from "@/components/RateBadge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -67,6 +67,11 @@ import DualPrice from "./DualPrice";
 import FunctionsBar, { type PosFunction } from "./FunctionsBar";
 import CouponDialog from "./CouponDialog";
 import { couponDiscount, type AppliedCoupon } from "./coupons";
+import ChannelGate from "./sale/ChannelGate";
+import ConsultView from "./sale/ConsultView";
+import DeliveryDialog from "./delivery/DeliveryDialog";
+import { deliveryProblems } from "./delivery/parse";
+import { pickChannel, saleContextProblem, saleSummary, type SaleContext } from "./sale/saleContext";
 
 function readStorage<T>(key: string, fallback: T): T {
   try {
@@ -126,8 +131,10 @@ interface CartDraft {
   note?: string;
   /** Cupón aplicado (se valida otra vez en el servidor al cobrar). */
   coupon?: AppliedCoupon | null;
-  /** Cobro a medias: pagos registrados, cliente, origen y nota. */
+  /** Cobro a medias: pagos registrados, cliente y nota. */
   checkout?: CheckoutDraft | null;
+  /** Origen, modalidad y datos de envío; se eligen antes de vender. */
+  sale?: SaleContext | null;
 }
 
 const EMPTY_DRAFT: CartDraft = { lines: [], discountMode: "amount", discountValue: "", note: "" };
@@ -153,7 +160,12 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
 
   const draftKey = `pos.cart.${session.id}`;
   const [draft, setDraft] = useState<CartDraft>(() => readStorage(draftKey, EMPTY_DRAFT));
-  useEffect(() => writeStorage(draftKey, draft.lines.length > 0 ? draft : null), [draftKey, draft]);
+  useEffect(() => writeStorage(draftKey, draft.lines.length > 0 || draft.sale ? draft : null), [draftKey, draft]);
+  // Sin origen elegido se muestra la pantalla de inicio de venta.
+  const [changingSale, setChangingSale] = useState(false);
+  const [consulting, setConsulting] = useState(false);
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const atGate = !draft.sale || changingSale;
 
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<PosHit[]>([]);
@@ -248,7 +260,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
     return () => clearTimeout(t);
   }, [query, runSearch]);
 
-  useScanner((code) => runSearch(code, true), !paying && !moving && !closing && !receipt);
+  useScanner((code) => runSearch(code, true), !paying && !moving && !closing && !receipt && !atGate && !consulting && !deliveryOpen);
 
   const pick = (hit: PosHit) => {
     add(hit);
@@ -265,6 +277,13 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
     if (draft.lines.length === 0) return toast.error("El carrito está vacío");
     if (totals.total <= 0) return toast.error("El total debe ser mayor que cero");
     if (couponShort) return toast.error(`El cupón ${draft.coupon!.code} no aplica a esta compra`, { description: "Quítalo o agrega productos." });
+    const problem = saleContextProblem(draft.sale);
+    if (problem) {
+      toast.error(problem);
+      if (!draft.sale || (draft.sale.requiresFulfillment && !draft.sale.fulfillment)) setChangingSale(true);
+      else setDeliveryOpen(true);
+      return;
+    }
     idempotencyKey.current = newIdempotencyKey();
     setPaying(true);
   };
@@ -319,7 +338,9 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
       change: result.change,
       customer: result.customer,
       note: result.note,
-      channelId: result.channelId,
+      channelId: draft.sale?.channelId ?? null,
+      fulfillment: draft.sale?.fulfillment ?? null,
+      delivery: draft.sale?.fulfillment === "envio" ? draft.sale.delivery : null,
       cashierId: cashier?.id ?? null,
       coupon: draft.coupon && couponOff > 0 ? { code: draft.coupon.code, discount: couponOff } : null,
     };
@@ -426,6 +447,63 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           La tasa no está al día. Actualízala en Configuración antes de cobrar en bolívares.
         </p>
       )}
+
+      {consulting ? (
+        <ConsultView
+          locationId={session.location_id}
+          online={offline.online}
+          money={money}
+          baseCurrency={base}
+          pricesIncludeTax={pricesIncludeTax}
+          search={searchCatalog}
+          onFinish={() => setConsulting(false)}
+        />
+      ) : atGate ? (
+        <ChannelGate
+          channels={channels}
+          current={changingSale ? draft.sale : null}
+          heldCount={held.data?.length ?? 0}
+          onPick={(channel, fulfillment) => {
+            const next = pickChannel(draft.sale, channel, fulfillment);
+            setDraft((d) => ({ ...d, sale: next }));
+            setChangingSale(false);
+            if (next.fulfillment === "envio" && (!next.delivery || deliveryProblems(next.delivery).length > 0)) setDeliveryOpen(true);
+            else setTimeout(() => searchRef.current?.focus(), 0);
+          }}
+          onConsult={changingSale ? undefined : () => setConsulting(true)}
+          onResume={changingSale || hasLines ? undefined : () => setHeldOpen(true)}
+          onBack={changingSale && draft.sale ? () => setChangingSale(false) : undefined}
+        />
+      ) : (
+      <>
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card px-3 py-2 text-sm" aria-label="Origen de la venta">
+        <Store className="h-4 w-4 text-muted-foreground" />
+        <span className="font-semibold" data-testid="pos-sale-summary">
+          {draft.sale ? saleSummary(draft.sale) : ""}
+        </span>
+        {draft.sale?.fulfillment === "envio" && (
+          <Button
+            size="sm"
+            variant={draft.sale.delivery && deliveryProblems(draft.sale.delivery).length === 0 ? "outline" : "destructive"}
+            onClick={() => setDeliveryOpen(true)}
+          >
+            <Truck className="h-4 w-4" />
+            {draft.sale.delivery && deliveryProblems(draft.sale.delivery).length === 0
+              ? `Envío: ${draft.sale.delivery.first_name} ${draft.sale.delivery.last_name}`
+              : "Completar datos de envío"}
+          </Button>
+        )}
+        <div className="ml-auto flex gap-1">
+          <Button size="sm" variant="ghost" onClick={() => setChangingSale(true)}>
+            Cambiar
+          </Button>
+          {!hasLines && (
+            <Button size="sm" variant="ghost" onClick={() => setDraft(EMPTY_DRAFT)}>
+              Cancelar venta
+            </Button>
+          )}
+        </div>
+      </div>
 
       <FunctionsBar
         online={offline.online}
@@ -591,8 +669,11 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
         </section>
       </div>
 
+      </>
+      )}
+
       {/* En el teléfono, el cobro queda fijo abajo mientras se agregan productos. */}
-      {hasLines && (
+      {hasLines && !atGate && !consulting && (
         <div className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t bg-background p-3 lg:hidden">
           <DualPrice amount={totals.total} baseCurrency={base} money={money} />
           <Button size="lg" className="h-12 flex-1" disabled={!money} onClick={openPayment}>
@@ -653,15 +734,41 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           total={totals.total}
           money={money}
           methods={methods}
-          channels={channels.filter((c) => c.is_active)}
-          channelRequired={tenantSettings?.channel_required ?? false}
+          saleSummary={draft.sale ? saleSummary(draft.sale) : "Sin origen"}
+          onChangeSale={() => {
+            setPaying(false);
+            setChangingSale(true);
+          }}
           busy={sale.isPending}
           initialNote={draft.note ?? ""}
-          saved={draft.checkout ?? null}
+          saved={
+            draft.checkout ??
+            (draft.sale?.customer
+              ? { payments: [], customer: draft.sale.customer, note: draft.note ?? "", changeCurrency: money.baseCurrency }
+              : null)
+          }
           onSave={(checkout) => setDraft((d) => (d.lines.length > 0 ? { ...d, checkout } : d))}
           onConfirm={confirm}
         />
       )}
+      <DeliveryDialog
+        open={deliveryOpen}
+        onOpenChange={setDeliveryOpen}
+        value={draft.sale?.delivery ?? null}
+        customer={draft.sale?.customer ?? null}
+        online={offline.online}
+        onSave={(delivery, customer) =>
+          setDraft((d) =>
+            d.sale
+              ? {
+                  ...d,
+                  sale: { ...d.sale, delivery, customer },
+                  checkout: d.checkout && customer?.id ? { ...d.checkout, customer } : d.checkout,
+                }
+              : d,
+          )
+        }
+      />
       <ReceiptDialog
         target={receipt}
         header={{
@@ -716,6 +823,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           resume.mutate(c.id, {
             onSuccess: (payload) => {
               setDraft({ ...EMPTY_DRAFT, ...payload });
+              setChangingSale(false);
               setHeldOpen(false);
               toast.success(`Retomado el carrito de ${c.label}`);
             },

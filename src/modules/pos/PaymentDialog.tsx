@@ -4,19 +4,20 @@
  * campos y bancos salen de la configuración del negocio.
  *
  * Orden de la pantalla: total y lo que falta, cliente y nota, pagos (uno por
- * método; cada uno nuevo propone lo que falta en su moneda), vuelto y origen.
+ * método; cada uno nuevo propone lo que falta en su moneda) y vuelto. El origen
+ * y la modalidad se eligen antes de vender; aquí solo se muestran, con «Cambiar».
  * Todo lo que se va registrando se guarda en el borrador del carrito: si se
  * cierra la pestaña o se va la luz, al volver el cobro sigue donde estaba.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Store, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type { PaymentMethod, SalesChannel } from "@/modules/settings/api";
+import type { PaymentMethod } from "@/modules/settings/api";
 import {
   changeIn,
   formatMoney,
@@ -38,14 +39,12 @@ export interface PaymentResult {
   change: { currency: string; amount: number } | null;
   customer: SaleCustomer | null;
   note: string | null;
-  channelId: string | null;
 }
 
 /** Lo que se lleva registrado del cobro; vive en el borrador del carrito. */
 export interface CheckoutDraft {
   payments: PaymentDraft[];
   customer: SaleCustomer;
-  channelId: string | null;
   note: string;
   changeCurrency: string;
 }
@@ -56,8 +55,8 @@ export default function PaymentDialog({
   total,
   money,
   methods,
-  channels,
-  channelRequired,
+  saleSummary,
+  onChangeSale,
   busy,
   initialNote = "",
   saved,
@@ -69,9 +68,10 @@ export default function PaymentDialog({
   total: number;
   money: MoneySettings;
   methods: PaymentMethod[];
-  /** Orígenes activos; si channelRequired, hay que elegir uno. */
-  channels: SalesChannel[];
-  channelRequired: boolean;
+  /** Origen y modalidad elegidos al empezar la venta (p. ej. «WhatsApp · Envío · MRW»). */
+  saleSummary: string;
+  /** Vuelve a elegir origen o modalidad sin perder el carrito. */
+  onChangeSale: () => void;
   busy: boolean;
   /** Nota que ya se escribió desde el POS. */
   initialNote?: string;
@@ -88,7 +88,6 @@ export default function PaymentDialog({
   const [error, setError] = useState<string | null>(null);
   const [changeCurrency, setChangeCurrency] = useState(money.baseCurrency);
   const [customer, setCustomer] = useState<SaleCustomer>({});
-  const [channelId, setChannelId] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const loaded = useRef(false);
 
@@ -103,7 +102,6 @@ export default function PaymentDialog({
     setError(null);
     setPayments(saved?.payments ?? []);
     setCustomer(saved?.customer ?? {});
-    setChannelId(saved?.channelId ?? null);
     setNote(saved?.note ?? initialNote);
     setChangeCurrency(saved?.changeCurrency ?? money.baseCurrency);
     loaded.current = true;
@@ -114,9 +112,9 @@ export default function PaymentDialog({
   // Cada cambio queda en el borrador del carrito.
   useEffect(() => {
     if (!open || !loaded.current || !onSave) return;
-    onSave({ payments, customer, channelId, note, changeCurrency });
+    onSave({ payments, customer, note, changeCurrency });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [payments, customer, channelId, note, changeCurrency]);
+  }, [payments, customer, note, changeCurrency]);
 
   const usable = useMemo(
     () => methods.filter((m) => m.is_active && (m.currency === money.baseCurrency || m.currency === money.localCurrency)),
@@ -157,9 +155,7 @@ export default function PaymentDialog({
     setError(null);
   };
 
-  const blocker = channelRequired && channels.length > 0 && !channelId
-    ? "Elige el origen de la venta."
-    : summary.unconvertible
+  const blocker = summary.unconvertible
     ? "Un pago usa una moneda sin tasa."
     : payments.length === 0
       ? "Registra al menos un pago."
@@ -178,7 +174,6 @@ export default function PaymentDialog({
       change: summary.excess > 0 && change !== null ? { currency: changeCurrency, amount: change } : null,
       customer: saleCustomer(customer),
       note: note.trim() || null,
-      channelId,
     });
   };
 
@@ -191,6 +186,18 @@ export default function PaymentDialog({
         <DialogHeader>
           <DialogTitle>Cobrar</DialogTitle>
         </DialogHeader>
+
+        <div className="flex items-center justify-between gap-2 rounded-xl border bg-muted/40 px-4 py-2 text-sm">
+          <span className="flex min-w-0 items-center gap-2">
+            <Store className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="truncate font-semibold" data-testid="sale-summary">
+              {saleSummary}
+            </span>
+          </span>
+          <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onChangeSale}>
+            Cambiar
+          </Button>
+        </div>
 
         {/* Total y lo que falta: siempre arriba. */}
         <div className="space-y-3 rounded-xl border bg-card p-4">
@@ -358,28 +365,6 @@ export default function PaymentDialog({
               </Button>
             ))}
             {change !== null && <span className="num ml-auto text-xl font-bold">{formatMoney(change, changeCurrency)}</span>}
-          </div>
-        )}
-
-        {channels.length > 0 && (
-          <div className="space-y-2 rounded-xl border p-4 text-sm">
-            <p className="font-semibold">
-              Origen de la venta{channelRequired ? "" : " (opcional)"}
-            </p>
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Origen de la venta">
-              {channels.map((c) => (
-                <Button
-                  key={c.id}
-                  type="button"
-                  size="sm"
-                  variant={channelId === c.id ? "default" : "outline"}
-                  aria-pressed={channelId === c.id}
-                  onClick={() => setChannelId(channelId === c.id ? null : c.id)}
-                >
-                  {c.name}
-                </Button>
-              ))}
-            </div>
           </div>
         )}
 

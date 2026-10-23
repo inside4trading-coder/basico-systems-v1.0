@@ -37,7 +37,7 @@ export default function ChannelsSection() {
     <Card className="space-y-3 p-4">
       <div>
         <p className="mono-cap text-xs text-muted-foreground">Origen de la venta</p>
-        <p className="text-sm text-muted-foreground">Por dónde llegó el cliente. Se elige al cobrar y se suma en Reportes.</p>
+        <p className="text-sm text-muted-foreground">Por dónde llegó el cliente. El POS lo pide antes de cada venta y se suma en Reportes. Los orígenes a distancia piden además retiro o envío.</p>
       </div>
       {settings && (
         <label className="flex items-center gap-2 text-sm">
@@ -69,6 +69,13 @@ export default function ChannelsSection() {
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <Switch checked={c.is_active} onCheckedChange={(v) => save.mutate({ id: c.id, is_active: v }, { onError: fail })} />
               {c.is_active ? "Activo" : "Inactivo"}
+            </label>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Switch
+                checked={c.requires_fulfillment}
+                onCheckedChange={(v) => save.mutate({ id: c.id, requires_fulfillment: v }, { onError: fail })}
+              />
+              Retiro o envío
             </label>
           </li>
         ))}
