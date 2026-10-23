@@ -9,7 +9,10 @@ select no_plan();
 insert into auth.users (id, email, aud, role) values
   ('aaaaaaaa-0000-0000-0000-000000000001', 'plataforma@test.local', 'authenticated', 'authenticated'),
   ('aaaaaaaa-0000-0000-0000-000000000002', 'cliente@test.local', 'authenticated', 'authenticated'),
-  ('aaaaaaaa-0000-0000-0000-000000000003', 'otro@test.local', 'authenticated', 'authenticated');
+  ('aaaaaaaa-0000-0000-0000-000000000003', 'otro@test.local', 'authenticated', 'authenticated'),
+  ('aaaaaaaa-0000-0000-0000-000000000004', 'dueno@test.local', 'authenticated', 'authenticated'),
+  ('aaaaaaaa-0000-0000-0000-000000000005', 'admin1@test.local', 'authenticated', 'authenticated'),
+  ('aaaaaaaa-0000-0000-0000-000000000006', 'admin2@test.local', 'authenticated', 'authenticated');
 insert into app.platform_admins (user_id) values ('aaaaaaaa-0000-0000-0000-000000000001');
 insert into public.tenants (id, name, slug) values ('bbbbbbbb-1111-1111-1111-111111111111', 'Ferretería El Sol', 'ferreteria-el-sol');
 
@@ -24,7 +27,7 @@ select ok(not has_function_privilege('authenticated', 'public.signup_register_at
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000002","role":"authenticated"}', true);
 select is(public.is_platform_admin(), false, 'un cliente no es admin de plataforma');
-select throws_ok($$ select public.platform_create_invite('X', null, '{}', 30, 7) $$, '42501', 'Solo la plataforma puede hacer esto',
+select throws_ok($$ select public.platform_create_invite('X', '[]', '{}', 30, 7) $$, '42501', 'Solo la plataforma puede hacer esto',
                  'un cliente no crea enlaces');
 select throws_ok($$ select * from public.platform_tenants() $$, '42501', 'Solo la plataforma puede hacer esto',
                  'un cliente no ve los negocios');
@@ -32,19 +35,19 @@ select throws_ok($$ select * from public.platform_tenants() $$, '42501', 'Solo l
 -- La plataforma crea enlaces.
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
 select is(public.is_platform_admin(), true, 'la plataforma se reconoce');
-select throws_ok($$ select public.platform_create_invite('X', null, '{"inventado": true}', 30, 7) $$, '23514',
+select throws_ok($$ select public.platform_create_invite('X', '[]', '{"inventado": true}', 30, 7) $$, '23514',
                  'No existe el módulo o cupo «inventado»', 'solo módulos que existen');
-select throws_ok($$ select public.platform_create_invite('X', null, '{"max_users": true}', 30, 7) $$, '23514',
+select throws_ok($$ select public.platform_create_invite('X', '[]', '{"max_users": true}', 30, 7) $$, '23514',
                  'Valor no válido para «max_users»', 'cada cupo con su tipo');
-select lives_ok($$ select set_config('t.code', public.platform_create_invite('Ferretería', null, '{"fichaje": true, "max_users": 8}', 30, 7), true) $$,
+select lives_ok($$ select set_config('t.code', public.platform_create_invite('Ferretería', '[]', '{"fichaje": true, "max_users": 8}', 30, 7), true) $$,
                 'la plataforma crea un enlace');
-select lives_ok($$ select set_config('t.fijo', public.platform_create_invite('Con correo', 'Cliente@Test.local', '{}', null, 7), true) $$,
+select lives_ok($$ select set_config('t.fijo', public.platform_create_invite('Con correo', '[{"email":"Cliente@Test.local","role":"owner"}]', '{}', null, 7), true) $$,
                 'enlace con correo fijo');
 
 -- Quien abre el enlace (sin cuenta) ve solo la etiqueta.
 reset role;
 set local role anon;
-select is(public.signup_invite_info(current_setting('t.code')), '{"valid": true, "label": "Ferretería", "email": null}'::jsonb,
+select is(public.signup_invite_info(current_setting('t.code')), '{"valid": true, "label": "Ferretería", "mode": "crear", "tenant_name": null, "restricted": false, "email": null}'::jsonb,
           'anon ve la etiqueta, no los módulos');
 select is(public.signup_invite_info('noexiste'), '{"valid": false, "reason": "no_existe"}'::jsonb, 'código inexistente');
 select throws_ok($$ select public.redeem_signup_invite('x', 'y') $$, '42501', null, 'anon no canjea');
@@ -128,6 +131,71 @@ reset role;
 select is((select status from public.tenants where id = current_setting('t.tenant')::uuid), 'suspended', 'negocio suspendido');
 select ok((select trial_ends_at between now() + interval '44 days' and now() + interval '46 days'
            from public.tenants where id = current_setting('t.tenant')::uuid), 'la prueba suma 15 días');
+
+-- Enlace con varios correos: un dueño crea, los demás entran con su rol.
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
+set local role authenticated;
+select throws_ok($$ select public.platform_create_invite('X', '[{"email":"a@x.co","role":"admin"}]', '{}', 30, 7) $$, '23514',
+                 'Al menos un correo tiene que ser de un dueño', 'la lista lleva un dueño');
+select throws_ok($$ select public.platform_create_invite('X', '[{"email":"a@x.co","role":"owner"},{"email":"A@x.co","role":"admin"}]', '{}', 30, 7) $$,
+                 '23514', 'Correo repetido: a@x.co', 'sin correos repetidos');
+select throws_ok($$ select public.platform_create_invite('X', '[{"email":"a@x.co","role":"owner"},{"email":"b@x.co","role":"cajero"}]', '{}', 30, 7) $$, '23514',
+                 'Rol no válido para b@x.co', 'solo dueño o administrador');
+select throws_ok($$ select public.platform_create_invite('X', '[{"email":"a@x.co","role":"owner"},{"email":"b@x.co","role":"admin"},{"email":"c@x.co","role":"admin"},{"email":"d@x.co","role":"admin"},{"email":"e@x.co","role":"admin"},{"email":"f@x.co","role":"admin"}]', '{}', 30, 7) $$,
+                 '23514', 'Hasta 5 correos por enlace', 'máximo 5 correos');
+select throws_ok($$ select public.platform_create_invite('X', '[{"email":"no-es-correo","role":"owner"}]', '{}', 30, 7) $$, '23514',
+                 'Correo no válido: no-es-correo', 'correos válidos');
+select lives_ok($$ select set_config('t.multi', public.platform_create_invite('Equipo',
+  '[{"email":"Dueno@test.local","role":"owner"},{"email":"admin1@test.local","role":"admin"},{"email":"admin2@test.local","role":"admin"}]',
+  '{}', 30, 7), true) $$, 'enlace con tres correos');
+
+reset role;
+select is(public.signup_invite_info(current_setting('t.multi')) ->> 'email', 'dueno@test.local', 'para crear, solo el dueño');
+select is(public.signup_invite_info(current_setting('t.multi')) ->> 'restricted', 'true', 'el enlace está limitado a su lista');
+select is(app.signup_register_attempt(current_setting('t.multi'), 'admin1@test.local') ->> 'reason', 'otro_correo',
+          'un administrador no crea el negocio');
+
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000005","role":"authenticated"}', true);
+select throws_ok(format('select public.redeem_signup_invite(%L, %L)', current_setting('t.multi'), 'Equipo'), '42501',
+                 'Este enlace es para otro correo', 'el administrador espera a que el dueño cree el negocio');
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000004","role":"authenticated"}', true);
+select lives_ok(format('select set_config(''t.multi_tenant'', public.redeem_signup_invite(%L, %L)::text, true)',
+                       current_setting('t.multi'), 'Equipo Uno'), 'el dueño crea el negocio');
+
+reset role;
+select is(public.signup_invite_info(current_setting('t.multi')) ->> 'mode', 'unirse', 'el enlace sigue para los demás');
+select is(public.signup_invite_info(current_setting('t.multi')) ->> 'tenant_name', 'Equipo Uno', 'y muestra el negocio');
+select is(public.signup_invite_info(current_setting('t.multi')) ->> 'email', null, 'sin revelar los correos pendientes');
+select is(app.signup_register_attempt(current_setting('t.multi'), 'admin1@test.local') ->> 'ok', 'true', 'el administrador crea su cuenta');
+select is(app.signup_register_attempt(current_setting('t.multi'), 'otro@test.local') ->> 'reason', 'otro_correo', 'un extraño no');
+
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000003","role":"authenticated"}', true);
+select throws_ok(format('select public.redeem_signup_invite(%L, %L)', current_setting('t.multi'), ''), '42501',
+                 'Este enlace es para otro correo', 'un extraño no entra al negocio');
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000005","role":"authenticated"}', true);
+select is(public.redeem_signup_invite(current_setting('t.multi'), '')::text, current_setting('t.multi_tenant'),
+          'el administrador entra al mismo negocio');
+select is(public.redeem_signup_invite(current_setting('t.multi'), '')::text, current_setting('t.multi_tenant'),
+          'volver a entrar no falla');
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000006","role":"authenticated"}', true);
+select lives_ok(format('select public.redeem_signup_invite(%L, %L)', current_setting('t.multi'), ''), 'el segundo administrador entra');
+
+reset role;
+select results_eq(
+  format($$ select u.email::text, m.role from public.tenant_members m join auth.users u on u.id = m.user_id
+            where m.tenant_id = %L order by 1 $$, current_setting('t.multi_tenant')),
+  $$ values ('admin1@test.local', 'admin'), ('admin2@test.local', 'admin'), ('dueno@test.local', 'owner') $$,
+  'cada correo con su rol');
+select is(public.signup_invite_info(current_setting('t.multi')) ->> 'reason', 'usado', 'con todos dentro, el enlace queda usado');
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
+set local role authenticated;
+select is((select jsonb_array_length(recipients) from public.platform_invites() where code = current_setting('t.multi')), 3,
+          'la plataforma ve los correos del enlace');
+select ok((select bool_and(r ->> 'joined_at' is not null) from public.platform_invites() p, jsonb_array_elements(p.recipients) r
+           where p.code = current_setting('t.multi')), 'y quién ya entró');
+reset role;
 
 select * from finish();
 rollback;

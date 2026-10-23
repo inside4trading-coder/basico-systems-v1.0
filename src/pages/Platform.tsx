@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import BrandMark from "@/components/BrandMark";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +20,17 @@ import {
   useSetTenantStatus,
   type PlatformInvite,
 } from "@/modules/onboarding/api";
-import { inviteEntitlements, signupUrl, trialDaysLeft, type PlanForm } from "@/modules/onboarding/lib";
+import {
+  cleanRecipients,
+  inviteEntitlements,
+  MAX_INVITE_RECIPIENTS,
+  RECIPIENT_ROLE_LABEL,
+  recipientsProblem,
+  signupUrl,
+  trialDaysLeft,
+  type InviteRecipient,
+  type PlanForm,
+} from "@/modules/onboarding/lib";
 
 const ADDONS = [
   { key: "fichaje", label: "Fichaje" },
@@ -36,7 +47,14 @@ const QUOTAS = [
 
 const PLAN_LABEL: Record<string, string> = Object.fromEntries([...ADDONS, ...QUOTAS].map((item) => [item.key, item.label]));
 
-const STATE_LABEL: Record<PlatformInvite["state"], string> = { valido: "Vigente", usado: "Usado", vencido: "Vencido" };
+const STATE_LABEL: Record<PlatformInvite["state"], string> = {
+  valido: "Vigente",
+  unirse: "Falta que entren",
+  usado: "Usado",
+  vencido: "Vencido",
+};
+
+const FIRST_RECIPIENT: InviteRecipient = { email: "", role: "owner" };
 
 const date = (iso: string | null) =>
   iso ? new Intl.DateTimeFormat("es-VE", { dateStyle: "medium", timeZone: "America/Caracas" }).format(new Date(iso)) : "—";
@@ -53,7 +71,7 @@ async function copy(text: string) {
 function InviteForm() {
   const create = useCreateInvite();
   const [label, setLabel] = useState("");
-  const [email, setEmail] = useState("");
+  const [recipients, setRecipients] = useState<InviteRecipient[]>([FIRST_RECIPIENT]);
   const [trialDays, setTrialDays] = useState("30");
   const [validDays, setValidDays] = useState("7");
   const [plan, setPlan] = useState<PlanForm>({ ...ENTITLEMENT_DEFAULTS });
@@ -61,17 +79,19 @@ function InviteForm() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    const problem = recipientsProblem(recipients);
+    if (problem) return toast.error(problem);
     try {
       const code = await create.mutateAsync({
         label: label.trim(),
-        email: email.trim(),
+        recipients: cleanRecipients(recipients),
         entitlements: inviteEntitlements(plan),
         trialDays: trialDays.trim() === "" ? null : Number(trialDays),
         validDays: Number(validDays),
       });
       setCreated(signupUrl(code));
       setLabel("");
-      setEmail("");
+      setRecipients([FIRST_RECIPIENT]);
       setPlan({ ...ENTITLEMENT_DEFAULTS });
     } catch (e) {
       toast.error((e as Error).message);
@@ -87,10 +107,6 @@ function InviteForm() {
           <Input id="inv-label" required maxLength={80} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Nombre del cliente" />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="inv-email">Correo (opcional)</Label>
-          <Input id="inv-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Solo este correo podrá usarlo" />
-        </div>
-        <div className="space-y-1.5">
           <Label htmlFor="inv-trial">Días de prueba</Label>
           <Input id="inv-trial" type="number" min={1} max={365} value={trialDays} onChange={(e) => setTrialDays(e.target.value)} placeholder="Vacío = sin fin" />
         </div>
@@ -99,6 +115,57 @@ function InviteForm() {
           <Input id="inv-valid" type="number" min={1} max={90} required value={validDays} onChange={(e) => setValidDays(e.target.value)} />
         </div>
       </div>
+
+      <fieldset className="space-y-2">
+        <legend className="mono-cap text-xs text-muted-foreground">Correos (opcional, hasta {MAX_INVITE_RECIPIENTS})</legend>
+        <p className="text-xs text-muted-foreground">
+          Comparte el mismo enlace con todos. Un dueño de la lista crea el negocio; los demás lo abren después y entran con su rol. Sin
+          correos, cualquiera puede usarlo una vez.
+        </p>
+        <ul className="space-y-2">
+          {recipients.map((r, index) => (
+            <li key={index} className="flex gap-2">
+              <Input
+                type="email"
+                aria-label={`Correo ${index + 1}`}
+                value={r.email}
+                onChange={(e) => setRecipients((list) => list.map((x, i) => (i === index ? { ...x, email: e.target.value } : x)))}
+                placeholder="correo@negocio.com"
+                className="flex-1"
+              />
+              <select
+                aria-label={`Rol del correo ${index + 1}`}
+                value={r.role}
+                onChange={(e) =>
+                  setRecipients((list) => list.map((x, i) => (i === index ? { ...x, role: e.target.value as InviteRecipient["role"] } : x)))
+                }
+                className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+              >
+                {(Object.keys(RECIPIENT_ROLE_LABEL) as InviteRecipient["role"][]).map((role) => (
+                  <option key={role} value={role}>
+                    {RECIPIENT_ROLE_LABEL[role]}
+                  </option>
+                ))}
+              </select>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-label={`Quitar correo ${index + 1}`}
+                disabled={recipients.length === 1}
+                onClick={() => setRecipients((list) => list.filter((_, i) => i !== index))}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </li>
+          ))}
+        </ul>
+        {recipients.length < MAX_INVITE_RECIPIENTS && (
+          <Button type="button" size="sm" variant="outline" onClick={() => setRecipients((list) => [...list, { email: "", role: "admin" }])}>
+            <Plus className="h-4 w-4" /> Agregar correo
+          </Button>
+        )}
+      </fieldset>
 
       <fieldset className="space-y-2">
         <legend className="mono-cap text-xs text-muted-foreground">Complementos</legend>
@@ -138,7 +205,7 @@ function InviteForm() {
 
       {created && (
         <div className="space-y-2 rounded-md border border-primary/40 bg-primary/5 p-3">
-          <p className="text-sm font-medium">Enlace listo. Mándalo al cliente:</p>
+          <p className="text-sm font-medium">Enlace listo. Compártelo con todos los correos de la lista:</p>
           <div className="flex gap-2">
             <Input readOnly value={created} onFocus={(e) => e.target.select()} />
             <Button type="button" variant="outline" onClick={() => copy(created)}>
@@ -170,13 +237,18 @@ function InviteList() {
                 <Badge variant={invite.state === "valido" ? "default" : "secondary"}>{STATE_LABEL[invite.state]}</Badge>
               </p>
               <p className="text-xs text-muted-foreground">
-                {invite.email ?? "Cualquier correo"} · {invite.trial_days ? `${invite.trial_days} días de prueba` : "Sin fin de prueba"} · vence{" "}
+                {invite.recipients.length === 0
+                  ? "Cualquier correo"
+                  : invite.recipients
+                      .map((r) => `${r.email} (${RECIPIENT_ROLE_LABEL[r.role]}${r.joined_at ? ", entró" : ""})`)
+                      .join(", ")}{" "}
+                · {invite.trial_days ? `${invite.trial_days} días de prueba` : "Sin fin de prueba"} · vence{" "}
                 {date(invite.expires_at)}
                 {extras.length > 0 && ` · ${extras.join(", ")}`}
                 {invite.tenant_name && ` · Negocio: ${invite.tenant_name}`}
               </p>
             </div>
-            {invite.state === "valido" && (
+            {(invite.state === "valido" || invite.state === "unirse") && (
               <Button size="sm" variant="outline" onClick={() => copy(signupUrl(invite.code))}>
                 Copiar enlace
               </Button>

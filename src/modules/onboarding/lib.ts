@@ -31,6 +31,38 @@ export function parseSignupCode(raw: string): string | null {
   return match ? match[1] : null;
 }
 
+export type RecipientRole = "owner" | "admin";
+export interface InviteRecipient {
+  email: string;
+  role: RecipientRole;
+}
+
+export const MAX_INVITE_RECIPIENTS = 5;
+export const RECIPIENT_ROLE_LABEL: Record<RecipientRole, string> = { owner: "Dueño", admin: "Administrador" };
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Filas con correo, en minúsculas y sin espacios (las vacías se ignoran). */
+export function cleanRecipients(rows: InviteRecipient[]): InviteRecipient[] {
+  return rows.map((r) => ({ ...r, email: r.email.trim().toLowerCase() })).filter((r) => r.email !== "");
+}
+
+/** Qué impide crear el enlace con esta lista; null si está bien. Sin correos: enlace abierto. */
+export function recipientsProblem(rows: InviteRecipient[]): string | null {
+  const list = cleanRecipients(rows);
+  if (list.length === 0) return null;
+  if (list.length > MAX_INVITE_RECIPIENTS) return `Hasta ${MAX_INVITE_RECIPIENTS} correos por enlace`;
+  const bad = list.find((r) => !EMAIL_RE.test(r.email));
+  if (bad) return `Correo no válido: ${bad.email}`;
+  const seen = new Set<string>();
+  for (const r of list) {
+    if (seen.has(r.email)) return `Correo repetido: ${r.email}`;
+    seen.add(r.email);
+  }
+  if (!list.some((r) => r.role === "owner")) return "Al menos un correo tiene que ser de un dueño";
+  return null;
+}
+
 export function signupUrl(code: string, origin: string = window.location.origin): string {
   return `${origin}/alta/${code}`;
 }
