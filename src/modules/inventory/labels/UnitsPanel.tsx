@@ -3,7 +3,7 @@
  * del fabricante). Se activa por producto; el stock sigue por variante.
  */
 import { useEffect, useMemo, useState } from "react";
-import { Ban, Eye, Plus, Printer, Tag, X } from "lucide-react";
+import { Ban, Eye, PackageCheck, Plus, Printer, Tag, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,12 +27,15 @@ import {
   missingLabels,
   parseSerials,
   useDisableItemLabels,
+  useDismissEntry,
   useGenerateItemLabels,
+  useItemLabelQueue,
   useMarkItemLabelsPrinted,
   useSetTrackUnits,
   useUnitOverview,
   useVariantItemLabels,
   type ItemLabel,
+  type QueueRow,
   type UnitOverviewRow,
 } from "./unitsApi";
 
@@ -92,7 +95,7 @@ export default function UnitsPanel() {
   const print = usePrintUnits(template);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<LookupHit[]>([]);
-  const [generating, setGenerating] = useState<UnitOverviewRow | null>(null);
+  const [generating, setGenerating] = useState<GenerateTarget | null>(null);
   const [viewing, setViewing] = useState<UnitOverviewRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -163,6 +166,8 @@ export default function UnitsPanel() {
         </div>
       </div>
 
+      <ArrivalsSection editable={editable} onPrint={print} onSerials={(row) => setGenerating(row)} />
+
       {editable && (
         <div className="space-y-1 rounded-xl border bg-card p-3">
           <Label htmlFor="unit-activate">Activar un producto</Label>
@@ -224,7 +229,7 @@ export default function UnitsPanel() {
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {editable && (
-                    <Button size="sm" onClick={() => setGenerating(r)}>
+                    <Button size="sm" onClick={() => setGenerating({ row: r })}>
                       <Tag className="h-4 w-4" /> Generar
                     </Button>
                   )}
@@ -249,17 +254,26 @@ export default function UnitsPanel() {
       )}
 
       {generating && (
-        <GenerateDialog row={generating} onClose={() => setGenerating(null)} onPrint={print} />
+        <GenerateDialog target={generating} onClose={() => setGenerating(null)} onPrint={print} />
       )}
       {viewing && <LabelsListDialog row={viewing} editable={editable} onClose={() => setViewing(null)} onPrint={print} />}
     </div>
   );
 }
 
-function GenerateDialog({ row, onClose, onPrint }: { row: UnitOverviewRow; onClose: () => void; onPrint: (labels: ItemLabel[]) => Promise<void> }) {
+interface GenerateTarget {
+  row: Pick<UnitOverviewRow, "variant_id" | "product_name" | "sku" | "on_hand" | "active_labels">;
+  /** Entrada de mercancía a la que quedan ligadas (máximo lo que le falta). */
+  movement?: { id: string; pending: number };
+  mode?: "seq" | "serial";
+}
+
+function GenerateDialog({ target, onClose, onPrint }: { target: GenerateTarget; onClose: () => void; onPrint: (labels: ItemLabel[]) => Promise<void> }) {
+  const { row, movement } = target;
+  const max = movement ? movement.pending : 500;
   const generate = useGenerateItemLabels();
-  const [mode, setMode] = useState<"seq" | "serial">("seq");
-  const [qty, setQty] = useState(String(missingLabels(row) || 1));
+  const [mode, setMode] = useState<"seq" | "serial">(target.mode ?? "seq");
+  const [qty, setQty] = useState(String(movement ? movement.pending : missingLabels(row) || 1));
   const [serialText, setSerialText] = useState("");
   const [printNow, setPrintNow] = useState(true);
   const serials = parseSerials(serialText);
@@ -267,7 +281,9 @@ function GenerateDialog({ row, onClose, onPrint }: { row: UnitOverviewRow; onClo
   const submit = async () => {
     try {
       const res = await generate.mutateAsync(
-        mode === "seq" ? { variantId: row.variant_id, quantity: Number(qty) } : { variantId: row.variant_id, serials },
+        mode === "seq"
+          ? { variantId: row.variant_id, quantity: Number(qty), movementId: movement?.id }
+          : { variantId: row.variant_id, serials, movementId: movement?.id },
       );
       toast.success(`${res.created} etiqueta${res.created === 1 ? "" : "s"} generada${res.created === 1 ? "" : "s"}`);
       if (printNow && res.ids?.length) await onPrint(await fetchItemLabels({ ids: res.ids }));
@@ -294,9 +310,9 @@ function GenerateDialog({ row, onClose, onPrint }: { row: UnitOverviewRow; onClo
         {mode === "seq" ? (
           <div className="space-y-1">
             <Label htmlFor="gen-qty">Cuántas</Label>
-            <Input id="gen-qty" type="number" min={1} max={500} value={qty} onChange={(e) => setQty(e.target.value)} />
+            <Input id="gen-qty" type="number" min={1} max={max} value={qty} onChange={(e) => setQty(e.target.value)} />
             <p className="text-xs text-muted-foreground">
-              Siguen la numeración de {row.sku ?? "su SKU"} (por ejemplo {(row.sku ?? "SKU").toUpperCase()}-00001). Máximo 500.
+              Siguen la numeración de {row.sku ?? "su SKU"} (por ejemplo {(row.sku ?? "SKU").toUpperCase()}-00001). Máximo {max}.
             </p>
           </div>
         ) : (
@@ -309,7 +325,10 @@ function GenerateDialog({ row, onClose, onPrint }: { row: UnitOverviewRow; onClo
               onChange={(e) => setSerialText(e.target.value)}
               placeholder="Uno por línea. Puedes escanearlos con la pistola."
             />
-            <p className="text-xs text-muted-foreground">{serials.length} serial{serials.length === 1 ? "" : "es"}</p>
+            <p className={serials.length > max ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+              {serials.length} serial{serials.length === 1 ? "" : "es"}
+              {movement ? ` de ${movement.pending} que faltan en esta entrada` : ""}
+            </p>
           </div>
         )}
         <label className="flex items-center gap-2 text-sm">
@@ -321,7 +340,7 @@ function GenerateDialog({ row, onClose, onPrint }: { row: UnitOverviewRow; onClo
             Cancelar
           </Button>
           <Button
-            disabled={generate.isPending || (mode === "seq" ? !(Number(qty) >= 1 && Number(qty) <= 500) : serials.length === 0)}
+            disabled={generate.isPending || (mode === "seq" ? !(Number(qty) >= 1 && Number(qty) <= max) : serials.length === 0 || serials.length > max)}
             onClick={submit}
           >
             {generate.isPending ? "Generando…" : "Generar"}
@@ -414,5 +433,99 @@ function LabelsListDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Entradas de mercancía con piezas sin etiquetar: un toque genera e imprime lo que falta. */
+function ArrivalsSection({
+  editable,
+  onPrint,
+  onSerials,
+}: {
+  editable: boolean;
+  onPrint: (labels: ItemLabel[]) => Promise<void>;
+  onSerials: (target: GenerateTarget) => void;
+}) {
+  const queue = useItemLabelQueue();
+  const generate = useGenerateItemLabels();
+  const dismiss = useDismissEntry();
+  const [busy, setBusy] = useState<string | null>(null);
+  const rows = queue.data ?? [];
+  if (queue.isLoading || rows.length === 0) return null;
+  const pieces = rows.reduce((a, r) => a + r.pending, 0);
+
+  const run = async (r: QueueRow) => {
+    setBusy(r.movement_id);
+    try {
+      const res = await generate.mutateAsync({ variantId: r.variant_id, quantity: r.pending, movementId: r.movement_id });
+      toast.success(`${res.created} etiqueta${res.created === 1 ? "" : "s"} de ${r.product_name}`);
+      if (res.ids?.length) await onPrint(await fetchItemLabels({ ids: res.ids }));
+    } catch (e) {
+      toast.error("No se generaron", { description: (e as Error).message });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const skip = (r: QueueRow) => {
+    const reason = window.prompt("¿Por qué no se etiqueta? (por ejemplo: ya venían etiquetadas)");
+    if (!reason?.trim()) return;
+    dismiss.mutate(
+      { movementId: r.movement_id, reason },
+      { onSuccess: () => toast.success("Entrada descartada"), onError: (e) => toast.error(e.message) },
+    );
+  };
+
+  const when = (iso: string) =>
+    new Intl.DateTimeFormat("es-VE", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Caracas" }).format(new Date(iso));
+
+  return (
+    <section className="space-y-2 rounded-xl border border-primary/40 bg-primary/5 p-3" aria-label="Llegadas por etiquetar">
+      <p className="flex items-center gap-2 text-sm font-semibold">
+        <PackageCheck className="h-4 w-4" /> Llegadas por etiquetar: {pieces} pieza{pieces === 1 ? "" : "s"} en {rows.length} entrada
+        {rows.length === 1 ? "" : "s"}
+      </p>
+      <ul className="divide-y rounded-lg border bg-card">
+        {rows.map((r) => (
+          <li key={r.movement_id} className="flex flex-wrap items-center justify-between gap-3 p-3 text-sm">
+            <div className="min-w-0 space-y-0.5">
+              <p className="font-medium">
+                {r.product_name}
+                {variantText(r.options) && <span className="text-muted-foreground"> · {variantText(r.options)}</span>}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Entraron {formatQty(r.qty)} en {r.location_name} · {when(r.received_at)}
+                {r.supplier && ` · ${r.supplier}`}
+                {r.note && ` · ${r.note}`}
+                {r.labeled > 0 && ` · ${r.labeled} ya etiquetadas`}
+              </p>
+            </div>
+            {editable && (
+              <div className="flex flex-wrap gap-1">
+                <Button size="sm" disabled={busy === r.movement_id} onClick={() => run(r)}>
+                  <Printer className="h-4 w-4" /> Generar e imprimir {r.pending}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    onSerials({
+                      row: { variant_id: r.variant_id, product_name: r.product_name, sku: r.sku, on_hand: r.pending, active_labels: 0 },
+                      movement: { id: r.movement_id, pending: r.pending },
+                      mode: "serial",
+                    })
+                  }
+                >
+                  Con seriales
+                </Button>
+                <Button size="sm" variant="ghost" disabled={dismiss.isPending} onClick={() => skip(r)}>
+                  No etiquetar
+                </Button>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

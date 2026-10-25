@@ -415,6 +415,8 @@ begin
     insert into public.label_templates (tenant_id, name, width_mm, height_mm) values (t, 'Aislamiento', 50, 25);
     insert into public.item_labels (tenant_id, variant_id, unit_number, code)
       select t, v.id, 1, 'ISO-' || left(t::text, 8) from public.variants v where v.tenant_id = t limit 1;
+    insert into public.item_label_dismissals (movement_id, tenant_id, reason)
+      select m.id, t, 'Aislamiento' from public.inventory_movements m where m.tenant_id = t and m.kind = 'entry' limit 1;
     insert into public.clock_pin_failures (tenant_id) values (t);
     insert into public.studio_jobs (tenant_id, product_id, kind, source_path)
       select t, p.id, 'catalogo', t::text || '/aislamiento.webp' from public.products p where p.tenant_id = t limit 1;
