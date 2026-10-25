@@ -34,6 +34,9 @@ interface Hit {
   entry_note: string | null;
   entry_supplier: string | null;
   times_printed: number;
+  sale_id: string | null;
+  sale_number: string | null;
+  sold_at: string | null;
 }
 
 const ORIGIN_LABEL: Record<string, string> = { manual: "Manual", recepcion: "Recepción" };
@@ -119,6 +122,7 @@ export default function SearchPanel() {
                   <Badge variant={h.status === "disabled" ? "destructive" : h.status === "printed" ? "secondary" : "default"}>
                     {ITEM_STATUS_LABEL[h.status]}
                   </Badge>
+                  {h.sale_number && <Badge variant="outline">Vendida · {h.sale_number}</Badge>}
                 </p>
                 <p>
                   {h.product_name}
@@ -132,9 +136,10 @@ export default function SearchPanel() {
                   {h.entry_at && ` · entrada del ${when(h.entry_at)}${h.entry_note ? ` (${h.entry_note})` : ""}${h.entry_supplier ? ` · ${h.entry_supplier}` : ""}`}
                   {` · impresa ${h.times_printed} ${h.times_printed === 1 ? "vez" : "veces"}`}
                   {h.disabled_reason && ` · desactivada: ${h.disabled_reason}`}
+                  {h.sold_at && ` · vendida ${when(h.sold_at)}`}
                 </p>
               </div>
-              {editable && h.status !== "disabled" && (
+              {editable && h.status !== "disabled" && !h.sale_number && (
                 <div className="flex gap-1">
                   <Button size="sm" variant="outline" onClick={() => reprint(h)}>
                     <Printer className="h-4 w-4" /> {h.status === "printed" ? "Reimprimir" : "Imprimir"}

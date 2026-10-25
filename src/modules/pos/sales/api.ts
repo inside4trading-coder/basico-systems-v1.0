@@ -67,7 +67,13 @@ export function useSales(sessionId: string, query: string) {
       let req = supabase.from("sales").select(SALE_COLUMNS).order("sold_at", { ascending: false }).limit(100);
       if (q) {
         const safe = q.replace(/[%,()]/g, " ");
-        req = req.or(`number.ilike.%${safe}%,customer_name.ilike.%${safe}%,invoice_number.ilike.%${safe}%`);
+        // El código de una pieza vendida (etiqueta por unidad) lleva a su venta.
+        const { data: units } = await supabase.from("item_labels").select("sale_items(sale_id)").ilike("code", safe.trim()).not("sale_item_id", "is", null).limit(5);
+        const saleIds = (units ?? [])
+          .map((u) => (u.sale_items as unknown as { sale_id: string } | null)?.sale_id)
+          .filter((id): id is string => Boolean(id));
+        const byUnit = saleIds.length ? `,id.in.(${saleIds.join(",")})` : "";
+        req = req.or(`number.ilike.%${safe}%,customer_name.ilike.%${safe}%,invoice_number.ilike.%${safe}%${byUnit}`);
       } else {
         req = req.eq("session_id", sessionId);
       }

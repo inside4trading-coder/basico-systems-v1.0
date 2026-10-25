@@ -83,6 +83,8 @@ export interface RegisterSaleInput {
   fulfillment?: "pickup" | "envio" | null;
   /** Datos del destinatario (solo con envío). */
   delivery?: DeliveryData | null;
+  /** Piezas escaneadas (etiqueta por unidad), por variante. */
+  units?: { variant_id: string; label_ids: string[] }[];
   /** Cupón aplicado: su descuento va incluido en cartDiscount. Necesita conexión. */
   coupon?: { code: string; discount: number } | null;
 }
@@ -229,7 +231,35 @@ export function useCloseSession() {
   });
 }
 
+export interface UnitLabelLookup {
+  id: string;
+  code: string;
+  status: "generated" | "printed" | "disabled";
+  sale_item_id: string | null;
+}
+
+/** Etiqueta por unidad con ese código exacto (para el escaneo del POS). */
+export async function lookupUnitLabel(code: string): Promise<UnitLabelLookup | null> {
+  const safe = code.trim().replace(/[\\%_]/g, (c) => `\\${c}`);
+  const { data, error } = await supabase.from("item_labels").select("id, code, status, sale_item_id").ilike("code", safe).limit(1);
+  if (error) throw asError(error);
+  return ((data ?? [])[0] as UnitLabelLookup | undefined) ?? null;
+}
+
+/** Liga las piezas escaneadas a la venta. Si falla, la venta igual queda hecha. */
+async function attachUnits(saleId: string, units: RegisterSaleInput["units"]) {
+  if (!units?.length) return;
+  const { error } = await supabase.rpc("attach_sale_units", { p_sale_id: saleId, p_units: units });
+  if (error) console.warn("No se ligaron las piezas a la venta", error.message);
+}
+
 export async function registerSale(input: RegisterSaleInput): Promise<RegisterSaleResult> {
+  const result = await registerSaleOnly(input);
+  await attachUnits(result.sale_id, input.units);
+  return result;
+}
+
+async function registerSaleOnly(input: RegisterSaleInput): Promise<RegisterSaleResult> {
   if (input.coupon) {
     const { data, error } = await supabase.rpc("register_sale_coupon", {
       p_idempotency_key: input.idempotencyKey,

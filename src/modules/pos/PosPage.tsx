@@ -18,6 +18,7 @@ import { useLocations } from "@/modules/inventory/api";
 import { useCashiers, usePaymentMethods, useSalesChannels, useTenantSettings } from "@/modules/settings/api";
 import { isNetworkError } from "@/core/offline";
 import {
+  lookupUnitLabel,
   newIdempotencyKey,
   useChangeSessionCashier,
   useOpenSessions,
@@ -30,6 +31,9 @@ import {
 } from "./api";
 import {
   addToCart,
+  addUnitToCart,
+  hasUnit,
+  saleUnits,
   cartDiscountAmount,
   currencySymbol,
   cartTotals,
@@ -201,26 +205,44 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
   const cartDiscount = round2(couponOff + manualDiscount);
   const totals = cartTotals(draft.lines, cartDiscount, pricesIncludeTax);
 
+  const toCartItem = (hit: PosHit) => ({
+    variantId: hit.variant_id,
+    productId: hit.product_id,
+    name: hit.product_name,
+    options: hit.options ?? {},
+    sku: hit.sku,
+    unit: hit.unit,
+    price: Number(hit.price),
+    taxRate: hit.tax_rate,
+    available: hit.available,
+  });
+
   const add = useCallback((hit: PosHit) => {
     if (hit.price === null || hit.price <= 0) return toast.error(`${hit.product_name} no tiene precio`);
     if (hit.available <= 0) return toast.error(`Sin existencia de ${hit.product_name} en esta sede`);
     setDraft((d) => {
       const inCart = d.lines.find((l) => l.variantId === hit.variant_id)?.qty ?? 0;
       if (inCart >= hit.available) toast.error(`Solo hay ${formatQty(hit.available)} de ${hit.product_name}`);
-      return {
-        ...d,
-        lines: addToCart(d.lines, {
-          variantId: hit.variant_id,
-          productId: hit.product_id,
-          name: hit.product_name,
-          options: hit.options ?? {},
-          sku: hit.sku,
-          unit: hit.unit,
-          price: Number(hit.price),
-          taxRate: hit.tax_rate,
-          available: hit.available,
-        }),
-      };
+      return { ...d, lines: addToCart(d.lines, toCartItem(hit)) };
+    });
+  }, []);
+
+  // Pieza con etiqueta por unidad: se agrega su variante y se guarda cuál pieza fue.
+  const addUnit = useCallback(async (hit: PosHit, code: string) => {
+    if (hit.price === null || hit.price <= 0) return toast.error(`${hit.product_name} no tiene precio`);
+    if (hit.available <= 0) return toast.error(`Sin existencia de ${hit.product_name} en esta sede`);
+    const label = await lookupUnitLabel(code);
+    if (!label) return toast.error(`No se encontró la pieza ${code}`);
+    if (label.status === "disabled") return toast.error(`La etiqueta ${label.code} está desactivada`);
+    if (label.sale_item_id) return toast.error(`La pieza ${label.code} ya se vendió`);
+    setDraft((d) => {
+      if (hasUnit(d.lines, label.id)) {
+        toast.error(`La pieza ${label.code} ya está en el carrito`);
+        return d;
+      }
+      const lines = addUnitToCart(d.lines, toCartItem(hit), { id: label.id, code: label.code });
+      if (lines === d.lines) toast.error(`Solo hay ${formatQty(hit.available)} de ${hit.product_name}`);
+      return { ...d, lines };
     });
   }, []);
 
@@ -233,7 +255,11 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
         const { hits: found, local } = await searchCatalog(q);
         setLocalResults(local);
         // Código exacto (lector o tecleado + Enter) con un solo resultado: directo al carrito.
-        if (addExact && found.length === 1 && found[0].match_kind !== "texto") {
+        if (addExact && found.length === 1 && found[0].match_kind === "unidad") {
+          await addUnit(found[0], q);
+          setQuery("");
+          setHits([]);
+        } else if (addExact && found.length === 1 && found[0].match_kind !== "texto") {
           add(found[0]);
           setQuery("");
           setHits([]);
@@ -247,7 +273,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
         setSearching(false);
       }
     },
-    [add, searchCatalog],
+    [add, addUnit, searchCatalog],
   );
 
   // Búsqueda mientras se escribe, con pausa para no consultar en cada tecla.
@@ -343,6 +369,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
       delivery: draft.sale?.fulfillment === "envio" ? draft.sale.delivery : null,
       cashierId: cashier?.id ?? null,
       coupon: draft.coupon && couponOff > 0 ? { code: draft.coupon.code, discount: couponOff } : null,
+      units: saleUnits(draft.lines),
     };
     const soldAt = new Date().toISOString();
     if (!navigator.onLine) {
@@ -893,6 +920,12 @@ function CartRow({
           <p className="truncate text-xs text-muted-foreground">
             {[Object.values(line.options).join(" · "), line.sku, `${unitLabel} c/u`].filter(Boolean).join(" · ")}
           </p>
+          {line.units && line.units.length > 0 && (
+            <p className="mono truncate text-[11px] text-muted-foreground" title={line.units.map((u) => u.code).join(", ")}>
+              {line.units.map((u) => u.code).join(", ")}
+              {line.qty > line.units.length && ` + ${formatQty(line.qty - line.units.length)} sin escanear`}
+            </p>
+          )}
         </div>
         <button type="button" onClick={onRemove} aria-label={`Quitar ${line.name}`} className="text-muted-foreground hover:text-destructive">
           <Trash2 className="h-4 w-4" />
