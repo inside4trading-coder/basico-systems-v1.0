@@ -54,7 +54,7 @@ export default function SalesSheet({ open, onOpenChange, sessionId, sessionOpen,
               <Input
                 type="search"
                 aria-label="Buscar venta"
-                placeholder="Número de venta o cliente (vacío: esta caja)"
+                placeholder="Número de venta, cliente o código de pieza (vacío: esta caja)"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />

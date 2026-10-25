@@ -33,6 +33,13 @@ export interface CartLine {
   available: number | null;
   /** Concepto manual: tipo e impuesto elegido (null = el del negocio). */
   manual?: { kind: ManualKind; taxRateId: string | null };
+  /** Piezas escaneadas por su etiqueta por unidad (una por unidad de la línea). */
+  units?: CartUnit[];
+}
+
+export interface CartUnit {
+  id: string;
+  code: string;
 }
 
 export type SaleItemPayload =
@@ -137,8 +144,35 @@ export function setQty(lines: CartLine[], variantId: string, qty: number): CartL
     const capped = l.available === null ? qty : Math.min(qty, l.available);
     if (!(capped > 0)) return [];
     const gross = round2(l.price * capped);
-    return [{ ...l, qty: capped, discount: Math.min(l.discount, gross) }];
+    // Si baja la cantidad, se sueltan las últimas piezas escaneadas.
+    const units = l.units && l.units.length > capped ? l.units.slice(0, Math.floor(capped)) : l.units;
+    return [{ ...l, qty: capped, discount: Math.min(l.discount, gross), ...(units ? { units } : {}) }];
   });
+}
+
+/** ¿Esa pieza ya está en el carrito? */
+export function hasUnit(lines: CartLine[], unitId: string): boolean {
+  return lines.some((l) => l.units?.some((u) => u.id === unitId));
+}
+
+/**
+ * Agrega una pieza escaneada: suma una unidad a su línea y guarda cuál fue.
+ * Devuelve las mismas líneas si no se pudo (sin existencia).
+ */
+export function addUnitToCart(lines: CartLine[], item: Omit<CartLine, "qty" | "discount">, unit: CartUnit): CartLine[] {
+  if (hasUnit(lines, unit.id)) return lines;
+  const next = addToCart(lines, item);
+  const line = next.find((l) => l.variantId === item.variantId);
+  const before = lines.find((l) => l.variantId === item.variantId);
+  if (!line || (before && line.qty === before.qty)) return lines;
+  return next.map((l) => (l.variantId === item.variantId ? { ...l, units: [...(l.units ?? []), unit] } : l));
+}
+
+/** Piezas por variante, para ligarlas a la venta (attach_sale_units). */
+export function saleUnits(lines: CartLine[]): { variant_id: string; label_ids: string[] }[] {
+  return lines
+    .filter((l) => !l.manual && l.units && l.units.length > 0)
+    .map((l) => ({ variant_id: l.variantId, label_ids: l.units!.map((u) => u.id) }));
 }
 
 export function setLineDiscount(lines: CartLine[], variantId: string, discount: number): CartLine[] {

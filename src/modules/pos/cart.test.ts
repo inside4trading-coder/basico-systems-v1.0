@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   saleItems,
+  addUnitToCart,
+  hasUnit,
+  saleUnits,
   addToCart,
   cartDiscountAmount,
   lineDiscountAmount,
@@ -217,5 +220,30 @@ describe("PVP en pantalla", () => {
   });
   it("no toca el precio cuando ya trae el IVA", () => {
     expect(shelfPrice(7.65, 16, true)).toBe(7.65);
+  });
+});
+
+describe("piezas con etiqueta por unidad", () => {
+  const item = {
+    variantId: "v1", productId: "p1", name: "Teléfono", options: {}, sku: "TEL", unit: "unidad", price: 100, taxRate: 16, available: 2,
+  };
+  it("cada pieza suma una unidad y queda guardada", () => {
+    let lines = addUnitToCart([], item, { id: "u1", code: "TEL-00001" });
+    lines = addUnitToCart(lines, item, { id: "u2", code: "TEL-00002" });
+    expect(lines[0].qty).toBe(2);
+    expect(lines[0].units?.map((u) => u.code)).toEqual(["TEL-00001", "TEL-00002"]);
+    expect(hasUnit(lines, "u2")).toBe(true);
+    expect(saleUnits(lines)).toEqual([{ variant_id: "v1", label_ids: ["u1", "u2"] }]);
+  });
+  it("la misma pieza no entra dos veces ni pasa de la existencia", () => {
+    let lines = addUnitToCart([], item, { id: "u1", code: "TEL-00001" });
+    expect(addUnitToCart(lines, item, { id: "u1", code: "TEL-00001" })).toBe(lines);
+    lines = addUnitToCart(lines, item, { id: "u2", code: "TEL-00002" });
+    expect(addUnitToCart(lines, item, { id: "u3", code: "TEL-00003" })).toBe(lines);
+  });
+  it("bajar la cantidad suelta las últimas piezas", () => {
+    let lines = addUnitToCart([], item, { id: "u1", code: "TEL-00001" });
+    lines = addUnitToCart(lines, item, { id: "u2", code: "TEL-00002" });
+    expect(setQty(lines, "v1", 1)[0].units).toEqual([{ id: "u1", code: "TEL-00001" }]);
   });
 });

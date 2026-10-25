@@ -155,5 +155,61 @@ select lives_ok($$ select public.log_label_print('price', null, 'Rollo', 1) $$, 
 select throws_ok(format('select public.log_label_print(%L, null, %L, 2, %L::uuid[], %L, %L)', 'unit', 'Rollo', current_setting('test.fresh'), '[]', 'x'),
                  '42501', null, 'pero no etiquetas por unidad');
 
+-- POS (fase 5): escanear la pieza, venderla, liberarla al devolver o anular.
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
+reset role;
+insert into public.registers (id, tenant_id, location_id, name, code) values
+  ('aaaaaaaa-3333-3333-3333-333333333331', 'aaaaaaaa-1111-1111-1111-111111111111', 'aaaaaaaa-2222-2222-2222-222222222221', 'Caja', 'C1');
+set local role authenticated;
+select is((select match_kind from public.catalog_lookup('tel-1-00004')), 'unidad', 'el POS reconoce el código de la pieza');
+select is((select variant_id from public.catalog_lookup('TEL-1-00004')), 'aaaaaaaa-5555-5555-5555-555555555551'::uuid, 'y trae su variante');
+select set_config('test.session', public.open_cash_session('aaaaaaaa-3333-3333-3333-333333333331') ->> 'session_id', true);
+select set_config('test.cash', (select id::text from public.payment_methods where code = 'cash_base'), true);
+select set_config('test.unit_sale', (public.register_sale('unid-venta-0001', current_setting('test.session')::uuid,
+  '[{"variant_id":"aaaaaaaa-5555-5555-5555-555555555551","qty":2}]',
+  jsonb_build_array(jsonb_build_object('payment_method_id', current_setting('test.cash'), 'amount', 232))) ->> 'sale_id'), true);
+select set_config('test.units', (select jsonb_agg(id order by code)::text from public.item_labels
+                                 where code in ('TEL-1-00004', 'TEL-1-00005', 'TEL-1-00001')), true);
+select is(public.attach_sale_units(current_setting('test.unit_sale')::uuid,
+            jsonb_build_array(jsonb_build_object('variant_id', 'aaaaaaaa-5555-5555-5555-555555555551', 'label_ids', current_setting('test.units')::jsonb))),
+          2, 'liga las piezas vendidas (la desactivada no)');
+select is(public.attach_sale_units(current_setting('test.unit_sale')::uuid,
+            jsonb_build_array(jsonb_build_object('variant_id', 'aaaaaaaa-5555-5555-5555-555555555551', 'label_ids', current_setting('test.units')::jsonb))),
+          0, 'repetirlo no liga de más');
+select results_eq($$ select code from public.item_labels where sale_item_id is not null order by code $$,
+                  $$ values ('TEL-1-00004'::text), ('TEL-1-00005') $$, 'las dos piezas quedan vendidas');
+select is((select sale_number from public.search_item_labels('TEL-1-00004') limit 1),
+          (select number from public.sales where id = current_setting('test.unit_sale')::uuid), 'el buscador dice en qué venta salió');
+select is((select active_labels from public.item_label_overview()),
+          (select count(*) from public.item_labels where status <> 'disabled' and sale_item_id is null), 'una pieza vendida ya no cuenta en existencia');
+select is((select count(*)::int from public.item_labels where status <> 'disabled' and sale_item_id is not null), 2, 'y son dos');
+
+select lives_ok(
+  format($$ select public.create_sale_return(%L::uuid, jsonb_build_array(jsonb_build_object('sale_item_id', (select id from public.sale_items where sale_id = %L::uuid), 'qty', 1)),
+                                            'Cambio de opinión', true, %L, %L::uuid) $$,
+         current_setting('test.unit_sale'), current_setting('test.unit_sale'), current_setting('test.cash'), current_setting('test.session')),
+  'devolución de una');
+select is((select count(*)::int from public.item_labels where sale_item_id is not null), 1, 'la devolución libera una pieza');
+select set_config('test.unit_sale2', (public.register_sale('unid-venta-0002', current_setting('test.session')::uuid,
+  '[{"variant_id":"aaaaaaaa-5555-5555-5555-555555555551","qty":1}]',
+  jsonb_build_array(jsonb_build_object('payment_method_id', current_setting('test.cash'), 'amount', 116))) ->> 'sale_id'), true);
+select is(public.attach_sale_units(current_setting('test.unit_sale2')::uuid,
+            jsonb_build_array(jsonb_build_object('variant_id', 'aaaaaaaa-5555-5555-5555-555555555551',
+                                                 'label_ids', jsonb_build_array((select id from public.item_labels where code = 'TEL-1-00004'))))),
+          0, 'una pieza ya vendida no se vuelve a ligar');
+select is(public.attach_sale_units(current_setting('test.unit_sale2')::uuid,
+            jsonb_build_array(jsonb_build_object('variant_id', 'aaaaaaaa-5555-5555-5555-555555555551',
+                                                 'label_ids', jsonb_build_array((select id from public.item_labels where code = 'TEL-1-00003'))))),
+          1, 'otra pieza sí');
+select lives_ok(format($$ select public.void_sale(%L, 'Error de cobro') $$, current_setting('test.unit_sale2')), 'anular la venta');
+select is((select sale_item_id from public.item_labels where code = 'TEL-1-00003'), null, 'anular libera la pieza');
+
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-0000-0000-000000000001","role":"authenticated"}', true);
+select set_config('request.headers', '{"x-tenant-id":"bbbbbbbb-1111-1111-1111-111111111111"}', true);
+select throws_ok(format('select public.attach_sale_units(%L, %L)', current_setting('test.unit_sale'), '[]'), 'P0002', null,
+                 'otro negocio no toca la venta');
+select is((select count(*)::int from public.catalog_lookup('TEL-1-00004')), 0, 'ni encuentra sus piezas');
+select set_config('request.headers', '{"x-tenant-id":"aaaaaaaa-1111-1111-1111-111111111111"}', true);
+
 select * from finish();
 rollback;
