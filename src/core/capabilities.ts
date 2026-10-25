@@ -43,6 +43,7 @@ export const CAPABILITIES = {
   "inventario.conteos": { label: "Conteos de inventario", area: "inventario", defaults: AM },
   "inventario.firmar": { label: "Firmar ajustes", area: "inventario", defaults: A },
   "inventario.todas_sedes": { label: "Trabajar en todas las sedes", area: "inventario", defaults: A },
+  "inventario.etiquetas": { label: "Etiquetas por unidad: generar, imprimir y desactivar", area: "inventario", defaults: AM },
   "reportes.ver": { label: "Ver reportes y clientes", area: "administracion", defaults: AM },
   "finanzas.operar": { label: "Operar Administración: movimientos, cobros, conciliación y Cashea", area: "administracion", defaults: AM },
   "finanzas.anular": { label: "Anular movimientos y cobros de Administración", area: "administracion", defaults: A },

@@ -108,6 +108,14 @@ describe("documento", () => {
     expect(html.match(/class="sheet"/g)).toHaveLength(2);
   });
 
+  it("por unidad: el código de la pieza se ve con QR", () => {
+    const html = labelsHtml([{ ...item, code: "TEL-00007", unitCode: "TEL-00007" }], tpl({ code_kind: "qr" }), header);
+    expect(html).toContain('class="ln sk uc"');
+    expect(html).toContain("TEL-00007");
+    const bc = labelsHtml([{ ...item, code: "TEL-00007", unitCode: "TEL-00007" }], tpl({ code_kind: "barcode" }), header);
+    expect(bc).not.toContain('class="ln sk uc"');
+  });
+
   it("sin precio ni código, no los imprime", () => {
     const html = labelsHtml([item], tpl({ show_price: false, code_kind: "none" }), header);
     expect(html).not.toContain("$ 9,00");

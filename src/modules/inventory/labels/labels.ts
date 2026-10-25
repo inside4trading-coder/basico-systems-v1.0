@@ -105,6 +105,8 @@ export interface LabelItem {
   priceLocal: string | null;
   /** SVG del código ya generado (barras o QR); vacío si la plantilla no lleva código. */
   codeSvg: string;
+  /** Etiqueta por unidad: el código de la pieza, siempre visible. */
+  unitCode?: string | null;
 }
 
 export interface LabelHeader {
@@ -289,6 +291,10 @@ export function labelHtml(item: LabelItem, t: LabelTemplateDraft | LabelTemplate
     if (t.show_name) lines.push(`<p class="nm" style="font-size:${r2(f.name)}pt;-webkit-line-clamp:${layout.nameLines}">${e(item.name)}</p>`);
     if (t.show_detail && item.detail) lines.push(`<p class="ln" style="font-size:${r2(f.detail)}pt">${e(item.detail)}</p>`);
     if (t.show_sku && item.sku) lines.push(`<p class="ln sk" style="font-size:${r2(f.sku)}pt">${e(item.sku)}</p>`);
+    // El código de la pieza va siempre (bajo las barras ya se ve; con QR o sin código, aquí).
+    if (item.unitCode && !(t.code_kind === "barcode" && layout.code)) {
+      lines.push(`<p class="ln sk uc" style="font-size:${r2(f.sku)}pt">${e(item.unitCode)}</p>`);
+    }
     if (t.show_price && item.price) lines.push(`<p class="pr" style="font-size:${r2(f.price)}pt">${e(item.price)}</p>`);
     if (t.show_price && t.show_price_local && item.priceLocal) {
       lines.push(`<p class="ln pl" style="font-size:${r2(f.priceLocal)}pt">${e(item.priceLocal)}</p>`);

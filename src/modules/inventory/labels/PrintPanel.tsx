@@ -10,14 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/core/supabase";
-import { formatMoney } from "@/modules/pos/cart";
 import { printReceipt } from "@/modules/pos/receipt";
-import { productTaxRate, withTax } from "@/core/tax";
-import { useCurrentRate, useTaxRates, useTenantSettings } from "@/modules/settings/api";
 import { defaultTemplate, useLabelHeader, useLabelTemplates } from "./api";
 import { codeSvg } from "./codes";
 import { CODE_KIND_LABEL, expandLabels, labelsHtml, type LabelItem, type LabelTemplate } from "./labels";
 import LabelPreview from "./LabelPreview";
+import { usePvp } from "./pricing";
 
 interface Hit {
   variant_id: string;
@@ -58,9 +56,7 @@ function templateSummary(t: LabelTemplate) {
 }
 
 export default function PrintPanel() {
-  const { data: settings } = useTenantSettings();
-  const { data: rate } = useCurrentRate();
-  const { data: taxRates = [] } = useTaxRates();
+  const pvp = usePvp();
   const templates = useLabelTemplates();
   const all = useMemo(() => templates.data?.all ?? [], [templates.data]);
   const [templateId, setTemplateId] = useState<string | null>(null);
@@ -70,8 +66,6 @@ export default function PrintPanel() {
   const [hits, setHits] = useState<Hit[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState(false);
-  const base = settings?.base_currency ?? "USD";
-  const local = settings?.local_currency ?? null;
 
   useEffect(() => {
     const q = query.trim();
@@ -94,15 +88,12 @@ export default function PrintPanel() {
 
   // La etiqueta lleva el PVP: el precio sin IVA más el IVA del producto.
   const toItem = (hit: Hit, data: LabelData): Omit<LabelItem, "codeSvg"> => {
-    const net = Number(hit.price ?? 0);
-    const price = settings?.prices_include_tax ? net : withTax(net, productTaxRate(data.taxIdByVariant.get(hit.variant_id), taxRates));
     return {
       name: hit.product_name,
       detail: [Object.values(hit.options ?? {}).join(" · "), hit.brand].filter(Boolean).join(" · ") || null,
       sku: hit.sku,
       code: data.codeByVariant.get(hit.variant_id) ?? hit.sku ?? "",
-      price: price > 0 ? formatMoney(price, base) : "",
-      priceLocal: local && rate?.rate && price > 0 ? formatMoney(price * rate.rate, local) : null,
+      ...pvp(hit.price, data.taxIdByVariant.get(hit.variant_id)),
     };
   };
   const first = rows[0]?.hit;

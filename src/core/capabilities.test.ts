@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import migrationSql from "../../supabase/migrations/20261205000000_role_capabilities.sql?raw";
 import { CAPABILITIES, CAPABILITY_KEYS, EDITABLE_ROLES, resolveCapabilities, roleAllows } from "./capabilities";
 
 describe("roleAllows", () => {
@@ -26,6 +25,15 @@ describe("roleAllows", () => {
     expect(resolveCapabilities(undefined, []).size).toBe(0);
   });
 });
+
+// La última migración que redefine app.capability_defaults() manda.
+const migrations = import.meta.glob("../../supabase/migrations/*.sql", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+const migrationSql =
+  Object.keys(migrations)
+    .sort()
+    .reverse()
+    .map((path) => migrations[path])
+    .find((sql) => sql.includes("function app.capability_defaults()")) ?? "";
 
 describe("defaults en la base", () => {
   // app.capability_defaults(): un jsonb_build_object por rol.
