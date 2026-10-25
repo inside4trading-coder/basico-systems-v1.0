@@ -2,7 +2,7 @@
  * Etiquetas por unidad: cada pieza con su propio código (consecutivo o serial
  * del fabricante). Se activa por producto; el stock sigue por variante.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Ban, Eye, PackageCheck, Plus, Printer, Tag, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -15,22 +15,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/core/supabase";
 import { useTenant } from "@/core/tenant-context";
 import { formatQty } from "@/modules/pos/cart";
-import { printReceipt } from "@/modules/pos/receipt";
-import { defaultTemplate, useLabelHeader, useLabelTemplates } from "./api";
-import { codeSvg } from "./codes";
-import { labelsHtml, type LabelItem, type LabelTemplate } from "./labels";
-import { usePvp } from "./pricing";
+import { usePrintUnits, useTemplateChoice } from "./printing";
 import {
   ITEM_STATUS_LABEL,
   fetchItemLabels,
-  fetchVariantInfo,
   missingLabels,
   parseSerials,
   useDisableItemLabels,
   useDismissEntry,
   useGenerateItemLabels,
   useItemLabelQueue,
-  useMarkItemLabelsPrinted,
   useSetTrackUnits,
   useUnitOverview,
   useVariantItemLabels,
@@ -50,48 +44,12 @@ interface LookupHit {
 
 const variantText = (options: Record<string, string> | null) => Object.values(options ?? {}).join(" · ");
 
-/** Imprime etiquetas por unidad con la plantilla y marca las nuevas como impresas. */
-function usePrintUnits(template: LabelTemplate | null) {
-  const header = useLabelHeader(template);
-  const pvp = usePvp();
-  const markPrinted = useMarkItemLabelsPrinted();
-  return async (labels: ItemLabel[]): Promise<void> => {
-    if (!template) return;
-    const active = labels.filter((l) => l.status !== "disabled");
-    if (active.length === 0) {
-      toast.info("No hay etiquetas activas para imprimir");
-      return;
-    }
-    const info = await fetchVariantInfo([...new Set(active.map((l) => l.variant_id))]);
-    const items: LabelItem[] = await Promise.all(
-      active.map(async (l) => {
-        const v = info.get(l.variant_id);
-        return {
-          name: v?.name ?? "Producto",
-          detail: v?.detail ?? null,
-          sku: v?.sku ?? null,
-          code: l.code,
-          unitCode: l.code,
-          ...pvp(v?.net, v?.taxRateId),
-          codeSvg: await codeSvg(template.code_kind, l.code),
-        };
-      }),
-    );
-    printReceipt(labelsHtml(items, template, header));
-    const fresh = active.filter((l) => l.status === "generated").map((l) => l.id);
-    if (fresh.length) await markPrinted.mutateAsync(fresh);
-  };
-}
-
 export default function UnitsPanel() {
   const { can } = useTenant();
   const editable = can("inventario.etiquetas");
   const overview = useUnitOverview();
   const setTrack = useSetTrackUnits();
-  const templates = useLabelTemplates();
-  const all = useMemo(() => templates.data?.all ?? [], [templates.data]);
-  const [templateId, setTemplateId] = useState<string | null>(null);
-  const template = all.find((t) => t.id === templateId) ?? (all.length ? defaultTemplate(all) : null);
+  const { all, template, setTemplateId } = useTemplateChoice();
   const print = usePrintUnits(template);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<LookupHit[]>([]);

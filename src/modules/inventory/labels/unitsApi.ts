@@ -143,18 +143,6 @@ export function useGenerateItemLabels() {
   });
 }
 
-export function useMarkItemLabelsPrinted() {
-  const invalidate = useInvalidate();
-  return useMutation({
-    mutationFn: async (ids: string[]) => {
-      const { data, error } = await supabase.rpc("mark_item_labels_printed", { p_ids: ids });
-      if (error) throw fail(error);
-      return data as number;
-    },
-    onSuccess: invalidate,
-  });
-}
-
 export function useDisableItemLabels() {
   const invalidate = useInvalidate();
   return useMutation({

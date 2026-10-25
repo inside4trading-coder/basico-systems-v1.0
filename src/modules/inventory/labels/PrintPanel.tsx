@@ -3,7 +3,7 @@
  * elige la plantilla (rollo u hoja, con o sin código, qué campos).
  */
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { codeSvg } from "./codes";
 import { CODE_KIND_LABEL, expandLabels, labelsHtml, type LabelItem, type LabelTemplate } from "./labels";
 import LabelPreview from "./LabelPreview";
 import { usePvp } from "./pricing";
+import { logLabelPrint } from "./printing";
 
 interface Hit {
   variant_id: string;
@@ -57,6 +58,7 @@ function templateSummary(t: LabelTemplate) {
 
 export default function PrintPanel() {
   const pvp = usePvp();
+  const qc = useQueryClient();
   const templates = useLabelTemplates();
   const all = useMemo(() => templates.data?.all ?? [], [templates.data]);
   const [templateId, setTemplateId] = useState<string | null>(null);
@@ -118,13 +120,25 @@ export default function PrintPanel() {
             return null;
           }
           const item: LabelItem = { ...fields, codeSvg: await codeSvg(template.code_kind, fields.code) };
-          return { item, copies: r.copies };
+          return { item, copies: r.copies, variantId: r.hit.variant_id };
         }),
       );
-      const items = prepared.filter((x): x is { item: LabelItem; copies: number } => x !== null);
+      const items = prepared.filter((x): x is { item: LabelItem; copies: number; variantId: string } => x !== null);
       if (missing.length) toast.warning("Sin código ni SKU, no se imprimen", { description: missing.join(", ") });
       if (total > MAX_LABELS) toast.warning(`Se imprimen las primeras ${MAX_LABELS} etiquetas`);
-      if (items.length) printReceipt(labelsHtml(expandLabels(items, MAX_LABELS), template, header));
+      if (items.length) {
+        const sheet = expandLabels(items, MAX_LABELS);
+        printReceipt(labelsHtml(sheet, template, header));
+        // El historial no detiene la impresión si falla.
+        logLabelPrint({
+          kind: "price",
+          template,
+          quantity: sheet.length,
+          items: items.map((x) => ({ variant_id: x.variantId, copies: x.copies })),
+        })
+          .then(() => qc.invalidateQueries({ queryKey: ["label-history"] }))
+          .catch(() => undefined);
+      }
     } catch (err) {
       toast.error("No se pudieron armar las etiquetas", { description: (err as Error).message });
     } finally {
