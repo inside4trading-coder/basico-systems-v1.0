@@ -5,7 +5,6 @@
  * entran por Control (entradas y ajustes), no se editan en esta tabla.
  */
 import { ScanButton } from "@/core/scanner/CameraScanner";
-import LabelsDialog from "./labels/LabelsDialog";
 import { Fragment, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Plus, SlidersHorizontal } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -105,11 +104,8 @@ export default function InventoryPage() {
   const stockValue = enriched.reduce((a, r) => a + r.total.onHand * Number(r.variant.cost ?? 0), 0);
   const columns = 9 + activeLocations.length;
 
-  const [labelsOpen, setLabelsOpen] = useState(false);
-
   return (
     <AppShell wide>
-      <LabelsDialog open={labelsOpen} onOpenChange={setLabelsOpen} />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl">Inventario</h1>
@@ -119,8 +115,8 @@ export default function InventoryPage() {
           <Button variant="outline" asChild>
             <Link to="/control">Entradas y ajustes</Link>
           </Button>
-          <Button variant="outline" onClick={() => setLabelsOpen(true)}>
-            Etiquetas
+          <Button variant="outline" asChild>
+            <Link to="/inventario/etiquetas">Etiquetas</Link>
           </Button>
           {editable && (
             <>
