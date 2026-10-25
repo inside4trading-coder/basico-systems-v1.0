@@ -4,8 +4,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTabParam } from "@/lib/useTabParam";
 import PrintPanel from "./PrintPanel";
 import TemplatesPanel from "./TemplatesPanel";
+import UnitsPanel from "./UnitsPanel";
 
-const TABS = ["imprimir", "plantillas"] as const;
+const TABS = ["imprimir", "unidades", "plantillas"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function LabelsPage() {
@@ -19,10 +20,14 @@ export default function LabelsPage() {
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="space-y-4">
         <TabsList>
           <TabsTrigger value="imprimir">Imprimir</TabsTrigger>
+          <TabsTrigger value="unidades">Por unidad</TabsTrigger>
           <TabsTrigger value="plantillas">Plantillas</TabsTrigger>
         </TabsList>
         <TabsContent value="imprimir">
           <PrintPanel />
+        </TabsContent>
+        <TabsContent value="unidades">
+          <UnitsPanel />
         </TabsContent>
         <TabsContent value="plantillas">
           <TemplatesPanel />
