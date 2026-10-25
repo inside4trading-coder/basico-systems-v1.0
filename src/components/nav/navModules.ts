@@ -72,6 +72,7 @@ export const NAV_MODULES: NavModule[] = [
         label: "Catálogo",
         items: [
           { label: "Inventario maestro", to: "/inventario", module: "inventario" },
+          { label: "Etiquetas", to: "/inventario/etiquetas", module: "inventario" },
           { label: "Importar y exportar", to: "/inventario/importar", capability: "catalogo.editar", module: "inventario" },
           { label: "Campos del catálogo", to: "/catalogo/campos", capability: "catalogo.editar", module: "inventario" },
         ],

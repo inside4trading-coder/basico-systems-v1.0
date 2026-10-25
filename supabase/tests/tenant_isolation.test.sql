@@ -412,6 +412,7 @@ begin
       values (t, v_mov, v_inst, 1, 1);
     insert into public.cash_session_cashiers (tenant_id, session_id, cashier_id) values (t, v_sess, v_staff);
     insert into public.coupons (tenant_id, code, kind, value) values (t, 'ISO1', 'amount', 1);
+    insert into public.label_templates (tenant_id, name, width_mm, height_mm) values (t, 'Aislamiento', 50, 25);
     insert into public.clock_pin_failures (tenant_id) values (t);
     insert into public.studio_jobs (tenant_id, product_id, kind, source_path)
       select t, p.id, 'catalogo', t::text || '/aislamiento.webp' from public.products p where p.tenant_id = t limit 1;
