@@ -124,5 +124,36 @@ select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-0000000
 select throws_ok(format('select public.dismiss_item_label_entry(%L, %L)', current_setting('test.e1'), 'x'), '42501', null,
                  'el cajero no descarta');
 
+-- Historial y buscador (fase 4).
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
+select lives_ok($$ select public.log_label_print('price', null, 'Rollo', 3, '{}', '[{"variant_id":"x","copies":3}]') $$,
+                'registra una impresión de precios');
+select set_config('test.fresh', (select array_agg(id)::text from public.item_labels where code in ('TEL-1-00003', 'TEL-1-00004')), true);
+select lives_ok(format('select public.log_label_print(%L, null, %L, 2, %L::uuid[])', 'unit', 'Rollo', current_setting('test.fresh')),
+                'imprime dos por unidad');
+select is((select count(*)::int from public.item_labels where code in ('TEL-1-00003', 'TEL-1-00004') and status = 'printed'), 2,
+          'y quedan impresas');
+select throws_ok(format('select public.log_label_print(%L, null, %L, 2, %L::uuid[])', 'unit', 'Rollo', current_setting('test.fresh')),
+                 '23514', 'Escribe el motivo de la reimpresión', 'reimprimir pide motivo');
+select lives_ok(format('select public.log_label_print(%L, null, %L, 2, %L::uuid[], %L, %L)', 'unit', 'Rollo', current_setting('test.fresh'), '[]', 'Se borró'),
+                'reimpresión con motivo');
+select is((select is_reprint from public.label_print_jobs where reason = 'Se borró'), true, 'queda marcada como reimpresión');
+select throws_ok(format('select public.log_label_print(%L, null, %L, 1, array[%L]::uuid[])', 'unit', 'Rollo',
+                        (select id from public.item_labels where unit_number = 1)), '23514', 'No hay etiquetas activas para imprimir',
+                 'una desactivada no se imprime');
+select is((select count(*)::int from public.label_print_history()), 3, 'el historial muestra las impresiones');
+select is((select printed_by_email from public.label_print_history() limit 1), 'owner-a@test.local', 'con quién imprimió');
+
+select is((select times_printed from public.search_item_labels('tel-1-00003')), 2::bigint, 'el buscador cuenta las impresiones');
+select is((select code from public.search_item_labels('TEL-1-00003') limit 1), 'TEL-1-00003', 'código exacto primero');
+select ok((select count(*) > 3 from public.search_item_labels('telefono')), 'busca por nombre sin tilde');
+select is((select entry_note from public.search_item_labels('SN-ENT')), 'Factura 1', 'muestra la entrada de origen');
+select is((select count(*)::int from public.search_item_labels('x')), 0, 'pide al menos dos letras');
+
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000002","role":"authenticated"}', true);
+select lives_ok($$ select public.log_label_print('price', null, 'Rollo', 1) $$, 'el cajero imprime precios');
+select throws_ok(format('select public.log_label_print(%L, null, %L, 2, %L::uuid[], %L, %L)', 'unit', 'Rollo', current_setting('test.fresh'), '[]', 'x'),
+                 '42501', null, 'pero no etiquetas por unidad');
+
 select * from finish();
 rollback;
