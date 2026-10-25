@@ -128,12 +128,13 @@ export function useSetTrackUnits() {
 export function useGenerateItemLabels() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: async (input: { variantId: string; quantity?: number; serials?: string[]; origin?: string }) => {
+    mutationFn: async (input: { variantId: string; quantity?: number; serials?: string[]; origin?: string; movementId?: string | null }) => {
       const { data, error } = await supabase.rpc("generate_item_labels", {
         p_variant_id: input.variantId,
         p_quantity: input.quantity ?? null,
         p_serials: input.serials?.length ? input.serials : null,
         p_origin: input.origin ?? "manual",
+        p_movement_id: input.movementId ?? null,
       });
       if (error) throw fail(error);
       return data as { created: number; ids: string[] };
@@ -188,4 +189,44 @@ export async function fetchVariantInfo(ids: string[]) {
       ];
     }),
   );
+}
+
+export interface QueueRow {
+  movement_id: string;
+  received_at: string;
+  location_name: string;
+  supplier: string | null;
+  note: string | null;
+  product_id: string;
+  product_name: string;
+  variant_id: string;
+  sku: string | null;
+  options: Record<string, string> | null;
+  qty: number;
+  labeled: number;
+  pending: number;
+}
+
+/** Entradas de mercancía de productos por unidad que tienen piezas sin etiquetar. */
+export function useItemLabelQueue() {
+  const tenant = useTenantKey();
+  return useQuery({
+    queryKey: ["item-labels", tenant, "queue"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("item_label_queue");
+      if (error) throw fail(error);
+      return ((data ?? []) as QueueRow[]).map((r) => ({ ...r, qty: Number(r.qty), labeled: Number(r.labeled), pending: Number(r.pending) }));
+    },
+  });
+}
+
+export function useDismissEntry() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: async ({ movementId, reason }: { movementId: string; reason: string }) => {
+      const { error } = await supabase.rpc("dismiss_item_label_entry", { p_movement_id: movementId, p_reason: reason });
+      if (error) throw fail(error);
+    },
+    onSuccess: invalidate,
+  });
 }
