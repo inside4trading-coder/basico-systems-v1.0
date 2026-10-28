@@ -73,15 +73,15 @@ export function normalizeHeader(header: string): string {
     .trim();
 }
 
-/** Sinónimos habituales en Excels de PyMEs venezolanas. */
+/** Sinónimos habituales en los Excels de los negocios en Venezuela. */
 const HEADER_SYNONYMS: [string[], TargetField][] = [
   [["clave producto", "clave", "grupo", "modelo"], "product_key"],
   [["nombre", "nombre producto", "producto", "descripcion corta", "articulo", "item"], "name"],
   [["marca", "fabricante"], "brand"],
   [["categoria", "rubro", "departamento", "linea", "familia"], "category"],
   [["descripcion", "detalle"], "description"],
-  [["sku", "codigo", "cod", "referencia", "ref"], "sku"],
-  [["precio sin iva", "precio", "precio venta", "precio de venta", "precio detal", "precio usd", "precio ref", "precio base"], "regular_price"],
+  [["sku", "codigo", "cod", "referencia", "ref", "codigo producto", "codigo articulo"], "sku"],
+  [["precio sin iva", "precio", "precio venta", "precio de venta", "precio detal", "precio usd", "precio ref", "precio base", "usd", "precio dolar", "precio dolares"], "regular_price"],
   [["oferta sin iva", "oferta", "precio oferta", "precio promocion"], "price"],
   [["costo", "costo unitario", "costo usd", "costo ref"], "cost"],
   [["unidad", "unidad de venta", "um", "presentacion"], "unit"],
@@ -93,6 +93,36 @@ const HEADER_SYNONYMS: [string[], TargetField][] = [
   [["color"], "option:Color"],
   [["medida", "tamano"], "option:Medida"],
 ];
+
+const STOCK_NAMES = ["existencia", "existencias", "stock", "cantidad", "cant", "inventario", "disponible", "unidades"];
+
+/**
+ * Campo para un encabezado. Primero el nombre exacto; si no, por la primera
+ * palabra ("Descripción del repuesto" → descripción) o por abreviatura de 4+
+ * letras ("Cant" → cantidad). Devuelve "stock" para la existencia genérica.
+ */
+export function matchHeader(header: string): TargetField | "stock" | null {
+  const h = normalizeHeader(header);
+  if (!h) return null;
+  if (STOCK_NAMES.includes(h)) return "stock";
+  const exact = HEADER_SYNONYMS.find(([names]) => names.includes(h));
+  if (exact) return exact[1];
+  const first = h.split(" ")[0];
+  if (STOCK_NAMES.includes(first)) return "stock";
+  const byWord = HEADER_SYNONYMS.find(([names]) => names.includes(first));
+  if (byWord) return byWord[1];
+  if (first.length >= 4) {
+    if (STOCK_NAMES.some((n) => n.startsWith(first))) return "stock";
+    const byPrefix = HEADER_SYNONYMS.find(([names]) => names.some((n) => !n.includes(" ") && n.startsWith(first)));
+    if (byPrefix) return byPrefix[1];
+  }
+  return null;
+}
+
+/** 1 si el texto parece un título de columna conocido, 0 si no (para hallar la fila de encabezado). */
+export function headerScore(cell: string): number {
+  return matchHeader(cell) ? 1 : 0;
+}
 
 /**
  * Propone un mapeo por nombre de columna. "existencia"/"stock" va a la sede
@@ -133,8 +163,9 @@ export function suggestMapping(
       take(header, `attr:${attribute.key}`);
       continue;
     }
-    if (["existencia", "existencias", "stock", "cantidad", "inventario", "disponible"].includes(h) && ctx.defaultLocationCode) {
-      take(header, `stock:${ctx.defaultLocationCode}`);
+    const matched = matchHeader(header);
+    if (matched === "stock") {
+      if (ctx.defaultLocationCode) take(header, `stock:${ctx.defaultLocationCode}`);
       continue;
     }
     // Encabezados tal como los escribe la exportación ("Número de parte / OEM", "Código oem").
@@ -143,8 +174,7 @@ export function suggestMapping(
       take(header, `code:${codeKind}`);
       continue;
     }
-    const hit = HEADER_SYNONYMS.find(([names]) => names.includes(h));
-    if (hit) take(header, hit[1]);
+    if (matched) take(header, matched);
   }
 
   // Muchos Excels no tienen "Nombre": el nombre del artículo está en "Descripción".
@@ -153,4 +183,16 @@ export function suggestMapping(
     if (description) mapping[description] = "name";
   }
   return mapping;
+}
+
+/** "Vehículo compatible" → "vehiculo_compatible". */
+export function attributeKey(label: string): string {
+  return label
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/^(\d)/, "c_$1")
+    .slice(0, 41);
 }

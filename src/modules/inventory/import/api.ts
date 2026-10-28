@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/core/supabase";
 import { useTenant } from "@/core/tenant-context";
-import type { ColumnMapping } from "./fields";
 import type { ImportPayloadRow } from "./preview";
 import type { RubroAttribute } from "./rubros";
+import type { TemplateV2 } from "./templates";
 
 export interface AttributeDef {
   id: string;
@@ -19,7 +19,8 @@ export interface AttributeDef {
 export interface ImportTemplate {
   id: string;
   name: string;
-  mapping: ColumnMapping;
+  /** Formato v1 (cruce plano) o v2; se lee con readTemplate. */
+  mapping: unknown;
   updated_at: string;
 }
 
@@ -50,17 +51,7 @@ function asError(error: { message?: string } | null): Error {
   return new Error(error?.message ?? "Error desconocido");
 }
 
-/** "Vehículo compatible" → "vehiculo_compatible". */
-export function attributeKey(label: string): string {
-  return label
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .replace(/^(\d)/, "c_$1")
-    .slice(0, 41);
-}
+export { attributeKey } from "./fields";
 
 export function useAttributeDefs() {
   const tenant = useTenantKey();
@@ -118,8 +109,8 @@ export function useImportTemplates() {
 export function useSaveImportTemplate() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ name, mapping }: { name: string; mapping: ColumnMapping }) => {
-      const clean = Object.fromEntries(Object.entries(mapping).filter(([, field]) => field !== ""));
+    mutationFn: async ({ name, template }: { name: string; template: TemplateV2 }) => {
+      const clean = template;
       const { data: existing } = await supabase.from("import_templates").select("id").eq("name", name.trim()).maybeSingle();
       const { error } = existing
         ? await supabase.from("import_templates").update({ mapping: clean }).eq("id", existing.id)
@@ -128,6 +119,18 @@ export function useSaveImportTemplate() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["inv"] }),
   });
+}
+
+/** Crea los campos propios que el cruce usa y aún no existen (texto, buscables). */
+export async function ensureAttributes(wanted: { key: string; label: string }[], existingKeys: string[]) {
+  const seen = new Set(existingKeys);
+  const missing = wanted.filter((a) => !seen.has(a.key) && seen.add(a.key));
+  if (missing.length === 0) return 0;
+  const { error } = await supabase
+    .from("attribute_defs")
+    .insert(missing.map((a) => ({ key: a.key, label: a.label, type: "text", multi: false, searchable: true })));
+  if (error) throw asError(error);
+  return missing.length;
 }
 
 export function useImportJobs() {
