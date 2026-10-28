@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { Check, FileSpreadsheet, PackagePlus, RefreshCcw } from "lucide-react";
+import { Check, ChevronDown, FileSpreadsheet, PackagePlus, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 import AppShell from "@/components/AppShell";
 import InviteForm from "@/components/InviteForm";
@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/core/tenant-context";
 import { cn } from "@/lib/utils";
 import NewProductDialog from "@/modules/inventory/NewProductDialog";
+import CatalogImporter from "@/modules/inventory/import/CatalogImporter";
 import { useLocations } from "@/modules/inventory/api";
 import { parseAmount } from "@/modules/inventory/import/preview";
 import { RATE_SOURCE_LABEL, useCurrentRate, useRefreshRate, useTenantSettings } from "@/modules/settings/api";
@@ -237,18 +238,25 @@ function BusinessStep({ onDone }: { onDone: () => void }) {
 function ProductsStep({ tenantId, currency, onDone }: { tenantId: string; currency: string; onDone: () => void }) {
   const { data: count = 0, refetch } = useProductCount(tenantId);
   const [creating, setCreating] = useState(false);
+  // El importador se abre aquí mismo: el cliente no sale del alta.
+  const [importing, setImporting] = useState(true);
 
   return (
     <Section title="Tus productos" description="Carga tu catálogo para empezar a vender. Puedes hacerlo ahora o después.">
       <div className="grid gap-3 sm:grid-cols-2">
-        <Link
-          to="/inventario/importar?desde=bienvenida"
-          className="flex flex-col gap-2 rounded-md border p-4 transition-colors hover:border-primary"
+        <button
+          type="button"
+          onClick={() => setImporting((v) => !v)}
+          aria-expanded={importing}
+          className={cn("flex flex-col gap-2 rounded-md border p-4 text-left transition-colors hover:border-primary", importing && "border-primary")}
         >
-          <FileSpreadsheet className="h-5 w-5 text-primary" aria-hidden />
+          <span className="flex items-center justify-between">
+            <FileSpreadsheet className="h-5 w-5 text-primary" aria-hidden />
+            <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", importing && "rotate-180")} aria-hidden />
+          </span>
           <span className="font-medium">Importar desde Excel</span>
-          <span className="text-sm text-muted-foreground">Baja la plantilla, llénala con tus productos, precios y existencias, y súbela.</span>
-        </Link>
+          <span className="text-sm text-muted-foreground">Sube tu Excel como lo tengas; te ayudamos a ubicar nombre, código, precio y existencia.</span>
+        </button>
         <button
           type="button"
           onClick={() => setCreating(true)}
@@ -259,10 +267,21 @@ function ProductsStep({ tenantId, currency, onDone }: { tenantId: string; curren
           <span className="text-sm text-muted-foreground">Agrega uno a mano para probar el punto de venta.</span>
         </button>
       </div>
+      {importing && (
+        <CatalogImporter
+          embedded
+          onImported={(r) => {
+            toast.success(`Listo: ${r.products_created} productos cargados`);
+            refetch().then(onDone);
+          }}
+        />
+      )}
       <p className="text-sm" role="status">
         {count === 0 ? "Todavía no tienes productos." : `Tienes ${count} producto${count === 1 ? "" : "s"}.`}
       </p>
-      <Button onClick={onDone}>{count === 0 ? "Lo hago después" : "Continuar"}</Button>
+      <Button variant={count === 0 && importing ? "outline" : "default"} onClick={onDone}>
+        {count === 0 ? "Lo hago después" : "Continuar"}
+      </Button>
       <NewProductDialog
         open={creating}
         onOpenChange={(open) => {
