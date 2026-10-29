@@ -10,12 +10,19 @@ export default function ColumnPicker({
   sheet,
   value,
   onPick,
+  exclude = [],
+  allowNone = true,
 }: {
   sheet: ParsedSheet;
   value: string;
   onPick: (header: string) => void;
+  /** Columnas que no se ofrecen (ya usadas en otro campo). */
+  exclude?: string[];
+  /** Muestra la tarjeta «No lo tengo». */
+  allowNone?: boolean;
 }) {
   const columns = sheet.headers
+    .filter((h) => !exclude.includes(h))
     .map((h) => ({ h, samples: sheet.rows.map((r) => r[h]).filter(Boolean).slice(0, SAMPLES) }))
     .filter((c) => c.samples.length > 0);
   const card = (selected: boolean) =>
@@ -33,10 +40,13 @@ export default function ColumnPicker({
           ))}
         </button>
       ))}
-      <button type="button" onClick={() => onPick("")} className={card(value === "")} aria-pressed={value === ""}>
-        <span className="mono-cap block text-[10px] text-muted-foreground">&nbsp;</span>
-        <span className="block text-sm">No lo tengo</span>
-      </button>
+      {allowNone && (
+        <button type="button" onClick={() => onPick("")} className={card(value === "")} aria-pressed={value === ""}>
+          <span className="mono-cap block text-[10px] text-muted-foreground">&nbsp;</span>
+          <span className="block text-sm">No lo tengo</span>
+        </button>
+      )}
+      {columns.length === 0 && !allowNone && <p className="text-sm text-muted-foreground">Ya usaste todas las columnas con datos.</p>}
     </div>
   );
 }

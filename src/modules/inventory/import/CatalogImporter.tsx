@@ -350,6 +350,7 @@ export default function CatalogImporter({
               key={`${current.name}|${activeSheet}|${current.headerIndex}`}
               sheet={current}
               defaultLocation={defaultLocation?.code ?? null}
+              attributeLabels={attributeLabels}
               onChange={(patch) => updateSheet(activeSheet, patch)}
             />
           ) : (
