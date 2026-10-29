@@ -53,10 +53,20 @@ update public.import_jobs set created_at = created_at - interval '1 hour' where 
 update public.products set created_at = created_at - interval '1 hour' where tenant_id = 'aaaaaaaa-1111-1111-1111-111111111111' and name in ('Bomba de agua', 'Correa', 'Fusible');
 update public.inventory_movements set created_at = created_at - interval '1 hour' where tenant_id = 'aaaaaaaa-1111-1111-1111-111111111111';
 insert into public.inventory_movements (tenant_id, variant_id, location_id, kind, qty_before, qty_delta, qty_after, created_at)
-select v.tenant_id, v.id, l.id, 'adjustment', 2, -1, 1, now()
+select v.tenant_id, v.id, l.id, 'adjustment', 2, -1, 1, now() + interval '1 minute'
 from public.variants v, public.locations l
 where v.sku = 'P-00002' and l.code = 'T1' and l.tenant_id = v.tenant_id;
 set local role authenticated;
+
+-- Otra importación (la recarga del mismo inventario) cuenta de nuevo la bomba:
+-- ese conteo no es «uso» y no debe impedir deshacer la primera.
+select results_eq(
+  $$ select (r ->> 'variants_updated')::int, (r ->> 'stock_rows_applied')::int
+     from public.catalog_import('inventario-2.xlsx', repeat('d', 64),
+       '[{"row_number": 2, "sku": "P-00001", "stock": [{"location_code": "T1", "qty": 5}]}]'::jsonb) r $$,
+  $$ values (1, 1) $$,
+  'una segunda importación vuelve a contar la bomba'
+);
 
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000002","role":"authenticated"}', true);
 select throws_ok(
@@ -76,7 +86,7 @@ select results_eq(
   $$ select (r ->> 'removed')::int, (r ->> 'kept')::int, r -> 'kept_names'
      from public.undo_catalog_import(current_setting('test.job')::uuid) r $$,
   $$ values (2, 1, '["Correa"]'::jsonb) $$,
-  'borra lo creado y conserva lo que ya se ajustó'
+  'borra lo creado (aunque otra importación lo haya contado) y conserva lo que ya se ajustó'
 );
 select results_eq(
   $$ select p.name, v.regular_price from public.products p join public.variants v on v.product_id = p.id order by p.name $$,
