@@ -158,6 +158,13 @@ export function suggestMapping(
     const h = normalizeHeader(header);
     if (!h || mapping[header] !== "" || locationOf(h)) continue;
 
+    // Un título que es exactamente un campo del sistema ("CODIGO" → SKU) gana sobre un campo propio
+    // con el mismo nombre (p. ej. el que guarda el código original de una importación anterior).
+    const exact = HEADER_SYNONYMS.find(([names]) => names.includes(h))?.[1];
+    if (exact && !used.has(exact) && !exact.startsWith("option:")) {
+      take(header, exact);
+      continue;
+    }
     const attribute = ctx.attributes.find((a) => normalizeHeader(a.label) === h || normalizeHeader(a.key) === h);
     if (attribute) {
       take(header, `attr:${attribute.key}`);

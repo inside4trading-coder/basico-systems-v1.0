@@ -10,11 +10,21 @@ import { Download, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 import AppShell from "@/components/AppShell";
 import BackLink from "@/components/BackLink";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { useTenant } from "@/core/tenant-context";
 import { useMarkStep } from "@/modules/onboarding/api";
 import { useCatalog, useLocations } from "./api";
-import { useAttributeDefs, useImportJobs } from "./import/api";
+import { useAttributeDefs, useImportJobs, useUndoImport, type ImportJob } from "./import/api";
 import CatalogImporter from "./import/CatalogImporter";
 import { exportCatalog, downloadTemplate } from "./import/exportCatalog";
 import { RUBROS } from "./import/rubros";
@@ -32,6 +42,8 @@ export default function ImportPage() {
   const { data: defs = [] } = useAttributeDefs();
   const { data: jobs = [] } = useImportJobs();
   const [rubroId, setRubroId] = useState(RUBROS[0].id);
+  const [undoing, setUndoing] = useState<ImportJob | null>(null);
+  const undo = useUndoImport();
 
   if (!can("catalogo.editar")) return <Navigate to="/inventario" replace />;
 
@@ -82,14 +94,57 @@ export default function ImportPage() {
             {jobs.map((j) => (
               <li key={j.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-sm">
                 <span className="font-medium">{j.file_name}</span>
-                <span className="text-xs text-muted-foreground">
+                <span className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                   {j.total_rows} filas · {j.result.variants_created ?? 0} nuevas · {j.result.variants_updated ?? 0} actualizadas · {formatDateTime(j.created_at)}
+                  {j.undone_at ? (
+                    <span>
+                      Deshecha · {formatDateTime(j.undone_at)}
+                      {j.undo_result && j.undo_result.kept > 0 && ` · ${j.undo_result.kept} se quedaron`}
+                    </span>
+                  ) : (
+                    (j.result.products_created ?? 0) > 0 && (
+                      <Button size="sm" variant="outline" onClick={() => setUndoing(j)}>
+                        Deshacer importación
+                      </Button>
+                    )
+                  )}
                 </span>
               </li>
             ))}
           </ul>
         </section>
       )}
+
+      <AlertDialog open={undoing !== null} onOpenChange={(open) => !open && setUndoing(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Deshacer esta importación?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se borrarán los {undoing?.result.products_created ?? 0} productos que creó «{undoing?.file_name}», con sus existencias. Los que ya se vendieron, ajustaron
+              o contaron se quedan. Los productos que ya tenías antes conservan los cambios de precio y existencia.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={undo.isPending}
+              onClick={() =>
+                undoing &&
+                undo.mutate(undoing.id, {
+                  onSuccess: (r) =>
+                    toast.success(`Se borraron ${r.removed} productos`, {
+                      description: r.kept > 0 ? `${r.kept} se quedaron porque ya tenían movimientos: ${r.kept_names.join(", ")}` : undefined,
+                    }),
+                  onError: (err) => toast.error("No se pudo deshacer", { description: err.message }),
+                  onSettled: () => setUndoing(null),
+                })
+              }
+            >
+              Deshacer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }
