@@ -30,6 +30,14 @@ export interface ImportJob {
   total_rows: number;
   result: Record<string, number>;
   created_at: string;
+  undone_at: string | null;
+  undo_result: UndoResult | null;
+}
+
+export interface UndoResult {
+  removed: number;
+  kept: number;
+  kept_names: string[];
 }
 
 export interface ImportResult {
@@ -140,12 +148,25 @@ export function useImportJobs() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("import_jobs")
-        .select("id, file_name, total_rows, result, created_at")
+        .select("id, file_name, total_rows, result, created_at, undone_at, undo_result")
         .order("created_at", { ascending: false })
         .limit(20);
       if (error) throw error;
       return (data ?? []) as ImportJob[];
     },
+  });
+}
+
+/** Borra lo que creó una importación; conserva lo que ya se usó. */
+export function useUndoImport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (jobId: string) => {
+      const { data, error } = await supabase.rpc("undo_catalog_import", { p_job_id: jobId });
+      if (error) throw asError(error);
+      return data as UndoResult;
+    },
+    onSuccess: () => qc.invalidateQueries(),
   });
 }
 

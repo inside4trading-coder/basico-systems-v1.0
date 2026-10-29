@@ -18,6 +18,11 @@ export interface CatalogIndexEntry {
   sku: string | null;
   codes: { kind: string; code: string }[];
   stockByLocationCode: Record<string, number>;
+  /** Para reconocer lo ya cargado cuando la fila no trae un SKU que coincida. */
+  name?: string;
+  brand?: string | null;
+  /** Códigos originales guardados en el campo propio de código (importaciones con SKU generado). */
+  codeValues?: string[];
 }
 
 export interface ImportContext {
@@ -74,6 +79,8 @@ export interface PreviewSummary {
   withWarnings: number;
   skipped: number;
   generatedSkus: number;
+  /** Filas sin SKU que coincidían y se reconocieron como productos ya cargados. */
+  recognized: number;
   productsCreate: number;
   variantsCreate: number;
   variantsUpdate: number;
@@ -82,6 +89,13 @@ export interface PreviewSummary {
 
 const clean = (v: unknown) => String(v ?? "").trim();
 const key = (v: unknown) => clean(v).toLocaleUpperCase("es");
+/** Sin acentos, mayúsculas ni espacios de más: «Bomba  de agua» = «BOMBA DE ÁGUA». */
+export const fold = (v: unknown) =>
+  clean(v)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleUpperCase("es")
+    .replace(/\s+/g, " ");
 
 /**
  * Número escrito a la venezolana o a la inglesa: "1.234,56", "1,234.56",
@@ -146,6 +160,20 @@ export function buildSheetsPreview(sources: SheetSource[], ctx: ImportContext) {
   }
   const locations = new Set(ctx.locationCodes.map(key));
   const attributes = new Map(ctx.attributes.map((a) => [a.key, a]));
+  // Lo ya cargado se reconoce por código original + marca, o por nombre + marca.
+  const byCodeBrand = new Map<string, CatalogIndexEntry[]>();
+  const byNameBrand = new Map<string, CatalogIndexEntry[]>();
+  const push = (map: Map<string, CatalogIndexEntry[]>, k: string, e: CatalogIndexEntry) => map.set(k, [...(map.get(k) ?? []), e]);
+  for (const entry of ctx.catalog) {
+    if (!entry.sku) continue;
+    for (const code of entry.codeValues ?? []) push(byCodeBrand, `${fold(code)}|${fold(entry.brand)}`, entry);
+    if (entry.name) push(byNameBrand, `${fold(entry.name)}|${fold(entry.brand)}`, entry);
+  }
+  const recognize = (original: string | null, name: unknown, brand: unknown): CatalogIndexEntry[] => {
+    const byCodeHit = original ? (byCodeBrand.get(`${fold(original)}|${fold(brand)}`) ?? []) : [];
+    if (byCodeHit.length > 0) return byCodeHit;
+    return name ? (byNameBrand.get(`${fold(name)}|${fold(brand)}`) ?? []) : [];
+  };
   const findExisting = (sku: string | null, codes: ImportPayloadRow["codes"]) =>
     sku ? bySku.get(key(sku)) : codes.map((c) => byCode.get(`${c.kind}|${key(c.code)}`)).find(Boolean);
 
@@ -182,10 +210,27 @@ export function buildSheetsPreview(sources: SheetSource[], ctx: ImportContext) {
   const skuCount = new Map<string, number>();
   for (const p of parsed) if (p.sku) skuCount.set(key(p.sku), (skuCount.get(key(p.sku)) ?? 0) + 1);
   let generatedSkus = 0;
+  let recognized = 0;
+  // Los que ya coinciden por SKU o código no se le asignan a otra fila.
+  const taken = new Set<string>(parsed.flatMap((p) => findExisting(p.sku, p.codes)?.variantId ?? []));
   for (const p of parsed) {
     const original = p.sku;
     if (original && p.rules.keepCodeAs) p.attrs.push({ key: p.rules.keepCodeAs, value: original });
     if (!p.rules.autoSku) continue;
+    // Producto ya cargado (p. ej. con SKU generado en otra importación): se actualiza en vez de duplicarlo.
+    // Si el archivo trae el mismo producto varias veces, cada fila toma el siguiente que coincida, en orden de SKU.
+    if (!findExisting(original, p.codes)) {
+      const found = recognize(original, p.product.name, p.product.brand);
+      const free = found.filter((e) => !taken.has(e.variantId)).sort((a, b) => (a.sku ?? "").localeCompare(b.sku ?? "", "es", { numeric: true }));
+      if (free.length > 0) {
+        taken.add(free[0].variantId);
+        p.sku = free[0].sku;
+        recognized += 1;
+        p.notes.push(`Ya estaba cargado (${p.sku}): se actualiza`);
+        continue;
+      }
+      if (found.length > 0) p.warnings.push(`Puede estar repetido: se parece a ${found.length === 1 ? "un producto" : `${found.length} productos`} que ya tienes`);
+    }
     const repeated = Boolean(original) && (skuCount.get(key(original)) ?? 0) > 1;
     const missing = !original && !findExisting(null, p.codes);
     if (repeated || missing) {
@@ -291,6 +336,7 @@ export function buildSheetsPreview(sources: SheetSource[], ctx: ImportContext) {
     withWarnings: preview.filter((r) => r.warnings.length > 0).length,
     skipped,
     generatedSkus,
+    recognized,
     productsCreate: newGroups.size,
     variantsCreate: preview.filter((r) => r.action === "Crear").length,
     variantsUpdate: preview.filter((r) => r.action === "Actualizar").length,

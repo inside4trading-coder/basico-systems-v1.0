@@ -18,7 +18,9 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useTenant } from "@/core/tenant-context";
-import { useCatalog, useLocations } from "../api";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/core/supabase";
+import { fetchAllPages, useCatalog, useLocations } from "../api";
 import { ensureAttributes, useApplyImport, useAttributeDefs, useImportJobs, useImportTemplates, useSaveImportTemplate, type ImportResult } from "./api";
 import { downloadTemplate } from "./exportCatalog";
 import ConfirmStep from "./ConfirmStep";
@@ -31,6 +33,8 @@ import { RUBROS } from "./rubros";
 import { effectiveRules, initSheet, moveStockTo, pendingAttributes, stockColumn, withHeaderRow, type MappingContext, type SheetState } from "./sheetState";
 import SheetStep from "./SheetStep";
 import { findFormat, readTemplate, signatureOf, similarity, toTemplate } from "./templates";
+
+const NO_CODE_VALUES = new Map<string, string[]>();
 
 interface LoadedFile {
   file: File;
@@ -46,7 +50,7 @@ export default function CatalogImporter({
   /** Después de aplicar una importación nueva. */
   onImported?: (result: ImportResult) => void;
 }) {
-  const { can } = useTenant();
+  const { can, active } = useTenant();
   const { data: catalog } = useCatalog();
   const { data: locations = [] } = useLocations();
   const { data: defs = [] } = useAttributeDefs();
@@ -79,6 +83,24 @@ export default function CatalogImporter({
   };
   const attributeLabels = useMemo(() => Object.fromEntries(defs.map((d) => [d.key, d.label])), [defs]);
 
+  // Códigos originales ya guardados (importaciones anteriores con SKU generado), para reconocerlos.
+  const codeDefIds = useMemo(() => {
+    const keys = new Set(sheets.filter((s) => s.include).map((s) => effectiveRules(s).keepCodeAs));
+    return defs.filter((d) => keys.has(d.key)).map((d) => d.id);
+  }, [sheets, defs]);
+  const { data: codeValues = NO_CODE_VALUES } = useQuery({
+    queryKey: ["inv", active?.tenant.id ?? "none", "code_values", codeDefIds],
+    enabled: codeDefIds.length > 0,
+    queryFn: async () => {
+      const rows = await fetchAllPages<{ product_id: string; value: string }>((f, t) =>
+        supabase.from("product_attribute_values").select("product_id, value").in("attribute_id", codeDefIds).order("id").range(f, t),
+      );
+      const map = new Map<string, string[]>();
+      for (const r of rows) map.set(r.product_id, [...(map.get(r.product_id) ?? []), r.value]);
+      return map;
+    },
+  });
+
   const index: CatalogIndexEntry[] = useMemo(() => {
     const codeById = new Map(locations.map((l) => [l.id, l.code]));
     return (catalog?.rows ?? []).map((r) => ({
@@ -87,8 +109,11 @@ export default function CatalogImporter({
       sku: r.variant.sku,
       codes: r.codes.map((c) => ({ kind: c.kind, code: c.code })),
       stockByLocationCode: Object.fromEntries(r.stocks.map((s) => [codeById.get(s.location_id) ?? "", Number(s.on_hand)])),
+      name: r.product.name,
+      brand: r.product.brand,
+      codeValues: codeValues.get(r.product.id),
     }));
-  }, [catalog, locations]);
+  }, [catalog, locations, codeValues]);
 
   const included = sheets.filter((s) => s.include);
   const pending = useMemo(() => pendingAttributes(sheets, defs.map((d) => d.key)), [sheets, defs]);
@@ -356,7 +381,16 @@ export default function CatalogImporter({
         <Card className="space-y-3 rounded-surface p-4">
           <p className="mono-cap text-xs text-muted-foreground">3 · Importar</p>
           <p className="text-sm">
-            Se cargarán <span className="num font-medium">{preview.summary.valid}</span> productos
+            {preview.summary.variantsUpdate > 0 ? (
+              <>
+                Se cargarán <span className="num font-medium">{preview.summary.variantsCreate}</span> productos nuevos y se actualizarán{" "}
+                <span className="num font-medium">{preview.summary.variantsUpdate}</span> que ya tenías
+              </>
+            ) : (
+              <>
+                Se cargarán <span className="num font-medium">{preview.summary.valid}</span> productos
+              </>
+            )}
             {preview.summary.skipped > 0 && <span className="text-muted-foreground"> · {preview.summary.skipped} filas sin nombre se saltan</span>}.
           </p>
           {blocking.length > 0 && (
@@ -374,7 +408,7 @@ export default function CatalogImporter({
           {showDetail && <ReviewStep preview={preview.preview} summary={preview.summary} multiSheet={multiSheet} onDownloadNormalized={downloadNormalized} />}
           <div className="flex flex-wrap items-center gap-3">
             <Button className="h-12 px-6 text-base" disabled={apply.isPending} onClick={runImport}>
-              <Upload /> Se ve bien, importar {preview.summary.valid} productos
+              <Upload /> Se ve bien, importar {preview.summary.valid} {preview.summary.variantsUpdate > 0 ? "filas" : "productos"}
             </Button>
             <p className="text-xs text-muted-foreground">Todo o nada: si algo falla, no se guarda ningún cambio.</p>
           </div>

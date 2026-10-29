@@ -73,6 +73,11 @@ describe("cruce sugerido", () => {
     expect(matchHeader(header)).toBe(field);
   });
 
+  it("el código sigue siendo SKU aunque ya exista el campo propio «Codigo»", () => {
+    const s = initSheet({ name: "INVENTARIO", table: trimTable(RAW) }, { ...mctx, attributes: [{ key: "codigo", label: "Codigo" }] });
+    expect(s.mapping.CODIGO).toBe("sku");
+  });
+
   it("propone nombre, código, precio, existencia y marca para el Excel de ejemplo", () => {
     const { sheet } = sheetSources();
     expect(sheet.mapping).toMatchObject({
@@ -189,5 +194,58 @@ describe("sede de la mercancía", () => {
     expect(stockColumn(mapping)).toEqual({ header: "CANTIDAD", location: "T1" });
     expect(moveStockTo(mapping, "AL")).toEqual({ CANTIDAD: "stock:AL", MARCA: "brand" });
     expect(stockColumn({ A: "stock:T1", B: "stock:AL" })).toBeNull();
+  });
+});
+
+describe("productos ya cargados", () => {
+  // Catálogo como quedó después de importar el archivo una vez.
+  function catalogAfterFirstImport() {
+    const { source, ctx } = sheetSources();
+    const { preview } = buildSheetsPreview([source], ctx);
+    return preview.map((r, i) => ({
+      variantId: `v${i}`,
+      productId: `p${i}`,
+      sku: r.payload.sku,
+      codes: [],
+      stockByLocationCode: {},
+      name: String(r.payload.product.name),
+      brand: (r.payload.product.brand as string | undefined) ?? null,
+      codeValues: r.payload.attributes.filter((a) => a.key === "codigo").map((a) => a.value),
+    }));
+  }
+
+  it("volver a subir el mismo archivo no crea nada nuevo", () => {
+    const catalog = catalogAfterFirstImport();
+    const { source, ctx } = sheetSources();
+    const { preview, summary } = buildSheetsPreview([source], { ...ctx, catalog });
+    expect(summary).toMatchObject({ variantsCreate: 0, variantsUpdate: 4, generatedSkus: 0, recognized: 3, blocked: 0 });
+    expect(preview.map((r) => r.payload.sku)).toEqual(catalog.map((c) => c.sku));
+    expect(preview[0].notes[0]).toContain("Ya estaba cargado");
+  });
+
+  it("mismo nombre con otra marca es otro producto", () => {
+    const catalog = catalogAfterFirstImport().map((c) => ({ ...c, brand: "OTRA MARCA", codeValues: [] }));
+    const { source, ctx } = sheetSources();
+    const { summary } = buildSheetsPreview([source], { ...ctx, catalog });
+    expect(summary.recognized).toBe(0);
+  });
+
+  it("el mismo producto varias veces se empareja en orden", () => {
+    const first = catalogAfterFirstImport();
+    const twin = { ...first[2], variantId: "v9", productId: "p9", sku: "P-00099" };
+    const { source, ctx } = sheetSources();
+    const { preview } = buildSheetsPreview([source], { ...ctx, catalog: [...first, twin] });
+    const fusible = preview.find((r) => r.payload.product.name === "FUSIBLE 10 AMPERIOS")!;
+    expect(fusible.payload.sku).toBe("P-00003");
+  });
+
+  it("si el archivo trae más copias que el catálogo, la de más se crea con aviso", () => {
+    const catalog = catalogAfterFirstImport();
+    const { source, ctx } = sheetSources();
+    const doubled = { ...source, rows: [...source.rows, source.rows[2]], rowNumbers: [...(source.rowNumbers ?? []), 99] };
+    const { preview } = buildSheetsPreview([doubled], { ...ctx, catalog });
+    const extra = preview[preview.length - 1];
+    expect(extra.action).toBe("Crear");
+    expect(extra.warnings[0]).toContain("Puede estar repetido");
   });
 });
