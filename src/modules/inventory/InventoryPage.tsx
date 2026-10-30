@@ -127,7 +127,7 @@ export default function InventoryPage() {
   const columns = 8 + activeLocations.length;
 
   return (
-    <AppShell wide>
+    <AppShell wide="full">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl">Inventario</h1>
@@ -211,7 +211,7 @@ export default function InventoryPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Producto</TableHead>
+              <TableHead className="min-w-[280px]">Producto</TableHead>
               <TableHead>SKU</TableHead>
               <TableHead className="text-right">Precio sin IVA</TableHead>
               <TableHead>IVA</TableHead>
