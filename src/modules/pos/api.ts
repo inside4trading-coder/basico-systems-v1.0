@@ -328,6 +328,8 @@ export interface PosHit {
   tax_rate: number;
   /** Solo en el catálogo con el buscador vacío. */
   image_url?: string | null;
+  /** Aliado con más existencia de esta variante (se vende por encargo). */
+  partner?: { location_id: string; name: string; available: number } | null;
   category?: string | null;
 }
 
@@ -376,12 +378,35 @@ export async function searchForPos(query: string, locationId: string): Promise<P
 
   const variantIds = hits.map((h) => h.variant_id);
   const productIds = [...new Set(hits.map((h) => h.product_id))];
-  const [stocks, products, taxes] = await Promise.all([
+  const [stocks, products, taxes, partners] = await Promise.all([
     supabase.from("stocks").select("variant_id, available").eq("location_id", locationId).in("variant_id", variantIds),
     supabase.from("products").select("id, tax_rate_id, image_url").in("id", productIds),
     supabase.from("tax_rates").select("id, rate, is_default"),
+    supabase.from("locations").select("id, name").eq("type", "external").eq("is_active", true).is("deleted_at", null),
   ]);
   if (stocks.error) throw asError(stocks.error);
+  if (partners.error) throw asError(partners.error);
+  const partnerName = new Map((partners.data ?? []).map((l) => [l.id as string, l.name as string]));
+  const partnerStock = new Map<string, NonNullable<PosHit["partner"]>>();
+  if (partnerName.size > 0) {
+    const ps = await supabase
+      .from("stocks")
+      .select("variant_id, location_id, available")
+      .in("location_id", [...partnerName.keys()])
+      .in("variant_id", variantIds)
+      .gt("available", 0);
+    if (ps.error) throw asError(ps.error);
+    for (const s of ps.data ?? []) {
+      const best = partnerStock.get(s.variant_id as string);
+      if (!best || Number(s.available) > best.available) {
+        partnerStock.set(s.variant_id as string, {
+          location_id: s.location_id as string,
+          name: partnerName.get(s.location_id as string) ?? "Aliado",
+          available: Number(s.available),
+        });
+      }
+    }
+  }
   if (products.error) throw asError(products.error);
   if (taxes.error) throw asError(taxes.error);
 
@@ -400,6 +425,7 @@ export async function searchForPos(query: string, locationId: string): Promise<P
     available: available.get(h.variant_id) ?? 0,
     tax_rate: taxOfProduct.get(h.product_id) ?? defaultTax,
     image_url: imageOfProduct.get(h.product_id) ?? null,
+    partner: partnerStock.get(h.variant_id) ?? null,
   }));
 }
 

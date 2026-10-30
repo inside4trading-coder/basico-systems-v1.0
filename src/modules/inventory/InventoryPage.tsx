@@ -22,7 +22,7 @@ import { useTenant } from "@/core/tenant-context";
 import { productTaxRate, withTax } from "@/core/tax";
 import { useTaxRates } from "@/modules/settings/api";
 import { useCatalog, useLocations, useUpdateProduct, useUpdateVariant } from "./api";
-import { formatMoney, formatQty, SALE_BLOCK_LABEL, saleBlockers, sumStock, variantLabel } from "./lib";
+import { formatMoney, formatQty, isPartner, productOrigin, SALE_BLOCK_LABEL, saleBlockers, sumStock, variantLabel } from "./lib";
 import NewProductDialog from "./NewProductDialog";
 import ProductDetailSheet from "./ProductDetailSheet";
 import { ProductPhotoButton } from "./ProductPhoto";
@@ -45,24 +45,34 @@ export default function InventoryPage() {
   const [category, setCategory] = useState("all");
   const [brand, setBrand] = useState("all");
   const [status, setStatus] = useState("all");
+  const [origin, setOrigin] = useState("all");
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
-  const activeLocations = locations.filter((l) => l.is_active);
-  const sellingIds = useMemo(() => new Set(locations.filter((l) => l.sells_in_pos && l.is_active).map((l) => l.id)), [locations]);
+  // Sedes propias primero; los aliados (sedes externas) al final.
+  const activeLocations = locations.filter((l) => l.is_active).sort((a, b) => Number(isPartner(a)) - Number(isPartner(b)));
+  const hasPartners = activeLocations.some(isPartner);
+  // Se vende lo de las sedes con POS y, por encargo, lo de los aliados.
+  const sellingIds = useMemo(
+    () => new Set(locations.filter((l) => l.is_active && (l.sells_in_pos || isPartner(l))).map((l) => l.id)),
+    [locations],
+  );
+  const partnerIds = useMemo(() => new Set(locations.filter(isPartner).map((l) => l.id)), [locations]);
 
   const enriched = useMemo(
     () =>
       rows.map((r) => {
-        const total = sumStock(r.stocks);
+        // Existencia y valor del inventario: solo lo propio, no lo del aliado.
+        const total = sumStock(r.stocks.filter((s) => !partnerIds.has(s.location_id)));
+        const origin = productOrigin(r.stocks, locations).kind;
         const sellable = sumStock(r.stocks, sellingIds).available;
         const blockers = saleBlockers({ product: r.product, variant: r.variant, sellableStock: sellable });
         const totalReserved = r.stocks.reduce((a, s) => a + Number(s.reserved), 0);
         const stockAt = (id: string) => Number(r.stocks.find((s) => s.location_id === id)?.on_hand ?? 0);
         const codesText = r.codes.map((c) => c.code).join(" ");
-        return { ...r, total, totalReserved, blockers, stockAt, codesText };
+        return { ...r, total, totalReserved, blockers, stockAt, codesText, origin };
       }),
-    [rows, sellingIds],
+    [rows, sellingIds, partnerIds, locations],
   );
 
   const categories = useMemo(() => uniq(rows.map((r) => r.product.category)), [rows]);
@@ -75,6 +85,8 @@ export default function InventoryPage() {
     if (status === "blocked" && r.blockers.length === 0) return false;
     if (status === "inactive" && r.variant.is_active) return false;
     if (locationId !== "all" && !(r.stockAt(locationId) > 0)) return false;
+    if (origin === "own" && r.origin === "partner") return false;
+    if (origin === "partner" && r.origin === "own") return false;
     if (q.trim()) {
       const text = [r.product.name, r.product.brand, r.variant.sku, variantLabel(r.variant.options), r.codesText].join(" ").toLowerCase();
       if (!q.toLowerCase().split(/\s+/).every((w) => text.includes(w))) return false;
@@ -181,6 +193,17 @@ export default function InventoryPage() {
               { value: "inactive", label: "Inactivas" },
             ]}
           />
+          {hasPartners && (
+            <Picker
+              value={origin}
+              onChange={setOrigin}
+              allLabel="Propios y de aliados"
+              options={[
+                { value: "own", label: "Propios" },
+                { value: "partner", label: "De aliados" },
+              ]}
+            />
+          )}
         </div>
       </Card>
 
@@ -197,6 +220,7 @@ export default function InventoryPage() {
               {activeLocations.map((l) => (
                 <TableHead key={l.id} className="whitespace-nowrap text-right">
                   {l.name}
+                  {isPartner(l) && <span className="block text-[10px] font-normal normal-case">aliado</span>}
                 </TableHead>
               ))}
               <TableHead className="text-right">Disponible</TableHead>

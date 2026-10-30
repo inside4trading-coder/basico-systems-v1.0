@@ -13,7 +13,7 @@ import { productTaxRate, withTax, type TaxRateLike } from "@/core/tax";
 import { useUpdateProduct, useUpdateVariant, type CatalogRow } from "./api";
 import { useAttributeDefs } from "./import/api";
 import { CODE_KIND_LABEL } from "./import/fields";
-import { formatMoney, formatQty, variantLabel, type Location } from "./lib";
+import { formatMoney, formatQty, isPartner, originLabel, productOrigin, variantLabel, type Location } from "./lib";
 import { splitValues, useProductAttributes, useSaveProductAttribute } from "./productAttributes";
 
 export default function ProductDetailSheet({
@@ -48,6 +48,12 @@ export default function ProductDetailSheet({
   // Primero los campos con dato; los vacíos solo si se pueden llenar.
   const fields = defs.filter((d) => valueOf(d.id) || editable).sort((a, b) => Number(Boolean(valueOf(b.id))) - Number(Boolean(valueOf(a.id))));
   const activeLocations = locations.filter((l) => l.is_active);
+  const ownLocations = activeLocations.filter((l) => !isPartner(l));
+  const partnerLocations = activeLocations.filter(isPartner);
+  const origin = productOrigin(
+    rows.flatMap((r) => r.stocks),
+    activeLocations,
+  );
 
   return (
     <Sheet open={product !== null} onOpenChange={(open) => !open && onClose()}>
@@ -59,6 +65,11 @@ export default function ProductDetailSheet({
               <SheetDescription className="text-left">
                 {[product.brand, product.category].filter(Boolean).join(" · ") || "Sin marca ni categoría"}
               </SheetDescription>
+              {partnerLocations.length > 0 && (
+                <Badge variant={origin.kind === "own" ? "outline" : "secondary"} className="w-fit">
+                  {originLabel(origin)}
+                </Badge>
+              )}
             </SheetHeader>
 
             <section className="space-y-2">
@@ -149,9 +160,15 @@ export default function ProductDetailSheet({
                       <span className="font-semibold">{net == null ? "—" : formatMoney(withTax(Number(net), rate), currency)}</span>
                     </Line>
                     <Line label="Costo">{r.variant.cost == null ? "—" : formatMoney(Number(r.variant.cost), currency)}</Line>
-                    {activeLocations.map((l) => (
+                    {ownLocations.map((l) => (
                       <Line key={l.id} label={`Existencia · ${l.name}`}>
                         <span className="num">{formatQty(Number(r.stocks.find((s) => s.location_id === l.id)?.on_hand ?? 0))}</span>
+                      </Line>
+                    ))}
+                    {partnerLocations.map((l) => (
+                      <Line key={l.id} label={`En aliado · ${l.name}`}>
+                        <span className="num">{formatQty(Number(r.stocks.find((s) => s.location_id === l.id)?.on_hand ?? 0))}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">se vende por encargo</span>
                       </Line>
                     ))}
                     <Line label="Estado">

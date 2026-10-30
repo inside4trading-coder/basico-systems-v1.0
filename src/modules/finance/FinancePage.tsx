@@ -14,10 +14,11 @@ import ReceivablesTab from "./receivables/ReceivablesTab";
 import CatalogTab from "./CatalogTab";
 import MovementsTab from "./MovementsTab";
 import ObligationsTab from "./obligations/ObligationsTab";
+import PartnerPayablesTab from "./partners/PartnerPayablesTab";
 import SummaryTab, { type FinanceTab } from "./SummaryTab";
 
-type Tab = "summary" | FinanceTab | "catalog";
-const TABS: Tab[] = ["summary", "movements", "obligations", "receivables", "reconciliation", "accounts", "catalog"];
+type Tab = "summary" | FinanceTab | "partners" | "catalog";
+const TABS: Tab[] = ["summary", "movements", "obligations", "receivables", "partners", "reconciliation", "accounts", "catalog"];
 
 export default function FinancePage() {
   const { active, can } = useTenant();
@@ -33,6 +34,7 @@ export default function FinancePage() {
           <TabsTrigger value="movements">Movimientos</TabsTrigger>
           <TabsTrigger value="obligations">Obligaciones</TabsTrigger>
           <TabsTrigger value="receivables">Por cobrar</TabsTrigger>
+          <TabsTrigger value="partners">Aliados</TabsTrigger>
           <TabsTrigger value="reconciliation">Conciliación</TabsTrigger>
           <TabsTrigger value="accounts">Cuentas</TabsTrigger>
           <TabsTrigger value="catalog">Categorías</TabsTrigger>
@@ -48,6 +50,9 @@ export default function FinancePage() {
         </TabsContent>
         <TabsContent value="receivables">
           <ReceivablesTab />
+        </TabsContent>
+        <TabsContent value="partners">
+          <PartnerPayablesTab />
         </TabsContent>
         <TabsContent value="reconciliation">
           <ReconciliationCenter />

@@ -35,6 +35,8 @@ export interface CartLine {
   manual?: { kind: ManualKind; taxRateId: string | null };
   /** Piezas escaneadas por su etiqueta por unidad (una por unidad de la línea). */
   units?: CartUnit[];
+  /** Venta por encargo: la existencia sale de este aliado, no de la sede. */
+  partner?: { locationId: string; name: string };
 }
 
 export interface CartUnit {
@@ -43,7 +45,7 @@ export interface CartUnit {
 }
 
 export type SaleItemPayload =
-  | { variant_id: string; qty: number; discount?: number }
+  | { variant_id: string; qty: number; discount?: number; from_location_id?: string }
   | { manual: true; kind: ManualKind; description: string; price: number; qty: number; discount?: number; tax_rate_id: string | null };
 
 /** Líneas del carrito como las recibe register_sale. */
@@ -51,7 +53,7 @@ export function saleItems(lines: CartLine[]): SaleItemPayload[] {
   return lines.map((l) =>
     l.manual
       ? { manual: true, kind: l.manual.kind, description: l.name, price: l.price, qty: l.qty, discount: l.discount, tax_rate_id: l.manual.taxRateId }
-      : { variant_id: l.variantId, qty: l.qty, discount: l.discount },
+      : { variant_id: l.variantId, qty: l.qty, discount: l.discount, ...(l.partner ? { from_location_id: l.partner.locationId } : {}) },
   );
 }
 

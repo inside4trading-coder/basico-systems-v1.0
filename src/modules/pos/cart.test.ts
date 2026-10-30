@@ -195,6 +195,12 @@ describe("líneas para register_sale", () => {
       { manual: true, kind: "servicio", description: "Mano de obra", price: 15, qty: 2, discount: 1, tax_rate_id: "t0" },
     ]);
   });
+  it("una línea por encargo manda el aliado de donde sale", () => {
+    const base = { productId: "p", options: {}, sku: null, unit: "unidad", taxRate: 16, qty: 1, discount: 0, available: 3 };
+    expect(saleItems([{ ...base, variantId: "v1", name: "Base motor", price: 10, partner: { locationId: "aliado-1", name: "Aliado X" } }])).toEqual([
+      { variant_id: "v1", qty: 1, discount: 0, from_location_id: "aliado-1" },
+    ]);
+  });
 });
 
 describe("descuento por línea", () => {

@@ -363,6 +363,8 @@ begin
       (tenant_id, sale_id, line, variant_id, product_id, description, qty, unit_price,
        gross, tax_rate, tax_amount, line_total)
       values (t, v_sale, 1, v_var, v_prod, 'Producto 1', 1, 10, 10, 0, 0, 10);
+    insert into public.partner_payables (tenant_id, location_id, sale_id, sale_item_id, variant_id, qty, unit_cost, amount)
+      select t, v_loc, v_sale, i.id, v_var, 1, 6, 6 from public.sale_items i where i.sale_id = v_sale;
     select * into v_pm from public.payment_methods where tenant_id = t limit 1;
     insert into public.sale_payments
       (tenant_id, sale_id, payment_method_id, method_code, method_name, currency, amount, amount_base)
