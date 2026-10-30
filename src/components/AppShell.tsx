@@ -67,7 +67,8 @@ function MobileMenu({ open, onOpenChange }: { open: boolean; onOpenChange: (v: b
   );
 }
 
-export default function AppShell({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
+/** wide: tablas amplias (hasta 1400 px); "full": todo el ancho de la pantalla. */
+export default function AppShell({ children, wide = false }: { children: ReactNode; wide?: boolean | "full" }) {
   const { session, signOut } = useAuth();
   const { active, memberships, clearTenant, can } = useTenant();
   const role = active?.role;
@@ -118,7 +119,7 @@ export default function AppShell({ children, wide = false }: { children: ReactNo
               : "Tu prueba gratis terminó. Escríbenos para activar tu plan."}
           </div>
         )}
-        <main className={cn("mx-auto w-full space-y-6 p-4", wide ? "max-w-[1400px]" : "max-w-3xl")}>{children}</main>
+        <main className={cn("mx-auto w-full space-y-6 p-4", wide === "full" ? "max-w-none" : wide ? "max-w-[1400px]" : "max-w-3xl")}>{children}</main>
       </div>
       <MobileMenu open={mobileOpen} onOpenChange={setMobileOpen} />
     </div>
