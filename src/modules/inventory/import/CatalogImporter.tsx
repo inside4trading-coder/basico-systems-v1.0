@@ -20,7 +20,8 @@ import { Label } from "@/components/ui/label";
 import { useTenant } from "@/core/tenant-context";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/core/supabase";
-import { fetchAllPages, useCatalog, useLocations } from "../api";
+import { fetchAllPages, useCatalog, useLocations, useSaveLocation } from "../api";
+import { isPartner, partnerCode } from "../lib";
 import { ensureAttributes, useApplyImport, useAttributeDefs, useImportJobs, useImportTemplates, useSaveImportTemplate, type ImportResult } from "./api";
 import { downloadTemplate } from "./exportCatalog";
 import ConfirmStep from "./ConfirmStep";
@@ -72,6 +73,9 @@ export default function CatalogImporter({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [missing, setMissing] = useState("");
+  // Nombre del aliado nuevo cuando la hoja es la lista de un aliado comercial.
+  const [partnerName, setPartnerName] = useState<string | null>(null);
+  const saveLocation = useSaveLocation();
 
   const activeLocations = useMemo(() => locations.filter((l) => l.is_active), [locations]);
   const defaultLocation = activeLocations.find((l) => l.sells_in_pos && l.type === "store") ?? activeLocations[0];
@@ -290,6 +294,19 @@ export default function CatalogImporter({
     setMissing("");
   };
   const currentStock = current ? stockColumn(current.mapping) : null;
+  const createPartner = async () => {
+    const name = partnerName?.trim();
+    if (!name) return;
+    const code = partnerCode(name, locations.map((l) => l.code));
+    try {
+      await saveLocation.mutateAsync({ name, code, type: "external", sells_in_pos: false });
+      answerSede(code);
+      setPartnerName(null);
+      toast.success(`Aliado ${name} creado`);
+    } catch (err) {
+      toast.error("No se pudo crear el aliado", { description: (err as Error).message });
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -366,13 +383,43 @@ export default function CatalogImporter({
             </Choice>
           </Question>
 
-          {activeLocations.length > 1 && currentStock && (
+          {currentStock && (
             <Question title={`¿En qué sede está esta mercancía${multiSheet ? ` (${current.name})` : ""}?`}>
               {activeLocations.map((l) => (
-                <Choice key={l.id} selected={Boolean(sedeAnswered[current.name]) && currentStock.location === l.code} onClick={() => answerSede(l.code)}>
-                  {l.name}
+                <Choice
+                  key={l.id}
+                  selected={(Boolean(sedeAnswered[current.name]) || activeLocations.length === 1) && currentStock.location === l.code}
+                  onClick={() => answerSede(l.code)}
+                >
+                  {isPartner(l) ? `Aliado: ${l.name}` : l.name}
                 </Choice>
               ))}
+              {partnerName === null ? (
+                <Choice selected={false} onClick={() => setPartnerName("")}>
+                  Es de un aliado…
+                </Choice>
+              ) : (
+                <div className="flex w-full flex-wrap items-center gap-2">
+                  <Input
+                    autoFocus
+                    value={partnerName}
+                    onChange={(e) => setPartnerName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && void createPartner()}
+                    placeholder="Nombre del aliado"
+                    aria-label="Nombre del aliado"
+                    className="h-11 max-w-xs"
+                  />
+                  <Button type="button" className="h-11" disabled={!partnerName.trim() || saveLocation.isPending} onClick={() => void createPartner()}>
+                    Crear aliado
+                  </Button>
+                  <Button type="button" variant="ghost" className="h-11" onClick={() => setPartnerName(null)}>
+                    Cancelar
+                  </Button>
+                  <p className="w-full text-xs text-muted-foreground">
+                    Mercancía que no tienes en tu local pero sí tu aliado. Se puede vender por encargo y queda pendiente pagarle el costo.
+                  </p>
+                </div>
+              )}
             </Question>
           )}
         </Card>

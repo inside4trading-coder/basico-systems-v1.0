@@ -244,3 +244,53 @@ export function periodStart(period: "today" | "week" | "month" | "year" | "all",
   }
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// Aliados: sedes de tipo "external" con la lista de un aliado comercial.
+// ---------------------------------------------------------------------------
+
+export const isPartner = (l: Pick<Location, "type">) => l.type === "external";
+
+/** Código de sede para un aliado nuevo a partir de su nombre, sin repetir. */
+export function partnerCode(name: string, taken: string[]): string {
+  const base =
+    name
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, "")
+      .slice(0, 12) || "ALIADO";
+  const used = new Set(taken.map((c) => c.toUpperCase()));
+  if (!used.has(base)) return base;
+  for (let n = 2; ; n++) {
+    const code = `${base.slice(0, 13)}-${n}`;
+    if (!used.has(code)) return code;
+  }
+}
+
+export type ProductOrigin = { kind: "own" } | { kind: "partner"; names: string[] } | { kind: "both"; names: string[] };
+
+/**
+ * De dónde es un producto según dónde hay existencia: propio, de uno o más
+ * aliados, o ambos. Sin existencia en ningún lado cuenta como propio.
+ */
+export function productOrigin(stocks: Pick<Stock, "location_id" | "on_hand">[], locations: Pick<Location, "id" | "name" | "type">[]): ProductOrigin {
+  const byId = new Map(locations.map((l) => [l.id, l]));
+  let own = false;
+  const names = new Set<string>();
+  for (const s of stocks) {
+    if (!(Number(s.on_hand) > 0)) continue;
+    const l = byId.get(s.location_id);
+    if (!l) continue;
+    if (isPartner(l)) names.add(l.name);
+    else own = true;
+  }
+  if (names.size === 0) return { kind: "own" };
+  return { kind: own ? "both" : "partner", names: [...names].sort() };
+}
+
+export function originLabel(o: ProductOrigin): string {
+  if (o.kind === "own") return "Propio";
+  if (o.kind === "partner") return `Del aliado ${o.names.join(", ")}`;
+  return `Propio y en ${o.names.join(", ")}`;
+}

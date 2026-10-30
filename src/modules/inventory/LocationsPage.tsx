@@ -17,7 +17,7 @@ const TYPE_LABEL: Record<Location["type"], string> = {
   store: "Tienda",
   warehouse: "Almacén",
   popup: "Punto temporal",
-  external: "Externa",
+  external: "Aliado comercial",
 };
 
 interface Draft {
@@ -104,6 +104,11 @@ export default function LocationsPage() {
                 </option>
               ))}
             </select>
+            {draft.type === "external" && (
+              <p className="text-xs text-muted-foreground">
+                Mercancía de un aliado que vendes por encargo. No cuenta como sede de tu plan.
+              </p>
+            )}
           </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-[1fr_12rem]">

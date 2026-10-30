@@ -26,11 +26,12 @@ export function ProductCard({
   const pvp = hit.price === null ? null : shelfPrice(Number(hit.price), hit.tax_rate, pricesIncludeTax);
   const local = pvp !== null && money?.localCurrency ? fromBase(pvp, money.localCurrency, money) : null;
   const details = [Object.values(hit.options ?? {}).join(" · "), hit.brand, hit.sku].filter(Boolean).join(" · ");
+  const partner = hit.available <= 0 && hit.partner && hit.partner.available > 0 ? hit.partner : null;
   return (
     <button
       type="button"
       onClick={() => onPick(hit)}
-      disabled={hit.available <= 0}
+      disabled={hit.available <= 0 && !partner}
       className="flex h-full w-full flex-col overflow-hidden rounded-xl border bg-card text-left transition-colors hover:border-primary disabled:opacity-50"
     >
       <div className={cn("grid w-full place-items-center bg-muted", hit.image_url ? "aspect-[4/3]" : "h-14")}>
@@ -56,9 +57,17 @@ export function ProductCard({
               <p className="num font-bold">{formatMoney(pvp, baseCurrency)}</p>
             )}
           </div>
-          <span className={cn("num whitespace-nowrap text-[11px]", hit.available <= 0 ? "text-destructive" : "text-muted-foreground")}>
-            {formatQty(hit.available)} disp.
-          </span>
+          {partner ? (
+            <span className="num whitespace-nowrap text-right text-[11px] font-medium text-primary">
+              Encargo
+              <br />
+              {partner.name}: {formatQty(partner.available)}
+            </span>
+          ) : (
+            <span className={cn("num whitespace-nowrap text-[11px]", hit.available <= 0 ? "text-destructive" : "text-muted-foreground")}>
+              {formatQty(hit.available)} disp.
+            </span>
+          )}
         </div>
       </div>
     </button>

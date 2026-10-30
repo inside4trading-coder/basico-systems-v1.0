@@ -80,10 +80,13 @@ export function localLookup(rows: SnapshotRow[], query: string, limit = 30): Pos
 }
 
 /** Descuenta del disponible local lo vendido sin conexión, para no vender dos veces lo mismo. */
-export function applyLocalSale(snapshot: CatalogSnapshot, items: ({ variant_id: string; qty: number } | { manual: true; qty: number })[]): CatalogSnapshot {
+export function applyLocalSale(
+  snapshot: CatalogSnapshot,
+  items: ({ variant_id: string; qty: number; from_location_id?: string } | { manual: true; qty: number })[],
+): CatalogSnapshot {
   const sold = new Map<string, number>();
-  // Los conceptos manuales no tienen stock.
-  for (const i of items) if ("variant_id" in i) sold.set(i.variant_id, (sold.get(i.variant_id) ?? 0) + i.qty);
+  // Los conceptos manuales no tienen stock y lo vendido por encargo sale del aliado.
+  for (const i of items) if ("variant_id" in i && !i.from_location_id) sold.set(i.variant_id, (sold.get(i.variant_id) ?? 0) + i.qty);
   return {
     ...snapshot,
     rows: snapshot.rows.map((r) => (sold.has(r.variant_id) ? { ...r, available: Math.max(0, r.available - (sold.get(r.variant_id) ?? 0)) } : r)),

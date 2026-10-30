@@ -205,6 +205,8 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
   const cartDiscount = round2(couponOff + manualDiscount);
   const totals = cartTotals(draft.lines, cartDiscount, pricesIncludeTax);
 
+  // Sin existencia en la sede pero sí en un aliado: se vende por encargo.
+  const viaPartner = (hit: PosHit) => hit.available <= 0 && (hit.partner?.available ?? 0) > 0;
   const toCartItem = (hit: PosHit) => ({
     variantId: hit.variant_id,
     productId: hit.product_id,
@@ -214,16 +216,19 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
     unit: hit.unit,
     price: Number(hit.price),
     taxRate: hit.tax_rate,
-    available: hit.available,
+    available: viaPartner(hit) ? hit.partner!.available : hit.available,
+    ...(viaPartner(hit) ? { partner: { locationId: hit.partner!.location_id, name: hit.partner!.name } } : {}),
   });
 
   const add = useCallback((hit: PosHit) => {
     if (hit.price === null || hit.price <= 0) return toast.error(`${hit.product_name} no tiene precio`);
-    if (hit.available <= 0) return toast.error(`Sin existencia de ${hit.product_name} en esta sede`);
+    if (hit.available <= 0 && !viaPartner(hit)) return toast.error(`Sin existencia de ${hit.product_name} en esta sede`);
     setDraft((d) => {
+      const item = toCartItem(hit);
       const inCart = d.lines.find((l) => l.variantId === hit.variant_id)?.qty ?? 0;
-      if (inCart >= hit.available) toast.error(`Solo hay ${formatQty(hit.available)} de ${hit.product_name}`);
-      return { ...d, lines: addToCart(d.lines, toCartItem(hit)) };
+      if (inCart >= (item.available ?? 0)) toast.error(`Solo hay ${formatQty(item.available)} de ${hit.product_name}`);
+      else if (item.partner && inCart === 0) toast(`Por encargo a ${item.partner.name}`);
+      return { ...d, lines: addToCart(d.lines, item) };
     });
   }, []);
 
@@ -917,6 +922,7 @@ function CartRow({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{line.name}</p>
+          {line.partner && <p className="text-[11px] font-medium text-primary">Encargo · {line.partner.name}</p>}
           <p className="truncate text-xs text-muted-foreground">
             {[Object.values(line.options).join(" · "), line.sku, `${unitLabel} c/u`].filter(Boolean).join(" · ")}
           </p>

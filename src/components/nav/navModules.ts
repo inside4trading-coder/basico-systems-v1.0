@@ -106,6 +106,7 @@ export const NAV_MODULES: NavModule[] = [
           { label: "Movimientos", to: tab("/administracion", "movements"), capability: "finanzas.operar", module: "administracion" },
           { label: "Obligaciones", to: tab("/administracion", "obligations"), capability: "finanzas.operar", module: "administracion" },
           { label: "Por cobrar", to: tab("/administracion", "receivables"), capability: "finanzas.operar", module: "administracion" },
+          { label: "Aliados", to: tab("/administracion", "partners"), capability: "finanzas.operar", module: "administracion" },
           { label: "Conciliación", to: tab("/administracion", "reconciliation"), capability: "finanzas.operar", module: "administracion" },
           { label: "Cuentas", to: tab("/administracion", "accounts"), capability: "finanzas.operar", module: "administracion" },
           { label: "Categorías", to: tab("/administracion", "catalog"), capability: "finanzas.operar", module: "administracion" },
