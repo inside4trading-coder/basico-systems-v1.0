@@ -180,7 +180,7 @@ export const SALE_BLOCK_LABEL: Record<SaleBlockReason, string> = {
   product_inactive: "Producto inactivo",
   variant_inactive: "Variante inactiva",
   no_price: "Sin precio",
-  no_stock: "Sin stock en sedes de venta",
+  no_stock: "Sin stock",
 };
 
 /**
@@ -293,4 +293,19 @@ export function originLabel(o: ProductOrigin): string {
   if (o.kind === "own") return "Propio";
   if (o.kind === "partner") return `Del aliado ${o.names.join(", ")}`;
   return `Propio y en ${o.names.join(", ")}`;
+}
+
+export type StockStatus =
+  | { kind: "ready"; alsoAt: string[] }
+  | { kind: "encargo"; partners: string[] }
+  | { kind: "blocked"; reasons: SaleBlockReason[] };
+
+/**
+ * Estado de venta de una variante para la tabla de inventario: lista con lo
+ * propio, por encargo cuando solo la tiene un aliado, o con pendientes.
+ */
+export function stockStatus(blockers: SaleBlockReason[], origin: ProductOrigin): StockStatus {
+  if (blockers.length > 0) return { kind: "blocked", reasons: blockers };
+  if (origin.kind === "partner") return { kind: "encargo", partners: origin.names };
+  return { kind: "ready", alsoAt: origin.kind === "both" ? origin.names : [] };
 }
