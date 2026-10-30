@@ -3,6 +3,8 @@
  * Portado de SublimeInventarioMaestro.tsx (basicosystems@f551478b). Se
  * quitaron Woo, lotes de Abastecimiento y "proponer stock": las existencias
  * entran por Control (entradas y ajustes), no se editan en esta tabla.
+ * Tocar el nombre abre el detalle con todos sus datos (incluidos los
+ * importados) y la oferta.
  */
 import { ScanButton } from "@/core/scanner/CameraScanner";
 import { Fragment, useMemo, useState } from "react";
@@ -22,6 +24,7 @@ import { useTaxRates } from "@/modules/settings/api";
 import { useCatalog, useLocations, useUpdateProduct, useUpdateVariant } from "./api";
 import { formatMoney, formatQty, SALE_BLOCK_LABEL, saleBlockers, sumStock, variantLabel } from "./lib";
 import NewProductDialog from "./NewProductDialog";
+import ProductDetailSheet from "./ProductDetailSheet";
 import { ProductPhotoButton } from "./ProductPhoto";
 import { BulkApplyButton, CostHistoryButton } from "./VariantTools";
 
@@ -35,6 +38,7 @@ export default function InventoryPage() {
   const updProduct = useUpdateProduct();
   const { data: taxRates = [] } = useTaxRates();
   const [creating, setCreating] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   const [q, setQ] = useState("");
   const [locationId, setLocationId] = useState("all");
@@ -100,9 +104,15 @@ export default function InventoryPage() {
   const saveVariant = (id: string, patch: Parameters<typeof updVariant.mutate>[0]["patch"]) =>
     updVariant.mutate({ id, patch }, { onError: (err) => toast.error("No se pudo guardar", { description: err.message }) });
 
+  // Sin oferta, el precio de venta sigue al precio normal (si no, el PVP no cambiaría).
+  const savePrice = (r: (typeof rows)[number], n: number | null) => {
+    const noOffer = r.variant.price == null || Number(r.variant.price) === Number(r.variant.regular_price);
+    saveVariant(r.variant.id, noOffer ? { regular_price: n, price: n } : { regular_price: n });
+  };
+
   const sellableCount = enriched.filter((r) => r.blockers.length === 0).length;
   const stockValue = enriched.reduce((a, r) => a + r.total.onHand * Number(r.variant.cost ?? 0), 0);
-  const columns = 9 + activeLocations.length;
+  const columns = 8 + activeLocations.length;
 
   return (
     <AppShell wide>
@@ -181,7 +191,6 @@ export default function InventoryPage() {
               <TableHead>Producto</TableHead>
               <TableHead>SKU</TableHead>
               <TableHead className="text-right">Precio sin IVA</TableHead>
-              <TableHead className="text-right">Oferta sin IVA</TableHead>
               <TableHead>IVA</TableHead>
               <TableHead className="whitespace-nowrap text-right">PVP</TableHead>
               <TableHead className="text-right">Costo</TableHead>
@@ -209,7 +218,12 @@ export default function InventoryPage() {
                           <span onClick={(e) => e.stopPropagation()}>
                             <ProductPhotoButton productId={g.product.id} productName={g.product.name} url={g.product.image_url} editable={editable} />
                           </span>
-                          <span className="font-semibold">{g.product.name}</span>
+                          <button type="button" className="text-left font-semibold hover:underline" onClick={(e) => {
+                              e.stopPropagation();
+                              setDetailId(g.product.id);
+                            }}>
+                            {g.product.name}
+                          </button>
                         </div>
                       </TableCell>
                       <TableCell colSpan={columns - 1}>
@@ -227,10 +241,10 @@ export default function InventoryPage() {
                       <TableCell>
                         <div className={`flex min-w-[200px] items-center gap-2 ${multi ? "pl-8 text-sm text-muted-foreground" : "font-medium"}`}>
                           {!multi && <ProductPhotoButton productId={r.product.id} productName={r.product.name} url={r.product.image_url} editable={editable} />}
-                          <span>
+                          <button type="button" className="text-left hover:underline" onClick={() => setDetailId(r.product.id)} title="Ver detalle">
                             {multi ? variantLabel(r.variant.options) : r.product.name}
                             {!multi && r.product.brand && <span className="ml-2 text-xs text-muted-foreground">{r.product.brand}</span>}
-                          </span>
+                          </button>
                           {editable && <CostHistoryButton variantId={r.variant.id} name={multi ? `${r.product.name} ${variantLabel(r.variant.options)}` : r.product.name} currency={currency} />}
                         </div>
                       </TableCell>
@@ -241,8 +255,7 @@ export default function InventoryPage() {
                           r.variant.sku ?? "—"
                         )}
                       </TableCell>
-                      <MoneyCell editable={editable} value={r.variant.regular_price} onSave={(n) => saveVariant(r.variant.id, { regular_price: n })} currency={currency} />
-                      <MoneyCell editable={editable} value={r.variant.price} onSave={(n) => saveVariant(r.variant.id, { price: n })} currency={currency} />
+                      <MoneyCell editable={editable} value={r.variant.regular_price} onSave={(n) => savePrice(r, n)} currency={currency} />
                       <TableCell>
                         <TaxPicker
                           editable={editable}
@@ -259,7 +272,15 @@ export default function InventoryPage() {
                       <TableCell className="num whitespace-nowrap text-right font-semibold">
                         {(() => {
                           const net = r.variant.price ?? r.variant.regular_price;
-                          return net == null ? "—" : formatMoney(withTax(Number(net), productTaxRate(r.product.tax_rate_id, taxRates)), currency);
+                          const offer = r.variant.price != null && r.variant.regular_price != null && Number(r.variant.price) < Number(r.variant.regular_price);
+                          return net == null ? (
+                            "—"
+                          ) : (
+                            <>
+                              {formatMoney(withTax(Number(net), productTaxRate(r.product.tax_rate_id, taxRates)), currency)}
+                              {offer && <span className="block text-[10px] font-normal text-primary">en oferta</span>}
+                            </>
+                          );
                         })()}
                       </TableCell>
                       <MoneyCell editable={editable} value={r.variant.cost} onSave={(n) => saveVariant(r.variant.id, { cost: n })} currency={currency} />
@@ -299,6 +320,14 @@ export default function InventoryPage() {
       </Card>
 
       <NewProductDialog open={creating} onOpenChange={setCreating} currency={currency} />
+      <ProductDetailSheet
+        rows={detailId ? rows.filter((r) => r.product.id === detailId) : []}
+        locations={locations}
+        taxRates={taxRates}
+        currency={currency}
+        editable={editable}
+        onClose={() => setDetailId(null)}
+      />
     </AppShell>
   );
 }
