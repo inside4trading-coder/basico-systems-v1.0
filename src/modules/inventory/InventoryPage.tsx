@@ -22,7 +22,7 @@ import { useTenant } from "@/core/tenant-context";
 import { productTaxRate, withTax } from "@/core/tax";
 import { useTaxRates } from "@/modules/settings/api";
 import { useCatalog, useLocations, useUpdateProduct, useUpdateVariant } from "./api";
-import { formatMoney, formatQty, isPartner, productOrigin, SALE_BLOCK_LABEL, saleBlockers, sumStock, variantLabel } from "./lib";
+import { formatMoney, formatQty, isPartner, productOrigin, SALE_BLOCK_LABEL, saleBlockers, stockStatus, sumStock, variantLabel } from "./lib";
 import NewProductDialog from "./NewProductDialog";
 import ProductDetailSheet from "./ProductDetailSheet";
 import { ProductPhotoButton } from "./ProductPhoto";
@@ -49,30 +49,36 @@ export default function InventoryPage() {
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
-  // Sedes propias primero; los aliados (sedes externas) al final.
-  const activeLocations = locations.filter((l) => l.is_active).sort((a, b) => Number(isPartner(a)) - Number(isPartner(b)));
+  // La tabla solo muestra el inventario propio; lo del aliado se ve en el estado y en la ficha.
+  const activeLocations = locations.filter((l) => l.is_active);
+  const ownLocations = activeLocations.filter((l) => !isPartner(l));
   const hasPartners = activeLocations.some(isPartner);
+  // Con una sola sede propia basta una columna «Inventario»; con varias, una por sede y un total.
+  const multiSede = ownLocations.length > 1;
   // Se vende lo de las sedes con POS y, por encargo, lo de los aliados.
   const sellingIds = useMemo(
     () => new Set(locations.filter((l) => l.is_active && (l.sells_in_pos || isPartner(l))).map((l) => l.id)),
     [locations],
   );
-  const partnerIds = useMemo(() => new Set(locations.filter(isPartner).map((l) => l.id)), [locations]);
+  const ownIds = useMemo(() => new Set(locations.filter((l) => l.is_active && !isPartner(l)).map((l) => l.id)), [locations]);
+  const activeOnly = useMemo(() => locations.filter((l) => l.is_active), [locations]);
 
   const enriched = useMemo(
     () =>
       rows.map((r) => {
-        // Existencia y valor del inventario: solo lo propio, no lo del aliado.
-        const total = sumStock(r.stocks.filter((s) => !partnerIds.has(s.location_id)));
-        const origin = productOrigin(r.stocks, locations).kind;
+        // Existencia y valor del inventario: solo sedes propias activas, no lo del aliado.
+        const total = sumStock(r.stocks, ownIds);
+        const originInfo = productOrigin(r.stocks, activeOnly);
+        const origin = originInfo.kind;
         const sellable = sumStock(r.stocks, sellingIds).available;
         const blockers = saleBlockers({ product: r.product, variant: r.variant, sellableStock: sellable });
+        const state = stockStatus(blockers, originInfo);
         const totalReserved = r.stocks.reduce((a, s) => a + Number(s.reserved), 0);
         const stockAt = (id: string) => Number(r.stocks.find((s) => s.location_id === id)?.on_hand ?? 0);
         const codesText = r.codes.map((c) => c.code).join(" ");
-        return { ...r, total, totalReserved, blockers, stockAt, codesText, origin };
+        return { ...r, total, totalReserved, blockers, state, stockAt, codesText, origin };
       }),
-    [rows, sellingIds, partnerIds, locations],
+    [rows, sellingIds, ownIds, activeOnly],
   );
 
   const categories = useMemo(() => uniq(rows.map((r) => r.product.category)), [rows]);
@@ -124,7 +130,7 @@ export default function InventoryPage() {
 
   const sellableCount = enriched.filter((r) => r.blockers.length === 0).length;
   const stockValue = enriched.reduce((a, r) => a + r.total.onHand * Number(r.variant.cost ?? 0), 0);
-  const columns = 8 + activeLocations.length;
+  const columns = 7 + (multiSede ? ownLocations.length + 1 : 1);
 
   return (
     <AppShell wide="full">
@@ -180,7 +186,9 @@ export default function InventoryPage() {
             <Input placeholder="Buscar nombre, SKU, código…" value={q} onChange={(e) => setQ(e.target.value)} />
             <ScanButton className="shrink-0 px-3" onScan={setQ} />
           </div>
-          <Picker value={locationId} onChange={setLocationId} allLabel="Todas las sedes" options={activeLocations.map((l) => ({ value: l.id, label: l.name }))} />
+          {multiSede && (
+            <Picker value={locationId} onChange={setLocationId} allLabel="Todas las sedes" options={ownLocations.map((l) => ({ value: l.id, label: l.name }))} />
+          )}
           <Picker value={category} onChange={setCategory} allLabel="Todas las categorías" options={categories.map((c) => ({ value: c, label: c }))} />
           <Picker value={brand} onChange={setBrand} allLabel="Todas las marcas" options={brands.map((b) => ({ value: b, label: b }))} />
           <Picker
@@ -217,13 +225,13 @@ export default function InventoryPage() {
               <TableHead>IVA</TableHead>
               <TableHead className="whitespace-nowrap text-right">PVP</TableHead>
               <TableHead className="text-right">Costo</TableHead>
-              {activeLocations.map((l) => (
-                <TableHead key={l.id} className="whitespace-nowrap text-right">
-                  {l.name}
-                  {isPartner(l) && <span className="block text-[10px] font-normal normal-case">aliado</span>}
-                </TableHead>
-              ))}
-              <TableHead className="text-right">Disponible</TableHead>
+              {multiSede &&
+                ownLocations.map((l) => (
+                  <TableHead key={l.id} className="whitespace-nowrap text-right">
+                    {l.name}
+                  </TableHead>
+                ))}
+              <TableHead className="text-right">{multiSede ? "Total" : "Inventario"}</TableHead>
               <TableHead>Estado</TableHead>
             </TableRow>
           </TableHeader>
@@ -308,18 +316,33 @@ export default function InventoryPage() {
                         })()}
                       </TableCell>
                       <MoneyCell editable={editable} value={r.variant.cost} onSave={(n) => saveVariant(r.variant.id, { cost: n })} currency={currency} />
-                      {activeLocations.map((l) => (
-                        <TableCell key={l.id} className="num text-right">
-                          {formatQty(r.stockAt(l.id))}
-                        </TableCell>
-                      ))}
-                      <TableCell className="num text-right font-semibold">{formatQty(r.total.available)}</TableCell>
+                      {multiSede &&
+                        ownLocations.map((l) => (
+                          <TableCell key={l.id} className="num text-right">
+                            {formatQty(r.stockAt(l.id))}
+                          </TableCell>
+                        ))}
+                      <TableCell className="num text-right font-semibold">
+                        {formatQty(r.total.available)}
+                        {r.total.onHand > r.total.available && (
+                          <span className="block text-[10px] font-normal text-muted-foreground">{formatQty(r.total.onHand - r.total.available)} reservado</span>
+                        )}
+                      </TableCell>
                       <TableCell>
-                        {r.blockers.length === 0 ? (
-                          <Badge className="whitespace-nowrap">Lista para vender</Badge>
+                        {r.state.kind === "ready" ? (
+                          <>
+                            <Badge className="whitespace-nowrap">Lista para vender</Badge>
+                            {r.state.alsoAt.length > 0 && (
+                              <span className="mt-1 block text-[10px] text-muted-foreground">también en {r.state.alsoAt.join(", ")}</span>
+                            )}
+                          </>
+                        ) : r.state.kind === "encargo" ? (
+                          <Badge variant="secondary" className="whitespace-nowrap">
+                            Por encargo · {r.state.partners.join(", ")}
+                          </Badge>
                         ) : (
                           <div className="flex max-w-[220px] flex-wrap gap-1">
-                            {r.blockers.map((b) => (
+                            {r.state.reasons.map((b) => (
                               <Badge key={b} variant="outline" className="whitespace-nowrap text-[10px]">
                                 {SALE_BLOCK_LABEL[b]}
                               </Badge>

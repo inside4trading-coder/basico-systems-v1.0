@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { originLabel, partnerCode, productOrigin } from "./lib";
+import { originLabel, partnerCode, productOrigin, stockStatus } from "./lib";
 
 const locations = [
   { id: "t", name: "Tienda", type: "store" as const },
@@ -39,5 +39,20 @@ describe("productOrigin", () => {
       locations,
     );
     expect(originLabel(o)).toBe("Propio y en Aliado X, Aliado Y");
+  });
+});
+
+describe("stockStatus", () => {
+  it("con existencia propia y sin pendientes, se puede vender", () => {
+    expect(stockStatus([], { kind: "own" })).toEqual({ kind: "ready", alsoAt: [] });
+  });
+  it("si solo lo tiene el aliado, se vende por encargo", () => {
+    expect(stockStatus([], { kind: "partner", names: ["Aliado X"] })).toEqual({ kind: "encargo", partners: ["Aliado X"] });
+  });
+  it("si hay propio y del aliado, se vende lo propio y avisa dónde más hay", () => {
+    expect(stockStatus([], { kind: "both", names: ["Aliado X"] })).toEqual({ kind: "ready", alsoAt: ["Aliado X"] });
+  });
+  it("los pendientes mandan sobre el origen", () => {
+    expect(stockStatus(["no_price"], { kind: "partner", names: ["Aliado X"] })).toEqual({ kind: "blocked", reasons: ["no_price"] });
   });
 });

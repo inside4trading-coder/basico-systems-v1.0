@@ -161,7 +161,7 @@ export default function ProductDetailSheet({
                     </Line>
                     <Line label="Costo">{r.variant.cost == null ? "—" : formatMoney(Number(r.variant.cost), currency)}</Line>
                     {ownLocations.map((l) => (
-                      <Line key={l.id} label={`Existencia · ${l.name}`}>
+                      <Line key={l.id} label={ownLocations.length > 1 ? `Inventario · ${l.name}` : "Inventario"}>
                         <span className="num">{formatQty(Number(r.stocks.find((s) => s.location_id === l.id)?.on_hand ?? 0))}</span>
                       </Line>
                     ))}
