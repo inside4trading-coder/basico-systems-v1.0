@@ -16,13 +16,14 @@ export function usePricingPolicy() {
     queryFn: async (): Promise<PricingPolicy & { saved: boolean }> => {
       const { data, error } = await supabase
         .from("pricing_policies")
-        .select("target_margin, overhead_pct, concepts, min_margin, rounding")
+        .select("target_margin, overhead_pct, replacement_pct, concepts, min_margin, rounding")
         .maybeSingle();
       if (error) throw new Error(error.message);
       if (!data) return { ...DEFAULT_POLICY, saved: false };
       return {
         target_margin: Number(data.target_margin),
         overhead_pct: Number(data.overhead_pct),
+        replacement_pct: Number(data.replacement_pct ?? 0),
         min_margin: Number(data.min_margin),
         rounding: data.rounding as PricingPolicy["rounding"],
         concepts: ((data.concepts ?? []) as PricingPolicy["concepts"]).map((c) => ({ name: c.name, pct: Number(c.pct), active: !!c.active })),
@@ -52,6 +53,48 @@ export function useSetPrices() {
       return Number(data);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["inv"] }),
+  });
+}
+
+export interface RateChange {
+  from: number;
+  to: number;
+  fromDate: string;
+  toDate: string;
+  pct: number;
+}
+
+/**
+ * Cuánto cambió la tasa oficial (BCV) en los últimos 30 días. Solo de
+ * referencia para que el negocio decida su ajuste por reposición.
+ */
+export function useOfficialRateChange() {
+  return useQuery({
+    queryKey: ["inv", "official_rate_change"],
+    staleTime: 60 * 60 * 1000,
+    queryFn: async (): Promise<RateChange | null> => {
+      const since = new Date(Date.now() - 45 * 86400000).toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from("exchange_rates")
+        .select("source, rate, effective_date")
+        .eq("base_currency", "USD")
+        .eq("quote_currency", "VES")
+        .gte("effective_date", since)
+        .order("effective_date", { ascending: false })
+        .limit(200);
+      if (error) throw new Error(error.message);
+      const rows = data ?? [];
+      const source = rows.some((r) => r.source === "bcv") ? "bcv" : "dolarapi";
+      const list = rows.filter((r) => r.source === source);
+      if (list.length < 2) return null;
+      const latest = list[0];
+      const cutoff = new Date(new Date(latest.effective_date).getTime() - 30 * 86400000).toISOString().slice(0, 10);
+      const past = list.find((r) => r.effective_date <= cutoff) ?? list[list.length - 1];
+      if (past === latest) return null;
+      const from = Number(past.rate);
+      const to = Number(latest.rate);
+      return { from, to, fromDate: past.effective_date, toDate: latest.effective_date, pct: Math.round(((to - from) / from) * 1000) / 10 };
+    },
   });
 }
 

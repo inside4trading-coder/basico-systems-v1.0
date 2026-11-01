@@ -55,7 +55,10 @@ select is(
   row(60.00::numeric, 5.00::numeric, '99'::text, 'Vendedor'::text)::text,
   'queda guardada y limpia'
 );
-select lives_ok($$ select public.save_pricing_policy('{"target_margin": 40, "rounding": "none", "concepts": []}') $$, 'guardar otra vez la reemplaza');
+select is((select replacement_pct from public.pricing_policies), 0.00::numeric, 'sin ajuste por reposición salvo que se pida');
+select lives_ok($$ select public.save_pricing_policy('{"target_margin": 40, "replacement_pct": 12.5, "rounding": "none", "concepts": []}') $$, 'guardar otra vez la reemplaza');
+select is((select replacement_pct from public.pricing_policies), 12.50::numeric, 'guarda el ajuste por reposición');
+select throws_ok($$ select public.save_pricing_policy('{"replacement_pct": 500}') $$, '23514', null, 'ajuste fuera de rango');
 select is((select count(*)::int from public.pricing_policies), 1, 'una sola política por negocio');
 select throws_ok(
   $$ select public.save_pricing_policy('{"concepts": [{"name": "A", "pct": 50, "active": true}, {"name": "B", "pct": 45, "active": true}]}') $$,

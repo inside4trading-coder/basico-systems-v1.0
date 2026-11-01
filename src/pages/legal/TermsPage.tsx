@@ -66,7 +66,7 @@ export default function TermsPage() {
         </p>
       </LegalSection>
 
-      <LegalSection title="6. Documentos, impuestos y tasa de cambio">
+      <LegalSection title="6. Documentos, impuestos, precios y tasa de cambio">
         <p>
           El Servicio emite <strong>notas de entrega</strong>. <strong>No emite facturas fiscales</strong> ni sustituye a una
           máquina fiscal o imprenta digital autorizada. Cumplir con las obligaciones tributarias (facturación, IVA, IGTF,
@@ -75,6 +75,12 @@ export default function TermsPage() {
         <p>
           Los reportes de impuestos son una ayuda para tu contador y no reemplazan su revisión. La tasa de cambio se toma de
           la fuente que elijas (el Banco Central de Venezuela o una tasa propia). Revisa que sea la correcta antes de cobrar.
+        </p>
+        <p>
+          Los precios los fija el Cliente. La política de precios (ganancia, comisiones, ajuste por reposición y redondeo)
+          solo calcula sugerencias con los parámetros que el Cliente define; el Servicio no fija precios por su cuenta ni
+          los calcula con tasas de cambio distintas a la que el Cliente elige. Que los precios cumplan la normativa
+          aplicable es responsabilidad del Cliente.
         </p>
       </LegalSection>
 

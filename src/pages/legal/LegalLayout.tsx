@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import BrandMark from "@/components/BrandMark";
 
 /** Fecha de la versión vigente de los textos legales. */
-export const LEGAL_UPDATED = "23 de octubre de 2026";
+export const LEGAL_UPDATED = "1 de noviembre de 2026";
 
 export function LegalSection({ title, children }: { title: string; children: ReactNode }) {
   return (

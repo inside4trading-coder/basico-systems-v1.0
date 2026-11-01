@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { formatMoney } from "@/core/money";
-import { useSavePricingPolicy } from "./api";
+import { useOfficialRateChange, useSavePricingPolicy } from "./api";
 import { feesRate, pct, ROUNDING_LABEL, suggestPrice, type PricingPolicy, type Rounding } from "./pricing";
 
 const num = (v: string) => {
@@ -72,6 +72,7 @@ export default function PolicyTab({ policy, editable, currency, taxRate }: {
 }) {
   const [draft, setDraft] = useState<PricingPolicy>(policy);
   const save = useSavePricingPolicy();
+  const { data: rateChange } = useOfficialRateChange();
   useEffect(() => setDraft(policy), [policy]);
 
   const set = <K extends keyof PricingPolicy>(key: K, value: PricingPolicy[K]) => setDraft((d) => ({ ...d, [key]: value }));
@@ -96,14 +97,25 @@ export default function PolicyTab({ policy, editable, currency, taxRate }: {
       <div className="space-y-4">
         <Card className="space-y-4 rounded-surface p-4">
           <h2 className="mono-cap text-xs text-muted-foreground">Ganancia</h2>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <PctField id="margin" label="Ganancia objetivo" value={draft.target_margin} disabled={!editable}
               onChange={(n) => set("target_margin", n)} help="Sobre el costo total. 50 % = el costo más la mitad." />
             <PctField id="overhead" label="Gastos de traída" value={draft.overhead_pct} disabled={!editable}
               onChange={(n) => set("overhead_pct", n)} help="Envío, fletes y otros gastos, como % del costo." />
+            <PctField id="replacement" label="Ajuste por reposición" value={draft.replacement_pct} disabled={!editable}
+              onChange={(n) => set("replacement_pct", n)} help="Opcional. Lo que sumas para reponer la mercancía más cara. En 0 no aplica." />
             <PctField id="min" label="Ganancia mínima" value={draft.min_margin} disabled={!editable}
               onChange={(n) => set("min_margin", n)} help="Por debajo, el precio se marca «Margen bajo»." />
           </div>
+          {rateChange && (
+            <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">
+              Referencia: la tasa oficial pasó de {rateChange.from.toLocaleString("es-VE", { maximumFractionDigits: 2 })} a{" "}
+              {rateChange.to.toLocaleString("es-VE", { maximumFractionDigits: 2 })} entre el{" "}
+              {new Date(`${rateChange.fromDate}T12:00:00`).toLocaleDateString("es-VE")} y el {new Date(`${rateChange.toDate}T12:00:00`).toLocaleDateString("es-VE")} (
+              {rateChange.pct > 0 ? "+" : ""}
+              {pct(rateChange.pct)} %). Solo informa: el ajuste por reposición lo decides tú y la app no lo cambia sola.
+            </p>
+          )}
         </Card>
 
         <Card className="space-y-3 rounded-surface p-4">
@@ -174,6 +186,9 @@ export default function PolicyTab({ policy, editable, currency, taxRate }: {
           <>
             <Row label="Costo total" value={formatMoney(example.landed, currency)} />
             <Row label={`Ganancia (${pct(draft.target_margin)} %)`} value={formatMoney(example.profit, currency)} />
+            {example.replacement > 0 && (
+              <Row label={`Reposición (${pct(draft.replacement_pct)} %)`} value={formatMoney(example.replacement, currency)} />
+            )}
             {example.concepts.map((c, i) => (
               <Row key={i} label={`${c.name || "Comisión"} (${pct(c.pct)} %)`} value={formatMoney(c.amount, currency)} />
             ))}
