@@ -109,6 +109,7 @@ export default function PriceSheet({ row, policy, currency, editable, onClose }:
               <section className="space-y-1 rounded-surface border p-3">
                 <h3 className="mono-cap text-xs text-muted-foreground">B · Formación del precio</h3>
                 <Row label={`Ganancia objetivo (${pct(policy.target_margin)} %)`} value={money(s.profit)} />
+                {s.replacement > 0 && <Row label={`Ajuste por reposición (${pct(policy.replacement_pct)} %)`} value={money(s.replacement)} />}
                 {s.concepts.map((c, i) => (
                   <Row key={i} label={`${c.name} (${pct(c.pct)} %)`} value={money(c.amount)} />
                 ))}

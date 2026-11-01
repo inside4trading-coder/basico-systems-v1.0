@@ -2,13 +2,17 @@
  * Formación de precios: COSTO → PRECIO sin IVA → PVP → PVP con descuento.
  *
  *   costo total  = costo × (1 + gastos de traída)
- *   precio s/IVA = costo total × (1 + ganancia objetivo) ÷ (1 − comisiones)
+ *   precio s/IVA = costo total × (1 + ganancia objetivo) × (1 + reposición)
+ *                  ÷ (1 − comisiones)
  *   PVP          = precio + IVA del producto, con el redondeo del negocio
  *
  * Las comisiones son lo que se descuenta de cada venta (vendedor, punto de
  * venta, financiadora…). El IVA no es comisión: se suma aparte. El PVP se
  * redondea y de ahí se saca el precio sin IVA que se guarda, para que lo que
  * ve el cliente quede exacto.
+ *
+ * La reposición es un % fijo que pone el negocio para cubrir lo que le costará
+ * reponer la mercancía. No se calcula con ninguna tasa de cambio.
  */
 import { withTax } from "@/core/tax";
 
@@ -23,6 +27,8 @@ export interface PricingConcept {
 export interface PricingPolicy {
   target_margin: number;
   overhead_pct: number;
+  /** Ajuste por reposición (%), sobre el costo con ganancia. */
+  replacement_pct: number;
   concepts: PricingConcept[];
   min_margin: number;
   rounding: Rounding;
@@ -31,6 +37,7 @@ export interface PricingPolicy {
 export const DEFAULT_POLICY: PricingPolicy = {
   target_margin: 30,
   overhead_pct: 0,
+  replacement_pct: 0,
   concepts: [],
   min_margin: 15,
   rounding: "none",
@@ -85,6 +92,7 @@ export interface Breakdown {
   overhead: number;
   landed: number;
   profit: number;
+  replacement: number;
   concepts: { name: string; pct: number; amount: number }[];
   /** Precio sin IVA antes del redondeo. */
   rawNet: number;
@@ -102,7 +110,8 @@ export function suggestPrice(cost: number | null | undefined, policy: PricingPol
   const c = Number(cost);
   const landed = landedCost(c, policy);
   const withProfit = landed * (1 + Number(policy.target_margin) / 100);
-  const rawNet = withProfit / (1 - fees);
+  const withReplacement = withProfit * (1 + Number(policy.replacement_pct ?? 0) / 100);
+  const rawNet = withReplacement / (1 - fees);
   const pvp = roundPvp(withTax(round2(rawNet), taxRate), policy.rounding);
   const net = netFromPvp(pvp, taxRate);
   return {
@@ -110,6 +119,7 @@ export function suggestPrice(cost: number | null | undefined, policy: PricingPol
     overhead: round2(landed - c),
     landed: round2(landed),
     profit: round2(withProfit - landed),
+    replacement: round2(withReplacement - withProfit),
     concepts: policy.concepts.filter((x) => x.active).map((x) => ({ name: x.name, pct: Number(x.pct), amount: round2((rawNet * Number(x.pct)) / 100) })),
     rawNet: round2(rawNet),
     net,

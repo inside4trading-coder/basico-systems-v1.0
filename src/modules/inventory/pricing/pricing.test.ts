@@ -14,6 +14,7 @@ import {
 const policy: PricingPolicy = {
   target_margin: 50,
   overhead_pct: 0,
+  replacement_pct: 0,
   min_margin: 15,
   rounding: "none",
   concepts: [
@@ -63,6 +64,13 @@ describe("suggestPrice", () => {
     const b = suggestPrice(10, { ...policy, overhead_pct: 10, concepts: [] }, 0)!;
     expect(b.landed).toBe(11);
     expect(b.net).toBe(16.5);
+  });
+  it("suma el ajuste por reposición sobre el costo con ganancia", () => {
+    const b = suggestPrice(10, { ...policy, replacement_pct: 10, concepts: [] }, 0)!;
+    expect(b.profit).toBe(5);
+    expect(b.replacement).toBe(1.5);
+    expect(b.net).toBe(16.5);
+    expect(suggestPrice(10, { ...policy, concepts: [] }, 0)!.replacement).toBe(0);
   });
   it("redondea el PVP y guarda el precio sin IVA que lo da", () => {
     const b = suggestPrice(10, { ...policy, rounding: "99" }, 16)!;
