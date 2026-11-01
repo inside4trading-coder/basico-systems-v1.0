@@ -47,6 +47,8 @@ export interface Variant {
   price: number | null;
   discount_pct: number | null;
   cost: number | null;
+  /** Costo cuando se fijó el precio de lista; si cambió, el precio está por revisar. */
+  priced_cost?: number | null;
   unit: string;
   is_active: boolean;
   deleted_at: string | null;
