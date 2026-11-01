@@ -18,6 +18,7 @@ import Home from "@/pages/Home";
 import Team from "@/pages/Team";
 import InventoryPage from "@/modules/inventory/InventoryPage";
 import LabelsPage from "@/modules/inventory/labels/LabelsPage";
+import PricingPage from "@/modules/inventory/pricing/PricingPage";
 import ControlPage from "@/modules/inventory/ControlPage";
 import LocationsPage from "@/modules/inventory/LocationsPage";
 import ImportPage from "@/modules/inventory/ImportPage";
@@ -158,6 +159,16 @@ export default function App() {
                   <RequireTenant>
                     <ModuleGate module="inventario">
                       <LabelsPage />
+                    </ModuleGate>
+                  </RequireTenant>
+                }
+              />
+              <Route
+                path="/inventario/precios"
+                element={
+                  <RequireTenant>
+                    <ModuleGate module="inventario">
+                      <PricingPage />
                     </ModuleGate>
                   </RequireTenant>
                 }

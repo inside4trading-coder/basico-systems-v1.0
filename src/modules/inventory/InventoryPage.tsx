@@ -147,6 +147,11 @@ export default function InventoryPage() {
             <Link to="/inventario/etiquetas">Etiquetas</Link>
           </Button>
           {editable && (
+            <Button variant="outline" asChild>
+              <Link to="/inventario/precios">Precios</Link>
+            </Button>
+          )}
+          {editable && (
             <>
               <Button variant="outline" asChild>
                 <Link to="/inventario/importar">Importar / Exportar</Link>
