@@ -181,7 +181,8 @@ export default function PolicyTab({ policy, editable, currency, taxRate }: {
           <div className="space-y-1">
             <Label htmlFor="auto-on-cost">Actualizar el precio cuando cambie el costo</Label>
             <p className="text-xs text-muted-foreground">
-              Al cargar o cambiar el costo de un producto, su precio pasa a ser el de la política. Los precios manuales no se tocan.
+              Al cargar o cambiar el costo de un producto, también al recibir mercancía con costo de compra, su precio pasa a ser
+              el de la política. Los precios manuales no se tocan.
               Apagado, el producto queda en «Revisar».
             </p>
           </div>

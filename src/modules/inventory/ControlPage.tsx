@@ -253,7 +253,7 @@ function Reception() {
                 <Input inputMode="decimal" value={l.received} onChange={(e) => upd(i, { received: e.target.value })} />
               </div>
               <div>
-                <Label className="text-[11px]">Costo ({currency})</Label>
+                <Label className="text-[11px]">Costo de compra ({currency})</Label>
                 <Input inputMode="decimal" value={l.cost} onChange={(e) => upd(i, { cost: e.target.value })} />
               </div>
             </div>
@@ -265,6 +265,12 @@ function Reception() {
           </Card>
         );
       })}
+      {lines.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          El costo de compra (factura o importación, por unidad) pasa a ser el costo del producto. Si la política de precios
+          actualiza el precio con el costo, el precio se ajusta solo.
+        </p>
+      )}
       <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Notas" aria-label="Notas" />
       <Button className="h-14 w-full font-bold" disabled={busy || !lines.length} onClick={confirm}>
         Confirmar recepción
