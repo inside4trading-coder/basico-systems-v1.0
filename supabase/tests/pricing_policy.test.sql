@@ -18,6 +18,12 @@ insert into public.tenant_members (tenant_id, user_id, role) values
   ('aaaaaaaa-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', 'owner'),
   ('aaaaaaaa-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000002', 'cajero'),
   ('bbbbbbbb-1111-1111-1111-111111111111', 'bbbbbbbb-0000-0000-0000-000000000001', 'owner');
+insert into public.tenant_entitlements (tenant_id, key, value)
+select t.id, k, '10'::jsonb from public.tenants t, unnest(array['max_locations']) k
+on conflict do nothing;
+insert into public.locations (id, tenant_id, name, code, type) values
+  ('aaaaaaaa-2222-2222-2222-222222222221', 'aaaaaaaa-1111-1111-1111-111111111111', 'Tienda', 'T1', 'store'),
+  ('aaaaaaaa-2222-2222-2222-222222222223', 'aaaaaaaa-1111-1111-1111-111111111111', 'Aliado X', 'ALX', 'external');
 insert into public.products (id, tenant_id, name) values
   ('aaaaaaaa-4444-4444-4444-444444444441', 'aaaaaaaa-1111-1111-1111-111111111111', 'Producto X'),
   ('bbbbbbbb-4444-4444-4444-444444444441', 'bbbbbbbb-1111-1111-1111-111111111111', 'Producto B');
@@ -173,6 +179,22 @@ select is((select row(regular_price, price, priced_cost)::text from public.varia
 select lives_ok($$ select public.save_pricing_policy('{"target_margin": 50, "rounding": "none", "concepts": [], "auto_on_cost": false}') $$, 'apaga el precio automático');
 update public.variants set cost = 22 where sku = 'X2';
 select is((select row(regular_price, priced_cost)::text from public.variants where sku = 'X2'), row(30.00::numeric, 20.0000::numeric)::text, 'apagado, el precio no se mueve');
+
+-- Recepción: el costo unitario de la entrada pasa a ser el costo del producto.
+select lives_ok($$ select public.inventory_entry('aaaaaaaa-5555-5555-5555-555555555552', 'aaaaaaaa-2222-2222-2222-222222222221', 5, 24, 'Proveedor X') $$,
+  'recibe con costo, precio automático apagado');
+select is((select row(cost, regular_price, priced_cost)::text from public.variants where sku = 'X2'),
+  row(24.0000::numeric, 30.00::numeric, 20.0000::numeric)::text, 'toma el costo de la compra y queda por revisar');
+select lives_ok($$ select public.inventory_entry('aaaaaaaa-5555-5555-5555-555555555552', 'aaaaaaaa-2222-2222-2222-222222222221', 1) $$, 'recibe sin costo');
+select is((select cost from public.variants where sku = 'X2'), 24.0000::numeric, 'sin costo en la entrada no cambia el costo');
+select lives_ok($$ select public.save_pricing_policy('{"target_margin": 50, "rounding": "none", "concepts": []}') $$, 'enciende el precio automático');
+select lives_ok($$ select public.inventory_entry('aaaaaaaa-5555-5555-5555-555555555552', 'aaaaaaaa-2222-2222-2222-222222222221', 2, 26) $$,
+  'recibe con costo nuevo');
+select is((select row(cost, regular_price, priced_cost)::text from public.variants where sku = 'X2'),
+  row(26.0000::numeric, 39.00::numeric, 26.0000::numeric)::text, 'con precio automático, la compra mueve el precio');
+select lives_ok($$ select public.inventory_entry('aaaaaaaa-5555-5555-5555-555555555552', 'aaaaaaaa-2222-2222-2222-222222222223', 1, 3) $$,
+  'entra a la lista de un aliado');
+select is((select cost from public.variants where sku = 'X2'), 26.0000::numeric, 'lo del aliado no cambia el costo propio');
 
 -- Otro negocio no ve la política ni el historial de A.
 select set_config('request.headers', '{"x-tenant-id":"bbbbbbbb-1111-1111-1111-111111111111"}', true);
