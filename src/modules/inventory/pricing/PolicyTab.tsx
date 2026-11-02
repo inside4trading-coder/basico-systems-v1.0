@@ -1,7 +1,8 @@
 /**
  * Política de precios del negocio: ganancia objetivo, gastos de traída,
  * comisiones que se descuentan de cada venta, ganancia mínima y redondeo.
- * Muestra en vivo cómo queda un precio de ejemplo.
+ * Muestra en vivo cómo queda un precio de ejemplo. Al guardar ofrece aplicarla
+ * a todo el inventario.
  */
 import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
@@ -14,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { formatMoney } from "@/core/money";
 import { useOfficialRateChange, useSavePricingPolicy } from "./api";
+import ApplyPolicyDialog from "./ApplyPolicyDialog";
 import { feesRate, pct, ROUNDING_LABEL, suggestPrice, type PricingPolicy, type Rounding } from "./pricing";
 
 const num = (v: string) => {
@@ -72,6 +74,7 @@ export default function PolicyTab({ policy, editable, currency, taxRate }: {
 }) {
   const [draft, setDraft] = useState<PricingPolicy>(policy);
   const save = useSavePricingPolicy();
+  const [applyOpen, setApplyOpen] = useState(false);
   const { data: rateChange } = useOfficialRateChange();
   useEffect(() => setDraft(policy), [policy]);
 
@@ -87,7 +90,10 @@ export default function PolicyTab({ policy, editable, currency, taxRate }: {
     save.mutate(
       { ...draft, concepts: draft.concepts.map((c) => ({ ...c, name: c.name.trim() })) },
       {
-        onSuccess: () => toast.success("Política guardada"),
+        onSuccess: () => {
+          toast.success("Política guardada");
+          setApplyOpen(true);
+        },
         onError: (err) => toast.error("No se pudo guardar", { description: err.message }),
       },
     );
@@ -171,6 +177,17 @@ export default function PolicyTab({ policy, editable, currency, taxRate }: {
           <p className="text-xs text-muted-foreground">Siempre hacia arriba: el redondeo nunca baja el precio calculado.</p>
         </Card>
 
+        <Card className="flex items-start justify-between gap-4 rounded-surface p-4">
+          <div className="space-y-1">
+            <Label htmlFor="auto-on-cost">Actualizar el precio cuando cambie el costo</Label>
+            <p className="text-xs text-muted-foreground">
+              Al cargar o cambiar el costo de un producto, su precio pasa a ser el de la política. Los precios manuales no se tocan.
+              Apagado, el producto queda en «Revisar».
+            </p>
+          </div>
+          <Switch id="auto-on-cost" checked={draft.auto_on_cost} disabled={!editable} onCheckedChange={(v) => set("auto_on_cost", v)} />
+        </Card>
+
         {editable && (
           <div className="flex justify-end">
             <Button onClick={submit} disabled={save.isPending || invalid}>
@@ -179,6 +196,8 @@ export default function PolicyTab({ policy, editable, currency, taxRate }: {
           </div>
         )}
       </div>
+
+      <ApplyPolicyDialog open={applyOpen} onOpenChange={setApplyOpen} title="¿Aplicar la política a todo el inventario?" />
 
       <Card className="h-fit space-y-2 rounded-surface p-4 text-sm">
         <h2 className="mono-cap text-xs text-muted-foreground">Ejemplo con costo {formatMoney(10, currency)}</h2>

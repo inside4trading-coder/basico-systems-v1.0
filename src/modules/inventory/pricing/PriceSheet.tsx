@@ -1,11 +1,13 @@
 /**
  * Ficha de precio de una variante: el desglose del costo al PVP sugerido,
- * cómo está el precio vigente, y el historial de cambios.
+ * cómo está el precio vigente, y el historial de cambios. Un precio fijado a
+ * mano puede quedar como manual para que la política no lo cambie.
  */
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -37,6 +39,8 @@ export interface PriceRow {
   regular: number | null;
   price: number | null;
   taxRate: number;
+  /** Precio manual: la política no lo cambia. */
+  locked: boolean;
   status: PriceStatus;
 }
 
@@ -51,7 +55,9 @@ export default function PriceSheet({ row, policy, currency, editable, onClose }:
   const history = usePriceHistory(row?.variantId ?? null);
   const s = row ? suggestPrice(row.cost, policy, row.taxRate) : null;
   const [pvp, setPvp] = useState("");
+  const [keep, setKeep] = useState(true);
   useEffect(() => setPvp(s ? String(s.pvp) : ""), [row?.variantId, s?.pvp]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => setKeep(true), [row?.variantId]);
 
   if (!row) return null;
   const money = (n: number | null) => (n == null ? "—" : formatMoney(n, currency));
@@ -64,14 +70,28 @@ export default function PriceSheet({ row, policy, currency, editable, onClose }:
     const n = Number(pvp.replace(",", "."));
     if (!(n > 0)) return toast.error("Escribe un PVP válido");
     const net = netFromPvp(n, row.taxRate);
+    const fromPolicy = !!s && n === s.pvp;
+    const locked = fromPolicy ? false : keep;
     setPrices.mutate(
-      { items: [{ variant_id: row.variantId, regular_price: net }], reason: s && n === s.pvp ? "Fijación con la política" : "Fijación manual" },
+      { items: [{ variant_id: row.variantId, regular_price: net, price_locked: locked }], reason: fromPolicy ? "Fijación con la política" : "Fijación manual" },
       {
-        onSuccess: () => toast.success(`PVP fijado en ${formatMoney(n, currency)}`),
+        onSuccess: () => toast.success(`PVP fijado en ${formatMoney(withTax(net, row.taxRate), currency)}${locked ? " (manual)" : ""}`),
         onError: (err) => toast.error("No se pudo fijar", { description: err.message }),
       },
     );
   };
+
+  const backToPolicy = () => {
+    if (!s) return;
+    setPrices.mutate(
+      { items: [{ variant_id: row.variantId, regular_price: s.net, price_locked: false }], reason: "Volver a la política" },
+      {
+        onSuccess: () => toast.success(`Vuelve a la política: PVP ${formatMoney(s.pvp, currency)}`),
+        onError: (err) => toast.error("No se pudo cambiar", { description: err.message }),
+      },
+    );
+  };
+  const typedIsPolicy = !!s && Number(pvp.replace(",", ".")) === s.pvp;
 
   return (
     <Sheet open onOpenChange={(open) => !open && onClose()}>
@@ -81,10 +101,12 @@ export default function PriceSheet({ row, policy, currency, editable, onClose }:
             {row.name}
             {row.variant && <span className="text-muted-foreground"> · {row.variant}</span>}
           </SheetTitle>
-          <SheetDescription className="flex flex-wrap items-center gap-2">
-            {row.sku && <span className="mono text-xs">{row.sku}</span>}
-            <Badge variant={row.status === "fijado" ? "outline" : "secondary"}>{PRICE_STATUS_LABEL[row.status]}</Badge>
-            <span className="text-xs">{PRICE_STATUS_HELP[row.status]}</span>
+          <SheetDescription asChild>
+            <div className="flex flex-wrap items-center gap-2">
+              {row.sku && <span className="mono text-xs">{row.sku}</span>}
+              <Badge variant={row.status === "fijado" ? "outline" : "secondary"}>{PRICE_STATUS_LABEL[row.status]}</Badge>
+              <span className="text-xs">{PRICE_STATUS_HELP[row.status]}</span>
+            </div>
           </SheetDescription>
         </SheetHeader>
 
@@ -140,14 +162,32 @@ export default function PriceSheet({ row, policy, currency, editable, onClose }:
             </section>
 
             {editable && (
-              <div className="flex items-end gap-2">
-                <div className="flex-1 space-y-1">
-                  <label htmlFor="pvp-fix" className="text-xs text-muted-foreground">PVP a fijar (con IVA)</label>
-                  <Input id="pvp-fix" inputMode="decimal" value={pvp} onChange={(e) => setPvp(e.target.value)} className="text-right" />
+              <div className="space-y-2">
+                {row.locked && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted p-3 text-xs">
+                    <span>Precio manual: la política no lo cambia.</span>
+                    {s && (
+                      <Button size="sm" variant="outline" onClick={backToPolicy} disabled={setPrices.isPending}>
+                        Volver a la política
+                      </Button>
+                    )}
+                  </div>
+                )}
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 space-y-1">
+                    <label htmlFor="pvp-fix" className="text-xs text-muted-foreground">PVP a fijar (con IVA)</label>
+                    <Input id="pvp-fix" inputMode="decimal" value={pvp} onChange={(e) => setPvp(e.target.value)} className="text-right" />
+                  </div>
+                  <Button onClick={fix} disabled={setPrices.isPending}>
+                    Fijar precio
+                  </Button>
                 </div>
-                <Button onClick={fix} disabled={setPrices.isPending}>
-                  Fijar precio
-                </Button>
+                {!typedIsPolicy && (
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Checkbox checked={keep} onCheckedChange={(v) => setKeep(v === true)} />
+                    Mantener este precio: la política no lo cambia
+                  </label>
+                )}
               </div>
             )}
           </TabsContent>
