@@ -32,6 +32,8 @@ export interface PricingPolicy {
   concepts: PricingConcept[];
   min_margin: number;
   rounding: Rounding;
+  /** Si cambia el costo, el precio se recalcula con la política (salvo precio manual). */
+  auto_on_cost: boolean;
 }
 
 export const DEFAULT_POLICY: PricingPolicy = {
@@ -41,6 +43,7 @@ export const DEFAULT_POLICY: PricingPolicy = {
   concepts: [],
   min_margin: 15,
   rounding: "none",
+  auto_on_cost: true,
 };
 
 export const ROUNDING_LABEL: Record<Rounding, string> = {
@@ -50,7 +53,9 @@ export const ROUNDING_LABEL: Record<Rounding, string> = {
   int: "Número entero",
 };
 
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+// Redondeo a centavos sin el error del punto flotante (4,35 × 1,3 = 5,6549999…
+// debe dar 5,66, como en la base de datos).
+const round2 = (n: number) => Math.sign(n) * (Math.round(Number((Math.abs(n) * 100).toPrecision(12))) / 100);
 
 /** Suma de comisiones activas, como fracción (0,05 = 5 %). */
 export function feesRate(policy: PricingPolicy): number {
@@ -150,7 +155,7 @@ export function maxDiscountNoLoss(regular: number, cost: number, policy: Pricing
 /** Porcentaje con coma decimal: 1,5. */
 export const pct = (n: number) => Number(n).toLocaleString("es-VE", { maximumFractionDigits: 1 });
 
-export type PriceStatus = "sin_costo" | "sin_fijar" | "revisar" | "perdida" | "margen_bajo" | "fijado";
+export type PriceStatus = "sin_costo" | "sin_fijar" | "revisar" | "perdida" | "margen_bajo" | "manual" | "fijado";
 
 export const PRICE_STATUS_LABEL: Record<PriceStatus, string> = {
   sin_costo: "Sin costo",
@@ -158,6 +163,7 @@ export const PRICE_STATUS_LABEL: Record<PriceStatus, string> = {
   revisar: "Revisar",
   perdida: "Pérdida",
   margen_bajo: "Margen bajo",
+  manual: "Manual",
   fijado: "Fijado",
 };
 
@@ -167,6 +173,7 @@ export const PRICE_STATUS_HELP: Record<PriceStatus, string> = {
   revisar: "El costo cambió desde que se fijó el precio.",
   perdida: "El precio vigente no cubre el costo y las comisiones.",
   margen_bajo: "La ganancia queda por debajo del mínimo de la política.",
+  manual: "Precio puesto a mano: la política no lo cambia.",
   fijado: "Precio en orden.",
 };
 
@@ -175,6 +182,7 @@ export interface PricedVariant {
   priced_cost: number | null;
   regular_price: number | null;
   price: number | null;
+  price_locked?: boolean;
 }
 
 /** Estado del precio de una variante según la política. */
@@ -186,6 +194,7 @@ export function priceStatus(v: PricedVariant, policy: PricingPolicy): PriceStatu
   const effective = Number(v.price ?? v.regular_price);
   const p = profitAt(effective, cost, policy);
   if (p.amount < 0) return "perdida";
+  if (v.price_locked) return "manual";
   if (p.pct < Number(policy.min_margin)) return "margen_bajo";
   return "fijado";
 }

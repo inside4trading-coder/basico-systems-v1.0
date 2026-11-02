@@ -17,6 +17,7 @@ const policy: PricingPolicy = {
   replacement_pct: 0,
   min_margin: 15,
   rounding: "none",
+  auto_on_cost: true,
   concepts: [
     { name: "Vendedor", pct: 3, active: true },
     { name: "Punto de venta", pct: 2, active: true },
@@ -72,6 +73,11 @@ describe("suggestPrice", () => {
     expect(b.net).toBe(16.5);
     expect(suggestPrice(10, { ...policy, concepts: [] }, 0)!.replacement).toBe(0);
   });
+  it("redondea centavos igual que la base de datos", () => {
+    const b = suggestPrice(4.35, { ...policy, target_margin: 30, concepts: [] }, 16)!;
+    expect(b.rawNet).toBe(5.66);
+    expect(b.pvp).toBe(6.57);
+  });
   it("redondea el PVP y guarda el precio sin IVA que lo da", () => {
     const b = suggestPrice(10, { ...policy, rounding: "99" }, 16)!;
     expect(b.pvp).toBe(18.99);
@@ -105,6 +111,11 @@ describe("priceStatus", () => {
   it("la oferta deja pérdida o poco margen", () => {
     expect(priceStatus({ ...v, price: 10 }, policy)).toBe("perdida");
     expect(priceStatus({ ...v, price: 11.5 }, policy)).toBe("margen_bajo");
+  });
+  it("precio manual: se marca manual salvo pérdida o costo nuevo", () => {
+    expect(priceStatus({ ...v, price: 11.5, price_locked: true }, policy)).toBe("manual");
+    expect(priceStatus({ ...v, price: 10, price_locked: true }, policy)).toBe("perdida");
+    expect(priceStatus({ ...v, cost: 12, price_locked: true }, policy)).toBe("revisar");
   });
   it("precios viejos sin costo fijado se juzgan por el margen", () => {
     expect(priceStatus({ ...v, priced_cost: null }, DEFAULT_POLICY)).toBe("fijado");

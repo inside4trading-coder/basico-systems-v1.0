@@ -16,7 +16,7 @@ export function usePricingPolicy() {
     queryFn: async (): Promise<PricingPolicy & { saved: boolean }> => {
       const { data, error } = await supabase
         .from("pricing_policies")
-        .select("target_margin, overhead_pct, replacement_pct, concepts, min_margin, rounding")
+        .select("target_margin, overhead_pct, replacement_pct, concepts, min_margin, rounding, auto_on_cost")
         .maybeSingle();
       if (error) throw new Error(error.message);
       if (!data) return { ...DEFAULT_POLICY, saved: false };
@@ -26,6 +26,7 @@ export function usePricingPolicy() {
         replacement_pct: Number(data.replacement_pct ?? 0),
         min_margin: Number(data.min_margin),
         rounding: data.rounding as PricingPolicy["rounding"],
+        auto_on_cost: data.auto_on_cost ?? true,
         concepts: ((data.concepts ?? []) as PricingPolicy["concepts"]).map((c) => ({ name: c.name, pct: Number(c.pct), active: !!c.active })),
         saved: true,
       };
@@ -47,12 +48,37 @@ export function useSavePricingPolicy() {
 export function useSetPrices() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ items, reason }: { items: { variant_id: string; regular_price: number }[]; reason?: string }) => {
+    mutationFn: async ({ items, reason }: { items: { variant_id: string; regular_price: number; price_locked?: boolean }[]; reason?: string }) => {
       const { data, error } = await supabase.rpc("set_variant_prices", { p_items: items, p_reason: reason ?? null });
       if (error) throw new Error(error.message);
       return Number(data);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["inv"] }),
+  });
+}
+
+export interface PolicyImpact {
+  changed: number;
+  up: number;
+  down: number;
+  same: number;
+  locked: number;
+  no_cost: number;
+  applied?: number;
+}
+
+/** Cuenta (dryRun) o aplica la política guardada a todo el inventario. */
+export function useApplyPolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (dryRun: boolean): Promise<PolicyImpact> => {
+      const { data, error } = await supabase.rpc("apply_pricing_policy", { p_dry_run: dryRun });
+      if (error) throw new Error(error.message);
+      return data as unknown as PolicyImpact;
+    },
+    onSuccess: (_d, dryRun) => {
+      if (!dryRun) qc.invalidateQueries({ queryKey: ["inv"] });
+    },
   });
 }
 

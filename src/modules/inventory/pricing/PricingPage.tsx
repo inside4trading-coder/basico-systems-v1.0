@@ -1,7 +1,8 @@
 /**
  * Precios: del costo al PVP con la política del negocio. El listado marca qué
  * precios revisar (costo nuevo, pérdida, margen bajo, sin fijar) y permite
- * aplicar el sugerido en bloque. La política se edita en su pestaña.
+ * aplicar el sugerido en bloque o la política a todo el inventario. La
+ * política se edita en su pestaña.
  */
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -21,11 +22,12 @@ import { useTaxRates } from "@/modules/settings/api";
 import { useCatalog } from "../api";
 import { variantLabel } from "../lib";
 import { usePricingPolicy, useSetPrices } from "./api";
+import ApplyPolicyDialog from "./ApplyPolicyDialog";
 import PolicyTab from "./PolicyTab";
 import PriceSheet, { type PriceRow } from "./PriceSheet";
 import { DEFAULT_POLICY, pct, PRICE_STATUS_LABEL, priceStatus, profitAt, suggestPrice, type PriceStatus } from "./pricing";
 
-const STATUS_ORDER: PriceStatus[] = ["revisar", "perdida", "margen_bajo", "sin_fijar", "sin_costo", "fijado"];
+const STATUS_ORDER: PriceStatus[] = ["revisar", "perdida", "margen_bajo", "sin_fijar", "sin_costo", "manual", "fijado"];
 const PAGE = 200;
 
 export default function PricingPage() {
@@ -45,6 +47,7 @@ export default function PricingPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
   const [limit, setLimit] = useState(PAGE);
+  const [applyOpen, setApplyOpen] = useState(false);
 
   const rows = useMemo(
     () =>
@@ -57,6 +60,7 @@ export default function PricingPage() {
           const regular = v.regular_price == null ? null : Number(v.regular_price);
           const price = v.price == null ? null : Number(v.price);
           const pricedCost = v.priced_cost == null ? null : Number(v.priced_cost);
+          const locked = !!v.price_locked;
           const row: PriceRow = {
             variantId: v.id,
             name: r.product.name,
@@ -67,7 +71,8 @@ export default function PricingPage() {
             regular,
             price,
             taxRate,
-            status: priceStatus({ cost, priced_cost: pricedCost, regular_price: regular, price }, policy),
+            locked,
+            status: priceStatus({ cost, priced_cost: pricedCost, regular_price: regular, price, price_locked: locked }, policy),
           };
           const suggestion = suggestPrice(cost, policy, taxRate);
           const profit = cost && regular != null ? profitAt(price ?? regular, cost, policy).pct : null;
@@ -112,7 +117,7 @@ export default function PricingPage() {
 
   const applySuggested = () =>
     setPrices.mutate(
-      { items: applicable.map((r) => ({ variant_id: r.row.variantId, regular_price: r.suggestion!.net })), reason: "Fijación con la política" },
+      { items: applicable.map((r) => ({ variant_id: r.row.variantId, regular_price: r.suggestion!.net, price_locked: false })), reason: "Fijación con la política" },
       {
         onSuccess: (n) => {
           toast.success(`${n} precio${n === 1 ? "" : "s"} fijado${n === 1 ? "" : "s"} con la política`);
@@ -132,9 +137,12 @@ export default function PricingPage() {
           <h1 className="text-2xl">Precios</h1>
           <p className="text-sm text-muted-foreground">Costo → precio sin IVA → PVP, con la política del negocio</p>
         </div>
-        <Button variant="outline" asChild>
-          <Link to="/inventario">Volver al inventario</Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {editable && policy.saved && <Button onClick={() => setApplyOpen(true)}>Aplicar política a todo</Button>}
+          <Button variant="outline" asChild>
+            <Link to="/inventario">Volver al inventario</Link>
+          </Button>
+        </div>
       </div>
 
       {!policy.saved && (
@@ -255,6 +263,8 @@ export default function PricingPage() {
           <PolicyTab policy={policy} editable={editable} currency={currency} taxRate={defaultTax} />
         </TabsContent>
       </Tabs>
+
+      <ApplyPolicyDialog open={applyOpen} onOpenChange={setApplyOpen} />
 
       <PriceSheet row={openRow} policy={policy} currency={currency} editable={editable} onClose={() => setOpenId(null)} />
     </AppShell>

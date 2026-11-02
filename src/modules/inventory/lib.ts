@@ -49,6 +49,8 @@ export interface Variant {
   cost: number | null;
   /** Costo cuando se fijó el precio de lista; si cambió, el precio está por revisar. */
   priced_cost?: number | null;
+  /** Precio manual: la política de precios no lo cambia. */
+  price_locked?: boolean;
   unit: string;
   is_active: boolean;
   deleted_at: string | null;
