@@ -82,13 +82,6 @@ export interface PaymentMethod {
   account_id: string | null;
 }
 
-export interface TenantRateRow {
-  id: string;
-  rate: number;
-  note: string | null;
-  created_at: string;
-}
-
 function useTenantKey() {
   const { active } = useTenant();
   return active?.tenant.id ?? "none";
@@ -118,16 +111,89 @@ export function useCurrentRate() {
   });
 }
 
-/** Pide a la función exchange-rate-sync que consulte el BCV (o su respaldo). */
+/** Estado de la tasa: vigente, emergencia, última consulta, último error e historial. */
+export interface RateStatus {
+  rate_source: "bcv" | "manual";
+  current: CurrentRate | null;
+  override: { rate: number; note: string | null; created_at: string; active: boolean } | null;
+  last_check: { at: string; ok: boolean; mode: RateFetchMode; source: "bcv" | "dolarapi" | null; error: string | null } | null;
+  last_ok_at: string | null;
+  last_error: { at: string; error: string; mode: RateFetchMode } | null;
+  failing: boolean;
+  history: { rate: number; source: "bcv" | "dolarapi" | "manual" | "override"; effective_date: string; at: string; note: string | null }[];
+}
+export type RateFetchMode = "auto" | "cron" | "refresh" | "test";
+
+export function useRateStatus() {
+  const tenant = useTenantKey();
+  return useQuery({
+    queryKey: ["cfg", tenant, "rate_status"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("rate_status");
+      if (error) throw asError(error);
+      const s = data as RateStatus;
+      return {
+        ...s,
+        current: s.current ? { ...s.current, rate: Number(s.current.rate) } : null,
+        override: s.override ? { ...s.override, rate: Number(s.override.rate) } : null,
+        history: (s.history ?? []).map((h) => ({ ...h, rate: Number(h.rate) })),
+      } as RateStatus;
+    },
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+  });
+}
+
+export interface RateSyncResult {
+  ok: boolean;
+  skipped?: boolean;
+  reason?: string;
+  source?: "bcv" | "dolarapi";
+  errors?: string[];
+}
+
+/** Error legible de la función (cuerpo JSON con errors/error) en lugar de "non-2xx". */
+async function functionError(error: unknown): Promise<Error> {
+  const context = (error as { context?: Response }).context;
+  if (context && typeof context.json === "function") {
+    const body = await context.json().catch(() => null);
+    const message = body?.errors?.join?.("; ") ?? body?.error;
+    if (message) return new Error(message);
+  }
+  return asError(error as { message?: string });
+}
+
+/**
+ * Pide a la función exchange-rate-sync que consulte el BCV (o su respaldo).
+ * "auto" respeta los límites de frecuencia; "refresh" es «Actualizar ahora».
+ */
 export function useRefreshRate() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("exchange-rate-sync", { body: {} });
-      if (error) throw asError(error);
-      return data as { ok: boolean; skipped?: boolean; source?: string; errors?: string[] };
+    mutationFn: async (mode: "auto" | "refresh" = "auto") => {
+      const { data, error } = await supabase.functions.invoke("exchange-rate-sync", { body: { mode } });
+      if (error) throw await functionError(error);
+      return data as RateSyncResult;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cfg"] }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["cfg"] }),
+  });
+}
+
+export interface RateTestResult {
+  ok: boolean;
+  results: { source: "bcv" | "dolarapi"; ok: boolean; rate?: number; effective_date?: string; error?: string }[];
+}
+
+/** «Probar conexión»: consulta las dos fuentes sin guardar nada. */
+export function useTestRateConnection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("exchange-rate-sync", { body: { mode: "test" } });
+      if (error) throw await functionError(error);
+      return data as RateTestResult;
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["cfg"] }),
   });
 }
 
@@ -159,23 +225,35 @@ export function useUpdateTenantSettings() {
   });
 }
 
-export function useTenantRates() {
-  const tenant = useTenantKey();
-  return useQuery({
-    queryKey: ["cfg", tenant, "tenant_rates"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("tenant_rates").select("id, rate, note, created_at").order("created_at", { ascending: false }).limit(10);
-      if (error) throw error;
-      return (data ?? []).map((r) => ({ ...r, rate: Number(r.rate) })) as TenantRateRow[];
-    },
-  });
-}
-
+/**
+ * Agrega una tasa del negocio. untilOfficial: tasa de emergencia en modo BCV,
+ * rige hasta que entre en vigor una oficial nueva.
+ */
 export function useSetTenantRate() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ base, quote, rate, note }: { base: string; quote: string; rate: number; note: string | null }) => {
-      const { error } = await supabase.from("tenant_rates").insert({ base_currency: base, quote_currency: quote, rate, note });
+    mutationFn: async ({ base, quote, rate, note, untilOfficial = false }: {
+      base: string;
+      quote: string;
+      rate: number;
+      note: string | null;
+      untilOfficial?: boolean;
+    }) => {
+      const { error } = await supabase
+        .from("tenant_rates")
+        .insert({ base_currency: base, quote_currency: quote, rate, note, until_official: untilOfficial });
+      if (error) throw asError(error);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cfg"] }),
+  });
+}
+
+/** Vuelve a la tasa oficial antes de que llegue una nueva. */
+export function useEndRateOverride() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc("end_rate_override");
       if (error) throw asError(error);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cfg"] }),

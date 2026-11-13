@@ -419,3 +419,8 @@ enabled = true
 # Alta por enlace: la llama quien todavía no tiene cuenta.
 [functions.onboarding-signup]
 verify_jwt = false
+
+# Tasa oficial: la llama también la consulta programada (pg_cron + pg_net), sin sesión.
+# Sin sesión solo consulta fuentes públicas, con límite de frecuencia.
+[functions.exchange-rate-sync]
+verify_jwt = false

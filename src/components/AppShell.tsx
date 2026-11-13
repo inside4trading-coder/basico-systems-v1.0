@@ -4,6 +4,7 @@ import { Menu, PanelLeftOpen } from "lucide-react";
 import AppSidebar, { ModuleLinks } from "@/components/AppSidebar";
 import { useNavModules, useSidebarCollapsed } from "@/components/nav/useNav";
 import BrandMark from "@/components/BrandMark";
+import RateAlert from "@/components/RateAlert";
 import RateBadge from "@/components/RateBadge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -112,6 +113,7 @@ export default function AppShell({ children, wide = false }: { children: ReactNo
             </Button>
           </div>
         </header>
+        <RateAlert />
         {trialNotice && daysLeft !== null && (
           <div role="status" className="border-b bg-amber-50 px-4 py-2 text-center text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100">
             {daysLeft > 0

@@ -207,7 +207,7 @@ function BusinessStep({ onDone }: { onDone: () => void }) {
                   variant="outline"
                   size="sm"
                   disabled={refresh.isPending}
-                  onClick={() => refresh.mutate(undefined, { onError: (e) => toast.error((e as Error).message) })}
+                  onClick={() => refresh.mutate("refresh", { onError: (e) => toast.error((e as Error).message) })}
                 >
                   <RefreshCcw /> Consultar BCV
                 </Button>
