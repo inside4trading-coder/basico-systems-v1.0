@@ -55,9 +55,12 @@ export interface AttentionInput {
   /** Cuotas por cobrar vencidas y cuánto suman (moneda base). */
   receivableOverdueCount: number;
   receivableOverdueTotal: number;
+  /** Facturas de proveedores con cuotas vencidas y cuánto suman (moneda base). */
+  payableOverdueCount: number;
+  payableOverdueTotal: number;
 }
 
-export type AttentionTarget = "obligations" | "receivables" | "accounts" | "movements" | "reconciliation" | "settings";
+export type AttentionTarget = "obligations" | "receivables" | "payables" | "accounts" | "movements" | "reconciliation" | "settings";
 
 export interface AttentionItem {
   id: string;
@@ -80,6 +83,15 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
       title: `${plural(input.overdueCount, "cuota vencida", "cuotas vencidas")} sin pagar`,
       detail: input.overdueTotal > 0 ? `Faltan ${formatMoney(input.overdueTotal, input.baseCurrency)}` : "Monto variable",
       target: "obligations",
+    });
+  }
+  if (input.payableOverdueCount > 0) {
+    items.push({
+      id: "payable_overdue",
+      tone: "critical",
+      title: `${plural(input.payableOverdueCount, "cuota a proveedores vencida", "cuotas a proveedores vencidas")}`,
+      detail: `Por pagar ${formatMoney(input.payableOverdueTotal, input.baseCurrency)}`,
+      target: "payables",
     });
   }
   if (input.receivableOverdueCount > 0) {
