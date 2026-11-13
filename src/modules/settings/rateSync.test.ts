@@ -18,8 +18,8 @@ describe("sincronizar la tasa", () => {
     expect(shouldSyncRate({ rate: { source: "dolarapi", fetched_at: hoursAgo(4) }, now, lastAttempt: null, online: true })).toBe(true);
   });
 
-  it("la tasa manual del negocio no se toca", () => {
-    expect(shouldSyncRate({ rate: { source: "manual", fetched_at: hoursAgo(48) }, now, lastAttempt: null, online: true })).toBe(false);
+  it("con tasa de emergencia vieja sigue buscando la oficial (la emergencia vence con una nueva)", () => {
+    expect(shouldSyncRate({ rate: { source: "manual", fetched_at: hoursAgo(4) }, now, lastAttempt: null, online: true })).toBe(true);
   });
 
   it("no reintenta antes de una hora ni sin conexión", () => {

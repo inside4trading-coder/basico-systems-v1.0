@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import BrandMark from "@/components/BrandMark";
+import RateAlert from "@/components/RateAlert";
 import RateBadge from "@/components/RateBadge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/core/auth";
@@ -36,6 +37,7 @@ export default function PosShell({ children }: { children: ReactNode }) {
           </Button>
         </div>
       </header>
+      <RateAlert />
       <main className="mx-auto max-w-[1600px] space-y-4 p-4">{children}</main>
     </div>
   );

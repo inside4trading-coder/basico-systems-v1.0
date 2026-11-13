@@ -65,7 +65,7 @@ Ideas que recorren todo el código:
 
 | Función | Para qué |
 |---|---|
-| `exchange-rate-sync` | Consulta la tasa del BCV (con respaldo) y la guarda. |
+| `exchange-rate-sync` | Consulta la tasa del BCV (con respaldo), la guarda y registra cada intento en `rate_fetch_log`. La llama la app y, cada hora, `pg_cron` (sin sesión; verify_jwt desactivado). |
 | `invite-member` | Invita a una persona al equipo por correo; comprueba el permiso con la sesión de quien llama. |
 | `onboarding-signup` | Crea la cuenta de quien abre un enlace de alta válido (sin sesión; verify_jwt desactivado). |
 | `studio-generate` | Genera imágenes del Estudio de IA con OpenRouter. |
@@ -135,8 +135,10 @@ si tocas la base.
 - Una migración por cambio en `supabase/migrations/` (`AAAAMMDDHHMMSS_nombre.sql`). Se prueban con
   `supabase db reset` y se aplican a producción con la CLI o el MCP de Supabase con el contenido exacto del
   repo; después se revisan los avisos de Supabase (`get_advisors`) y se comparan las funciones contra local.
-- Las Edge Functions se despliegan por separado (`supabase functions deploy`). `onboarding-signup` va con
-  `verify_jwt = false`; el resto, con verificación.
+- Las Edge Functions se despliegan por separado (`supabase functions deploy`). `onboarding-signup` y
+  `exchange-rate-sync` van con `verify_jwt = false`; el resto, con verificación.
+- La consulta programada de la tasa lee la dirección del proyecto del Vault (secreto `project_url`, solo la URL
+  pública del proyecto). Sin ese secreto, el cron no hace nada.
 - El front se despliega en Vercel desde `main` (`vercel.json` reescribe a `index.html` y añade cabeceras de
   seguridad). Variables públicas: `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`.
 

@@ -36,7 +36,7 @@ export function useRateAutoSync() {
       const now = Date.now();
       if (isPending || !shouldSyncRate({ rate: rate ?? null, now, lastAttempt: readLastAttempt(), online: navigator.onLine })) return;
       writeLastAttempt(now);
-      mutate();
+      mutate("auto");
     };
     check();
     const timer = window.setInterval(check, CHECK_EVERY_MS);

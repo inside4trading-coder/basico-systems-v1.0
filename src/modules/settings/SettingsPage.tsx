@@ -1,12 +1,11 @@
 /**
  * Configuración del negocio para cobrar: tasa de cambio, impuestos y métodos
- * de pago. Reemplaza la pantalla TasaBCV de Sublime y la lista fija de
+ * de pago (la tasa vive en RateSection). Reemplaza la pantalla TasaBCV de Sublime y la lista fija de
  * posPaymentMethods.ts (basicosystems@f551478b).
  */
 import { useState, type FormEvent } from "react";
 import { useHashScroll } from "@/lib/useHashScroll";
 import { Navigate } from "react-router-dom";
-import { RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 import AppShell from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
@@ -23,20 +22,15 @@ import CouponsSection from "./CouponsSection";
 import ClosingReminderSection from "./ClosingReminderSection";
 import ExportSection from "./ExportSection";
 import PlanSection from "./PlanSection";
-import { formatDateTime } from "@/modules/inventory/lib";
+import RateSection from "./RateSection";
 import { parseAmount } from "@/modules/inventory/import/preview";
 import {
-  RATE_SOURCE_LABEL,
   slugCode,
-  useCurrentRate,
   usePaymentMethods,
-  useRefreshRate,
   useSavePaymentMethod,
   useSaveTaxRate,
   useSetDefaultTax,
-  useSetTenantRate,
   useTaxRates,
-  useTenantRates,
   useTenantSettings,
   useUpdateTenantSettings,
   type PaymentMethod,
@@ -52,7 +46,6 @@ const KIND_LABEL: Record<PaymentMethod["kind"], string> = {
   other: "Otro",
 };
 
-const fmtRate = (n: number) => n.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 const errorToast = (title: string) => (err: Error) => toast.error(title, { description: err.message });
 
 export default function SettingsPage() {
@@ -83,132 +76,6 @@ export default function SettingsPage() {
       {can("config.negocio") && section("plan", <PlanSection />)}
       {can("config.negocio") && section("exportar", <ExportSection />)}
     </AppShell>
-  );
-}
-
-/* ---------------- Tasa de cambio ---------------- */
-
-function RateSection() {
-  const { data: settings } = useTenantSettings();
-  const { data: current, isLoading } = useCurrentRate();
-  const { data: history = [] } = useTenantRates();
-  const refresh = useRefreshRate();
-  const update = useUpdateTenantSettings();
-  const setRate = useSetTenantRate();
-  const [rate, setRateText] = useState("");
-  const [note, setNote] = useState("");
-
-  if (!settings) return null;
-  if (!settings.local_currency) {
-    return (
-      <Card className="space-y-1 p-4">
-        <p className="mono-cap text-xs text-muted-foreground">Tasa de cambio</p>
-        <p className="text-sm">Este negocio trabaja solo en {settings.base_currency}: no usa tasa.</p>
-      </Card>
-    );
-  }
-  const pair = `${settings.base_currency}/${settings.local_currency}`;
-
-  const saveRate = (event: FormEvent) => {
-    event.preventDefault();
-    const n = parseAmount(rate);
-    if (n == null || Number.isNaN(n) || n <= 0) return toast.error("Escribe una tasa válida");
-    setRate.mutate(
-      { base: settings.base_currency, quote: settings.local_currency!, rate: n, note: note.trim() || null },
-      {
-        onSuccess: () => {
-          toast.success(`Tasa ${pair} fijada en ${fmtRate(n)}`);
-          setRateText("");
-          setNote("");
-        },
-        onError: errorToast("No se pudo fijar la tasa"),
-      },
-    );
-  };
-
-  return (
-    <Card className="space-y-4 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="mono-cap text-xs text-muted-foreground">Tasa de cambio {pair}</p>
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground">Cargando…</p>
-          ) : current ? (
-            <>
-              <p className="num text-3xl font-bold">{fmtRate(current.rate)}</p>
-              <p className="text-xs text-muted-foreground">
-                {RATE_SOURCE_LABEL[current.source]} · rige desde {new Date(`${current.effective_date}T12:00:00`).toLocaleDateString("es-VE")} · consultada{" "}
-                {formatDateTime(current.fetched_at)}
-              </p>
-              {current.stale && <Badge variant="destructive" className="mt-1">Tasa vieja: revisa la fuente o fija una propia</Badge>}
-            </>
-          ) : (
-            <p className="text-sm">Todavía no hay tasa. {settings.rate_source === "bcv" ? "Toca «Consultar BCV»." : "Fija una tasa propia."}</p>
-          )}
-        </div>
-        {settings.rate_source === "bcv" && (
-          <Button
-            variant="outline"
-            disabled={refresh.isPending}
-            onClick={() =>
-              refresh.mutate(undefined, {
-                onSuccess: (r) =>
-                  r.skipped
-                    ? toast.info("Se consultó hace menos de 30 minutos")
-                    : toast.success(`Tasa actualizada desde ${r.source === "bcv" ? "el BCV" : "DolarAPI"}`, {
-                        description: r.errors?.length ? `El BCV no respondió: ${r.errors[0]}` : undefined,
-                      }),
-                onError: errorToast("No se pudo consultar"),
-              })
-            }
-          >
-            <RefreshCcw /> Consultar BCV
-          </Button>
-        )}
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {(["bcv", "manual"] as const).map((src) => (
-          <Button
-            key={src}
-            size="sm"
-            variant={settings.rate_source === src ? "default" : "outline"}
-            onClick={() => settings.rate_source !== src && update.mutate({ rate_source: src }, { onError: errorToast("No se pudo cambiar") })}
-          >
-            {src === "bcv" ? "Usar tasa BCV" : "Usar tasa propia"}
-          </Button>
-        ))}
-      </div>
-
-      {settings.rate_source === "manual" && (
-        <form onSubmit={saveRate} className="grid gap-2 sm:grid-cols-[10rem_1fr_auto] sm:items-end">
-          <div className="space-y-1">
-            <Label htmlFor="rate-value">Nueva tasa</Label>
-            <Input id="rate-value" inputMode="decimal" value={rate} onChange={(e) => setRateText(e.target.value)} placeholder="881,07" />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="rate-note">Nota</Label>
-            <Input id="rate-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Opcional" />
-          </div>
-          <Button type="submit" disabled={setRate.isPending}>
-            Fijar
-          </Button>
-          {history.length > 0 && (
-            <ul className="space-y-1 pt-2 text-xs text-muted-foreground sm:col-span-3">
-              {history.map((h) => (
-                <li key={h.id}>
-                  <span className="num font-semibold text-foreground">{fmtRate(h.rate)}</span> · {formatDateTime(h.created_at)}
-                  {h.note ? ` · ${h.note}` : ""}
-                </li>
-              ))}
-            </ul>
-          )}
-        </form>
-      )}
-      <p className="text-xs text-muted-foreground">
-        Cada venta guarda la tasa con la que se cobró: cambiar la tasa no altera ventas pasadas.
-      </p>
-    </Card>
   );
 }
 
