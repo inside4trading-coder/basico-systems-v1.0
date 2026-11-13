@@ -87,9 +87,10 @@ function asError(error: { message?: string } | null): Error {
 const n = (v: unknown) => Number(v ?? 0);
 const nn = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 
-export function useSuppliers() {
+export function useSuppliers(enabled = true) {
   const tenant = useTenantKey();
   return useQuery({
+    enabled,
     queryKey: ["fin", tenant, "suppliers"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -240,6 +241,31 @@ export const useCreditPayable = () =>
   useRpc<{ p_payable_id: string; p_amount: number; p_occurred_on: string; p_reference: string | null; p_note: string | null }>("credit_payable");
 export const useVoidPayablePayment = () => useRpc<{ p_payment_id: string; p_reason: string }>("void_payable_payment");
 export const useCancelPayable = () => useRpc<{ p_payable_id: string; p_reason: string }>("cancel_payable");
+
+export interface ReceiveOnCredit {
+  location_id: string;
+  supplier_id: string;
+  document: string | null;
+  control_number: string | null;
+  issued_on: string;
+  tax_amount: number | null;
+  note: string | null;
+  lines: { variant_id: string; qty: number; unit_cost: number; expected_qty: number | null }[];
+}
+
+/** Recepción a crédito: entrada de mercancía y factura por pagar en una sola transacción. */
+export function useReceiveOnCredit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: ReceiveOnCredit) => {
+      const { data, error } = await supabase.rpc("receive_on_credit", { p });
+      if (error) throw asError(error);
+      return data as { payable_id: string; lines: number; amount: number; currency: string };
+    },
+    // Toca inventario y administración.
+    onSettled: () => qc.invalidateQueries(),
+  });
+}
 
 const PROOFS_BUCKET = "finance-proofs";
 

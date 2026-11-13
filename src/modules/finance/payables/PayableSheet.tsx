@@ -60,6 +60,7 @@ export default function PayableSheet({ payable, accounts, onClose }: { payable: 
             <div className="flex flex-wrap gap-2">
               <Badge variant={open ? "default" : "secondary"}>{PAYABLE_STATUS_LABEL[p.status]}</Badge>
               <Badge variant="outline">{p.category === "Proveedores" ? "Mercancía" : p.category}</Badge>
+              {p.source === "reception" && <Badge variant="outline">Desde Recepción</Badge>}
             </div>
             <dl className="grid grid-cols-2 gap-3">
               <Item label="Total" value={formatMoney(p.amount, p.currency)} />
