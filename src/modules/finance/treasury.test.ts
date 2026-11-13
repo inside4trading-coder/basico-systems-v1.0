@@ -30,6 +30,8 @@ const calm: AttentionInput = {
   bankPossible: 0,
   receivableOverdueCount: 0,
   receivableOverdueTotal: 0,
+  payableOverdueCount: 0,
+  payableOverdueTotal: 0,
 };
 
 describe("requiere tu atención", () => {
@@ -81,5 +83,11 @@ describe("participación", () => {
   it("porcentaje sobre el total, sin dividir por cero", () => {
     expect(shareOf(25, 100)).toBe(25);
     expect(shareOf(5, 0)).toBe(0);
+  });
+
+  it("facturas de proveedores vencidas llevan a Por pagar", () => {
+    const [item] = attentionItems({ ...calm, payableOverdueCount: 1, payableOverdueTotal: 116 });
+    expect(item).toMatchObject({ id: "payable_overdue", tone: "critical", title: "1 cuota a proveedores vencida", target: "payables" });
+    expect(item.detail).toContain("116");
   });
 });

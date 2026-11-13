@@ -415,6 +415,13 @@ begin
     insert into public.cash_session_cashiers (tenant_id, session_id, cashier_id) values (t, v_sess, v_staff);
     insert into public.coupons (tenant_id, code, kind, value) values (t, 'ISO1', 'amount', 1);
     insert into public.pricing_policies (tenant_id) values (t);
+    with s as (insert into public.suppliers (tenant_id, name) values (t, 'Proveedor aislamiento') returning id),
+         py as (insert into public.payables (tenant_id, supplier_id, issued_on, currency, amount)
+                select t, s.id, current_date, 'USD', 10 from s returning id),
+         pi as (insert into public.payable_installments (tenant_id, payable_id, number, due_date, amount)
+                select t, py.id, 1, current_date, 10 from py returning payable_id)
+    insert into public.payable_payments (tenant_id, payable_id, kind, amount, occurred_on)
+      select t, pi.payable_id, 'credit_note', 1, current_date from pi;
     insert into public.label_templates (tenant_id, name, width_mm, height_mm) values (t, 'Aislamiento', 50, 25);
     insert into public.item_labels (tenant_id, variant_id, unit_number, code)
       select t, v.id, 1, 'ISO-' || left(t::text, 8) from public.variants v where v.tenant_id = t limit 1;

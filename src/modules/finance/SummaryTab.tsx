@@ -13,6 +13,7 @@ import { caracasToday } from "@/modules/reports/dates";
 import { useCurrentRate, usePaymentMethods } from "@/modules/settings/api";
 import AccountSheet from "./AccountSheet";
 import { useBankPending } from "./bank/api";
+import { usePayablesSummary } from "./payables/api";
 import { useReceivablesSummary } from "./receivables/api";
 import { useTreasurySummary, type CategoryTotal, type TreasuryAccount } from "./api";
 import { ACCOUNT_KIND_LABEL, MOVEMENT_KIND_LABEL, formatDay } from "./lib";
@@ -35,6 +36,7 @@ export default function SummaryTab({ onNavigate }: { onNavigate: (tab: FinanceTa
   const { data: methods = [] } = usePaymentMethods();
   const { data: bank } = useBankPending();
   const { data: receivables } = useReceivablesSummary();
+  const { data: payables } = usePayablesSummary();
   const [openId, setOpenId] = useState<string | null>(null);
 
   if (isLoading) return <p className="mono-cap text-xs text-muted-foreground">Cargando…</p>;
@@ -60,6 +62,8 @@ export default function SummaryTab({ onNavigate }: { onNavigate: (tab: FinanceTa
     bankPossible: bank?.possible ?? 0,
     receivableOverdueCount: receivables?.overdue_count ?? 0,
     receivableOverdueTotal: receivables?.overdue_total ?? 0,
+    payableOverdueCount: payables?.overdue_count ?? 0,
+    payableOverdueTotal: payables?.overdue_total ?? 0,
   });
   const periodHint = range.from === null ? "Desde el inicio" : range.from === range.to ? formatDay(range.to) : `${formatDay(range.from)} – ${formatDay(range.to)}`;
 
@@ -80,14 +84,14 @@ export default function SummaryTab({ onNavigate }: { onNavigate: (tab: FinanceTa
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
         <Kpi label="Liquidez" value={formatMoney(data.liquidity.total, base)} hint="Todas las cuentas" strong />
         <Kpi label="Disponible" value={formatMoney(data.liquidity.available, base)} hint="Cuentas activas" />
         <Kpi label="Ingresos" value={formatMoney(data.period.income, base)} hint={periodHint} />
         <Kpi label="Egresos" value={formatMoney(data.period.expense, base)} hint={periodHint} />
         <Kpi label="Resultado" value={formatMoney(result, base)} hint="Ingresos − egresos" strong negative={result < 0} />
         <Kpi
-          label="Por pagar"
+          label="Obligaciones"
           value={formatMoney(data.payable.total, base)}
           hint={`Vencido y a 30 días · ${data.payable.count} ${data.payable.count === 1 ? "cuota" : "cuotas"}${data.payable.variable ? `, ${data.payable.variable} variable` : ""}`}
           onClick={() => onNavigate("obligations")}
@@ -99,6 +103,14 @@ export default function SummaryTab({ onNavigate }: { onNavigate: (tab: FinanceTa
             receivables?.overdue_count ? ` · ${receivables.overdue_count} ${receivables.overdue_count === 1 ? "vencida" : "vencidas"}` : ""
           }`}
           onClick={() => onNavigate("receivables")}
+        />
+        <Kpi
+          label="Por pagar"
+          value={formatMoney(payables?.total ?? 0, base)}
+          hint={`${payables?.open ?? 0} ${payables?.open === 1 ? "factura" : "facturas"}${
+            payables?.overdue_count ? ` · ${payables.overdue_count} ${payables.overdue_count === 1 ? "vencida" : "vencidas"}` : ""
+          }`}
+          onClick={() => onNavigate("payables")}
         />
       </div>
       <p className="text-xs text-muted-foreground">

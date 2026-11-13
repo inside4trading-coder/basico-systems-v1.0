@@ -1,6 +1,6 @@
 /**
  * Administración: resumen de tesorería, libro de movimientos, obligaciones,
- * cuentas por cobrar, conciliación bancaria, cuentas y catálogo. Portado de src/pages/sublime/admin/SublimeAdminScreens.tsx
+ * cuentas por cobrar y por pagar, conciliación bancaria, cuentas y catálogo. Portado de src/pages/sublime/admin/SublimeAdminScreens.tsx
  * (basicosystems@f551478b).
  */
 import { Navigate } from "react-router-dom";
@@ -10,6 +10,7 @@ import { useTenant } from "@/core/tenant-context";
 import { useTabParam } from "@/lib/useTabParam";
 import AccountsTab from "./AccountsTab";
 import ReconciliationCenter from "./bank/ReconciliationCenter";
+import PayablesTab from "./payables/PayablesTab";
 import ReceivablesTab from "./receivables/ReceivablesTab";
 import CatalogTab from "./CatalogTab";
 import MovementsTab from "./MovementsTab";
@@ -18,7 +19,7 @@ import PartnerPayablesTab from "./partners/PartnerPayablesTab";
 import SummaryTab, { type FinanceTab } from "./SummaryTab";
 
 type Tab = "summary" | FinanceTab | "partners" | "catalog";
-const TABS: Tab[] = ["summary", "movements", "obligations", "receivables", "partners", "reconciliation", "accounts", "catalog"];
+const TABS: Tab[] = ["summary", "movements", "obligations", "receivables", "payables", "partners", "reconciliation", "accounts", "catalog"];
 
 export default function FinancePage() {
   const { active, can } = useTenant();
@@ -34,6 +35,7 @@ export default function FinancePage() {
           <TabsTrigger value="movements">Movimientos</TabsTrigger>
           <TabsTrigger value="obligations">Obligaciones</TabsTrigger>
           <TabsTrigger value="receivables">Por cobrar</TabsTrigger>
+          <TabsTrigger value="payables">Por pagar</TabsTrigger>
           <TabsTrigger value="partners">Aliados</TabsTrigger>
           <TabsTrigger value="reconciliation">Conciliación</TabsTrigger>
           <TabsTrigger value="accounts">Cuentas</TabsTrigger>
@@ -50,6 +52,9 @@ export default function FinancePage() {
         </TabsContent>
         <TabsContent value="receivables">
           <ReceivablesTab />
+        </TabsContent>
+        <TabsContent value="payables">
+          <PayablesTab />
         </TabsContent>
         <TabsContent value="partners">
           <PartnerPayablesTab />
