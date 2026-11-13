@@ -366,6 +366,43 @@ export const useCollectFromLine = () =>
     "collect_receivable_from_bank_line",
   );
 
+export interface PayableCandidate {
+  payable_id: string;
+  supplier_name: string;
+  document: string | null;
+  currency: string;
+  pending: number;
+  installments: number;
+  next_number: number | null;
+  next_due: string | null;
+  next_pending: number | null;
+  /** Lo que cubre la línea en la moneda de la factura (null si no hay tasa). */
+  applied: number | null;
+  match: "installment" | "balance" | null;
+}
+
+/** Facturas por pagar abiertas para una salida del banco, las que coinciden primero. */
+export function usePayableCandidates(line: BankLine | null) {
+  const tenant = useTenantKey();
+  return useQuery({
+    enabled: Boolean(line && line.direction === "out"),
+    queryKey: ["fin", tenant, "bank", "payable-candidates", line?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("bank_payable_candidates", { p_line_id: line!.id });
+      if (error) throw asError(error);
+      const res = data as { rate: number | null; items: PayableCandidate[] };
+      const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+      return {
+        rate: num(res.rate),
+        items: res.items.map((c) => ({ ...c, pending: Number(c.pending), next_pending: num(c.next_pending), applied: num(c.applied) })),
+      };
+    },
+  });
+}
+
+export const usePayFromLine = () =>
+  useLineRpc<{ p_line_id: string; p_payable_id: string; p_applied?: number | null }>("pay_payable_from_bank_line");
+
 // ---------------------------------------------------------------------------
 // Centro de conciliación
 // ---------------------------------------------------------------------------

@@ -20,11 +20,15 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/core/auth";
 import { useTenant } from "@/core/tenant-context";
 import { useTabParam } from "@/lib/useTabParam";
+import { useReceiveOnCredit, useSuppliers } from "@/modules/finance/payables/api";
+import { SupplierFormDialog } from "@/modules/finance/payables/dialogs";
+import { caracasToday } from "@/modules/reports/dates";
 import { registerEntry, useAdjust, useInvalidateInventory, useMovements, useSign, useStockOf, useTransfer } from "./api";
 import { LocationSelect, useDefaultLocation, VariantCard, VariantFinder } from "./components";
 import {
@@ -177,6 +181,7 @@ function QuickEntry() {
 type ReceptionLine = { item: LookupResult; expected: string; received: string; cost: string };
 
 function Reception() {
+  const { can } = useTenant();
   const currency = useCurrency();
   const [loc, setLoc] = useDefaultLocation();
   const [supplier, setSupplier] = useState("");
@@ -184,6 +189,14 @@ function Reception() {
   const [lines, setLines] = useState<ReceptionLine[]>([]);
   const [busy, setBusy] = useState(false);
   const invalidate = useInvalidateInventory();
+  // A crédito: la recepción crea la factura en Administración → Por pagar.
+  const canCredit = can("finanzas.operar");
+  const [credit, setCredit] = useState(false);
+  const [supplierId, setSupplierId] = useState("");
+  const [addingSupplier, setAddingSupplier] = useState(false);
+  const [invoice, setInvoice] = useState({ document: "", control: "", issued: caracasToday(), tax: "" });
+  const { data: suppliers = [] } = useSuppliers(canCredit);
+  const receiveOnCredit = useReceiveOnCredit();
 
   const add = (found: LookupResult | null) => {
     if (!found) return;
@@ -192,10 +205,50 @@ function Reception() {
   };
   const upd = (i: number, patch: Partial<ReceptionLine>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
 
+  const valid = lines.filter((l) => toQty(l.received) > 0);
+  const subtotal = valid.reduce((a, l) => a + Math.round(toQty(l.received) * (toQty(l.cost) || 0) * 100) / 100, 0);
+  const tax = invoice.tax.trim() ? toQty(invoice.tax) : 0;
+  const chosen = suppliers.find((x) => x.id === supplierId);
+
+  const confirmOnCredit = async () => {
+    if (!supplierId) return toast.error("Elige el proveedor");
+    if (valid.some((l) => !(toQty(l.cost) > 0))) return toast.error("A crédito, cada producto necesita su costo de compra");
+    if (Number.isNaN(tax) || tax < 0) return toast.error("IVA inválido");
+    setBusy(true);
+    try {
+      const r = await receiveOnCredit.mutateAsync({
+        location_id: loc,
+        supplier_id: supplierId,
+        document: invoice.document.trim() || null,
+        control_number: invoice.control.trim() || null,
+        issued_on: invoice.issued,
+        tax_amount: invoice.tax.trim() ? tax : null,
+        note: note.trim() || null,
+        lines: valid.map((l) => ({
+          variant_id: l.item.variant_id,
+          qty: toQty(l.received),
+          unit_cost: toQty(l.cost),
+          expected_qty: l.expected.trim() === "" ? null : toQty(l.expected),
+        })),
+      });
+      toast.success(`Recepción registrada: ${r.lines} producto(s)`, {
+        description: `Factura por pagar a ${chosen?.name ?? "el proveedor"}: ${formatMoney(Number(r.amount), r.currency)}. Está en Administración → Por pagar.`,
+      });
+      setLines([]);
+      setNote("");
+      setInvoice((v) => ({ ...v, document: "", control: "", tax: "" }));
+    } catch (err) {
+      toast.error("No se registró la recepción", { description: `${(err as Error).message}. No entró mercancía ni se creó la factura.` });
+    } finally {
+      invalidate();
+      setBusy(false);
+    }
+  };
+
   const confirm = async () => {
-    const valid = lines.filter((l) => toQty(l.received) > 0);
     if (!valid.length) return toast.error("Indica al menos una cantidad recibida");
     if (!loc) return toast.error("Elige la sede");
+    if (credit) return confirmOnCredit();
     setBusy(true);
     let done = 0;
     try {
@@ -228,7 +281,66 @@ function Reception() {
   return (
     <div className="space-y-3">
       <LocationSelect value={loc} onChange={setLoc} />
-      <Input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="Proveedor" className="h-11" aria-label="Proveedor" />
+      {canCredit && (
+        <Card className="flex items-start justify-between gap-3 p-3">
+          <div className="space-y-0.5">
+            <Label htmlFor="rc-credit">A crédito</Label>
+            <p className="text-xs text-muted-foreground">Crea la factura del proveedor en Administración → Por pagar con el total de la recepción.</p>
+          </div>
+          <Switch id="rc-credit" checked={credit} onCheckedChange={setCredit} />
+        </Card>
+      )}
+      {credit ? (
+        <Card className="space-y-2 p-3">
+          <div className="flex items-end gap-2">
+            <div className="min-w-0 flex-1 space-y-1">
+              <Label htmlFor="rc-supplier">Proveedor</Label>
+              <Select value={supplierId} onValueChange={setSupplierId}>
+                <SelectTrigger id="rc-supplier" className="h-11">
+                  <SelectValue placeholder="Elige el proveedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers
+                    .filter((x) => x.is_active)
+                    .map((x) => (
+                      <SelectItem key={x.id} value={x.id}>
+                        {x.name}
+                        {x.credit_days > 0 ? ` · ${x.credit_days} días` : ""}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button type="button" variant="outline" className="h-11" onClick={() => setAddingSupplier(true)}>
+              Nuevo
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label htmlFor="rc-doc">N.º de factura</Label>
+              <Input id="rc-doc" value={invoice.document} maxLength={60} onChange={(e) => setInvoice((v) => ({ ...v, document: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="rc-control">N.º de control</Label>
+              <Input id="rc-control" value={invoice.control} maxLength={60} onChange={(e) => setInvoice((v) => ({ ...v, control: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="rc-issued">Emisión</Label>
+              <Input id="rc-issued" type="date" value={invoice.issued} max={caracasToday()} onChange={(e) => setInvoice((v) => ({ ...v, issued: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="rc-tax">IVA ({currency})</Label>
+              <Input id="rc-tax" inputMode="decimal" value={invoice.tax} placeholder="Opcional" onChange={(e) => setInvoice((v) => ({ ...v, tax: e.target.value }))} />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {chosen ? (chosen.credit_days > 0 ? `Vence a los ${chosen.credit_days} días de la emisión.` : "Vence el día de la emisión (el proveedor no tiene días de crédito).") : ""}
+            {valid.length > 0 ? ` Total de la factura: ${formatMoney(subtotal + (Number.isNaN(tax) ? 0 : tax), currency)}.` : ""}
+          </p>
+        </Card>
+      ) : (
+        <Input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="Proveedor" className="h-11" aria-label="Proveedor" />
+      )}
       <VariantFinder onPick={add} />
       {lines.map((l, i) => {
         const diff = l.expected.trim() !== "" && toQty(l.expected) !== toQty(l.received);
@@ -273,8 +385,9 @@ function Reception() {
       )}
       <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Notas" aria-label="Notas" />
       <Button className="h-14 w-full font-bold" disabled={busy || !lines.length} onClick={confirm}>
-        Confirmar recepción
+        {credit ? "Confirmar recepción a crédito" : "Confirmar recepción"}
       </Button>
+      {addingSupplier && <SupplierFormDialog supplier={null} onClose={() => setAddingSupplier(false)} onSaved={setSupplierId} />}
     </div>
   );
 }

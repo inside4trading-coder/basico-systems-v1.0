@@ -18,6 +18,7 @@ import { MOVEMENT_KIND_LABEL, formatDay } from "../lib";
 import SuggestInput from "../SuggestInput";
 import CategoryPicker from "../CategoryPicker";
 import CollectionPanel from "./CollectionPanel";
+import SupplierPaymentPanel from "./SupplierPaymentPanel";
 import { useCreateFromLine, useIgnoreLine, useLineCandidates, useLinkedMovement, useMatchLine, useReopenLine, type BankLine } from "./api";
 import { LINE_STATUS_LABEL } from "./labels";
 import { rankCandidates } from "./match";
@@ -33,7 +34,7 @@ export default function LineSheet({ line, onClose }: { line: BankLine | null; on
   const create = useCreateFromLine();
   const ignore = useIgnoreLine();
   const reopen = useReopenLine();
-  const [mode, setMode] = useState<"link" | "collect" | "create" | "ignore">("link");
+  const [mode, setMode] = useState<"link" | "collect" | "supplier" | "create" | "ignore">("link");
   const [showAll, setShowAll] = useState(false);
   const [category, setCategory] = useState("");
   const [counterparty, setCounterparty] = useState("");
@@ -111,7 +112,7 @@ export default function LineSheet({ line, onClose }: { line: BankLine | null; on
                 {(
                   [
                     ["link", "Vincular"],
-                    ...(line.direction === "in" ? ([["collect", "Cobranza"]] as const) : []),
+                    ...(line.direction === "in" ? ([["collect", "Cobranza"]] as const) : ([["supplier", "Pago a proveedor"]] as const)),
                     ["create", line.direction === "in" ? "Registrar ingreso" : "Registrar egreso"],
                     ["ignore", "Ignorar"],
                   ] as const
@@ -172,6 +173,7 @@ export default function LineSheet({ line, onClose }: { line: BankLine | null; on
               )}
 
               {mode === "collect" && <CollectionPanel line={line} />}
+              {mode === "supplier" && <SupplierPaymentPanel line={line} />}
 
               {mode === "create" && (
                 <section className="space-y-2">
