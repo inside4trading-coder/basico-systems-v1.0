@@ -9,7 +9,10 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { formatRate, formatRateDate, toLocalAmount } from "@/core/money";
+import { cn } from "@/lib/utils";
 import { productTaxRate, withTax, type TaxRateLike } from "@/core/tax";
+import { useCurrentRate, useTenantSettings } from "@/modules/settings/api";
 import { useUpdateProduct, useUpdateVariant, type CatalogRow } from "./api";
 import { useAttributeDefs } from "./import/api";
 import { CODE_KIND_LABEL } from "./import/fields";
@@ -39,6 +42,10 @@ export default function ProductDetailSheet({
   const updProduct = useUpdateProduct();
   const updVariant = useUpdateVariant();
   const fail = (err: Error) => toast.error("No se pudo guardar", { description: err.message });
+  // Precio en bolívares: siempre con la tasa vigente al momento de mirar, nunca un dato importado.
+  const { data: settings } = useTenantSettings();
+  const { data: currentRate } = useCurrentRate();
+  const localCurrency = settings?.local_currency ?? null;
 
   const valueOf = (attributeId: string) =>
     values
@@ -120,6 +127,7 @@ export default function ProductDetailSheet({
             {rows.map((r) => {
               const rate = productTaxRate(product.tax_rate_id, taxRates);
               const net = r.variant.price ?? r.variant.regular_price;
+              const pvp = net == null ? null : withTax(Number(net), rate);
               const hasOffer = r.variant.price != null && r.variant.regular_price != null && Number(r.variant.price) < Number(r.variant.regular_price);
               return (
                 <section key={r.variant.id} className="space-y-2">
@@ -157,8 +165,23 @@ export default function ProductDetailSheet({
                       )}
                     </Line>
                     <Line label={`PVP (IVA ${rate} %)`}>
-                      <span className="font-semibold">{net == null ? "—" : formatMoney(withTax(Number(net), rate), currency)}</span>
+                      <span className="font-semibold">{pvp == null ? "—" : formatMoney(pvp, currency)}</span>
                     </Line>
+                    {localCurrency && (
+                      <Line label={`PVP en ${localCurrency === "VES" ? "Bs." : localCurrency}`}>
+                        {pvp == null || !currentRate ? (
+                          "—"
+                        ) : (
+                          <>
+                            <span className="font-semibold">{formatMoney(toLocalAmount(pvp, currentRate.rate), localCurrency)}</span>
+                            <span className={cn("ml-2 text-xs", currentRate.stale ? "text-destructive" : "text-muted-foreground")}>
+                              tasa {formatRate(currentRate.rate)} · {formatRateDate(currentRate.effective_date)}
+                              {currentRate.stale ? " (vieja)" : ""}
+                            </span>
+                          </>
+                        )}
+                      </Line>
+                    )}
                     <Line label="Costo">{r.variant.cost == null ? "—" : formatMoney(Number(r.variant.cost), currency)}</Line>
                     {ownLocations.map((l) => (
                       <Line key={l.id} label={ownLocations.length > 1 ? `Inventario · ${l.name}` : "Inventario"}>

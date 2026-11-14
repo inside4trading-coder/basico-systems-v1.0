@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { currencySymbol, formatMoney, formatRateDate } from "./money";
+import { currencySymbol, formatMoney, formatRateDate, toLocalAmount } from "./money";
 
 describe("montos", () => {
   it("la divisa se muestra como REF, nunca $", () => {
@@ -22,5 +22,16 @@ describe("montos", () => {
 
   it("fecha corta de la tasa", () => {
     expect(formatRateDate("2026-10-21")).toMatch(/^21 oct/);
+  });
+});
+
+describe("toLocalAmount", () => {
+  it("convierte el PVP con la tasa del momento", () => {
+    // 40 sin IVA + 16 % = 46,40 · tasa BCV 911,6243
+    expect(toLocalAmount(46.4, 911.6243)).toBe(42299.37);
+  });
+
+  it("redondea a 2 decimales como el POS", () => {
+    expect(toLocalAmount(18.56, 888.8909)).toBe(16497.82);
   });
 });

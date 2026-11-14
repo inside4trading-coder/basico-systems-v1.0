@@ -28,6 +28,11 @@ export function formatMoney(value: number | null | undefined, currency: string):
   return `${currencySymbol(currency)} ${formatAmount(value)}`;
 }
 
+/** Monto en moneda local con la tasa dada, a 2 decimales (como lo convierte el POS). */
+export function toLocalAmount(amount: number, rate: number): number {
+  return Math.round(amount * rate * 100) / 100;
+}
+
 export function formatRate(rate: number): string {
   return rate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
