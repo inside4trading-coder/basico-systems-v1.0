@@ -1,4 +1,3 @@
-import planLimitsSql from "../../supabase/migrations/20261104000000_plan_limits.sql?raw";
 import { ENTITLEMENT_DEFAULTS, resolveEntitlements } from "./entitlements";
 
 const NOW = new Date("2026-10-19T12:00:00Z");
@@ -37,9 +36,19 @@ describe("resolveEntitlements", () => {
   });
 });
 
+// La última migración que redefine app.entitlement_defaults() manda.
+const migrations = import.meta.glob("../../supabase/migrations/*.sql", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+const defaultsSql =
+  Object.keys(migrations)
+    .sort()
+    .reverse()
+    .map((path) => migrations[path])
+    .map((sql) => /function app\.entitlement_defaults\(\)[\s\S]*?\$\$;/.exec(sql)?.[0])
+    .find(Boolean) ?? "";
+
 describe("defaults en la base", () => {
   it("app.entitlement_defaults() coincide con ENTITLEMENT_DEFAULTS", () => {
-    const body = /jsonb_build_object\(([\s\S]*?)\)\s*\$\$/.exec(planLimitsSql)?.[1] ?? "";
+    const body = /jsonb_build_object\(([\s\S]*?)\)\s*\$\$/.exec(defaultsSql)?.[1] ?? "";
     const pairs = [...body.matchAll(/'([a-z_]+)',\s*(true|false|\d+)/g)];
     const sqlDefaults = Object.fromEntries(pairs.map(([, key, value]) => [key, /^\d+$/.test(value) ? Number(value) : value === "true"]));
     expect(sqlDefaults).toEqual(ENTITLEMENT_DEFAULTS);

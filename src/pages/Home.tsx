@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { useBankPending } from "@/modules/finance/bank/api";
 import { useTreasurySummary } from "@/modules/finance/api";
 import { useReceivablesSummary } from "@/modules/finance/receivables/api";
+import BetoHomeCard from "@/modules/beto/BetoHomeCard";
 import { Greeting, MyShortcuts, RecentActivity } from "@/modules/home/HomeShortcuts";
 import { growers, topProfit, topSellers } from "@/modules/home/lib";
 import { useLocations } from "@/modules/inventory/api";
@@ -49,6 +50,7 @@ export default function Home() {
         </div>
       ) : (
         <>
+          <BetoHomeCard />
           <MyShortcuts />
           <RecentActivity />
           {supervisor && entitlements.reportes && <Dashboard finance={entitlements.administracion} />}

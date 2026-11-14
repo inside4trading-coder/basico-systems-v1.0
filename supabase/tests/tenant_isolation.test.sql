@@ -431,6 +431,11 @@ begin
     insert into public.clock_pin_failures (tenant_id) values (t);
     insert into public.studio_jobs (tenant_id, product_id, kind, source_path)
       select t, p.id, 'catalogo', t::text || '/aislamiento.webp' from public.products p where p.tenant_id = t limit 1;
+    -- Chat personal de Beto: del usuario de dos negocios, que es quien lee abajo.
+    with c as (insert into public.beto_conversations (tenant_id, user_id, title)
+               values (t, 'cccccccc-0000-0000-0000-000000000001', 'Aislamiento') returning id)
+    insert into public.beto_messages (tenant_id, conversation_id, user_id, role, content)
+      select t, c.id, 'cccccccc-0000-0000-0000-000000000001', 'user', 'Aislamiento' from c;
     insert into public.inventory_counts (tenant_id, number, location_id) values (t, 'ISO-C1', v_loc) returning id into v_count;
     insert into public.inventory_count_items (tenant_id, count_id, variant_id)
       select t, v_count, v.id from public.variants v where v.tenant_id = t limit 1;

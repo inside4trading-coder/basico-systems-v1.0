@@ -13,6 +13,7 @@ import { useAuth } from "@/core/auth";
 import { useTenant } from "@/core/tenant-context";
 import { useEntitlements } from "@/core/useEntitlements";
 import { useHomeShortcuts, useSaveHomeShortcuts } from "./api";
+import { firstName } from "./lib";
 import { readRecent } from "./recent";
 import { allowedShortcuts, MAX_SHORTCUTS, moveKey, selectShortcuts, shortcutForPath, type Shortcut, type ShortcutIcon } from "./shortcuts";
 
@@ -60,12 +61,6 @@ function useNow(): Date {
     };
   }, []);
   return now;
-}
-
-function firstName(meta: Record<string, unknown> | undefined, email: string | undefined): string {
-  const full = typeof meta?.full_name === "string" ? meta.full_name.trim() : "";
-  if (full) return full.split(/\s+/)[0];
-  return email?.split("@")[0] ?? "";
 }
 
 export function Greeting() {
