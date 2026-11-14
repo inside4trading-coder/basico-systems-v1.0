@@ -68,5 +68,5 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   fichaje: "Fichaje",
   estudio: "Studio",
   cashea: "Cashea",
-  beto: "Beto",
+  beto: "[B]eto",
 };

@@ -1,4 +1,4 @@
-/** Beto: conversaciones, mensajes, uso del mes y enviar una pregunta. */
+/** [B]eto: conversaciones, mensajes, uso del mes y enviar una pregunta. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/core/supabase";
 import { useTenant } from "@/core/tenant-context";
@@ -44,14 +44,14 @@ export interface BetoAnswer {
 
 const asError = (error: { message?: string }) => new Error(error.message ?? "Error inesperado");
 
-/** ¿Este usuario ve a Beto? (add-on del plan + permiso del rol). La base lo hace cumplir. */
+/** ¿Este usuario ve a [B]eto? (add-on del plan + permiso del rol). La base lo hace cumplir. */
 export function useBetoAccess(): boolean {
   const { can } = useTenant();
   const entitlements = useEntitlements();
   return entitlements.beto && can("beto.usar");
 }
 
-/** Qué áreas puede consultar (para no sugerir preguntas que Beto no le puede responder). */
+/** Qué áreas puede consultar (para no sugerir preguntas que [B]eto no le puede responder). */
 export function useBetoPromptAccess(): PromptAccess {
   const { can } = useTenant();
   const entitlements = useEntitlements();

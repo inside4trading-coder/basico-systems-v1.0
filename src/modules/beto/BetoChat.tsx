@@ -1,5 +1,5 @@
 /**
- * Conversación con Beto: sin conversación abierta, el saludo con la caja y las
+ * Conversación con [B]eto: sin conversación abierta, el saludo con la caja y las
  * sugerencias; con conversación, los mensajes y la caja abajo. La usan la
  * página /beto y el panel flotante.
  */
@@ -10,7 +10,8 @@ import { useAuth } from "@/core/auth";
 import { cn } from "@/lib/utils";
 import { firstName } from "@/modules/home/lib";
 import { useBetoMessages, useBetoPromptAccess, useBetoUsage, useSendBeto } from "./api";
-import { BetoAvatar, Composer, MessageView, Suggestions, Thinking } from "./BetoParts";
+import { Composer, MessageView, Suggestions, Thinking } from "./BetoParts";
+import { BETO_NAME, BETO_TEXT_GRADIENT, BetoAvatar } from "./brand";
 
 export function BetoGreeting({ compact }: { compact?: boolean }) {
   const { session } = useAuth();
@@ -23,7 +24,7 @@ export function BetoGreeting({ compact }: { compact?: boolean }) {
         {name && (
           <>
             ,{" "}
-            <span className="bg-gradient-to-r from-violet-600 via-fuchsia-500 to-pink-500 bg-clip-text font-bold text-transparent">{name}</span>
+            <span className={cn("font-bold", BETO_TEXT_GRADIENT)}>{name}</span>
           </>
         )}
       </h2>
@@ -65,7 +66,7 @@ export default function BetoChat({
         onError: (err) => {
           const conv = (err as Error & { conversationId?: string | null }).conversationId;
           if (conv && conv !== conversationId) onConversationChange(conv);
-          toast.error("Beto no pudo responder", { description: err.message });
+          toast.error(`${BETO_NAME} no pudo responder`, { description: err.message });
         },
         onSettled: () => setPendingText(null),
       },
@@ -121,7 +122,7 @@ export default function BetoChat({
           {left > 0 ? `Te quedan ${left} preguntas este mes.` : "Ya usaste las preguntas de este mes. Escríbenos para ampliarlo."}
         </p>
       )}
-      <p className="text-center text-[11px] text-muted-foreground">Beto puede equivocarse. Revisa las cifras importantes en Reportes y Administración.</p>
+      <p className="text-center text-[11px] text-muted-foreground">{BETO_NAME} puede equivocarse. Revisa las cifras importantes en Reportes y Administración.</p>
     </div>
   );
 }

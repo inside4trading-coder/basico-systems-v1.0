@@ -1,44 +1,23 @@
-/** Piezas de Beto: marca, avatar, caja de pregunta, sugerencias y mensajes. */
+/** Piezas de [B]eto: caja de pregunta, sugerencias y mensajes. La marca vive en brand.tsx. */
 import { useRef, useState, type KeyboardEvent } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ArrowUp, BarChart3, ListChecks, Mic, MicOff, Package, ShoppingCart, Sparkles, Wallet } from "lucide-react";
+import { ArrowUp, BarChart3, ListChecks, Mic, MicOff, Package, ShoppingCart, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import type { BetoKpi, BetoMessage } from "./api";
+import { BETO_GRADIENT, BETO_NAME, BetoAvatar } from "./brand";
 import { allowedPrompt, promptLibrary, SUGGESTIONS, type PromptAccess } from "./prompts";
 import { useSpeech } from "./useSpeech";
 
-export const BETO_GRADIENT = "bg-gradient-to-br from-violet-600 via-fuchsia-500 to-pink-500";
 export const MAX_QUESTION = 2000;
 
-/** «[B]eto»: la B entre corchetes, como la marca. */
-export function BetoWordmark({ className }: { className?: string }) {
-  return (
-    <span className={cn("font-display font-bold", className)}>
-      <span className="bg-gradient-to-r from-violet-500 to-fuchsia-500 bg-clip-text text-transparent">[B]</span>eto
-    </span>
-  );
-}
-
-export function BetoAvatar({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
-  const box = size === "lg" ? "h-14 w-14" : size === "md" ? "h-8 w-8" : "h-6 w-6";
-  const icon = size === "lg" ? "h-7 w-7" : size === "md" ? "h-4 w-4" : "h-3 w-3";
-  return (
-    <span className={cn("inline-flex shrink-0 items-center justify-center rounded-full text-white shadow-sm", BETO_GRADIENT, box)} aria-hidden>
-      <Sparkles className={icon} />
-    </span>
-  );
-}
-
 const SUGGESTION_ICON = { box: Package, cart: ShoppingCart, wallet: Wallet, chart: BarChart3 } as const;
-const SUGGESTION_TONE = {
-  box: "bg-violet-100 text-violet-700",
-  cart: "bg-pink-100 text-pink-700",
-  wallet: "bg-amber-100 text-amber-700",
-  chart: "bg-sky-100 text-sky-700",
-} as const;
+// Dos tintas que se alternan: azul de marca e índigo de [B]eto.
+const BLUE_TINT = "bg-blue100 text-blue700";
+const INDIGO_TINT = "bg-betoIndigo100 text-betoIndigo700";
+const SUGGESTION_TONE = { box: BLUE_TINT, cart: INDIGO_TINT, wallet: INDIGO_TINT, chart: BLUE_TINT } as const;
 
 export function Suggestions({ access, onPick, disabled }: { access: PromptAccess; onPick: (text: string) => void; disabled?: boolean }) {
   const items = SUGGESTIONS.filter((s) => allowedPrompt(s, access));
@@ -53,7 +32,7 @@ export function Suggestions({ access, onPick, disabled }: { access: PromptAccess
             type="button"
             disabled={disabled}
             onClick={() => onPick(s.text)}
-            className="flex items-center gap-3 rounded-lg border bg-card p-3 text-left text-sm transition-colors hover:border-violet-400 disabled:opacity-60"
+            className="flex items-center gap-3 rounded-lg border bg-card p-3 text-left text-sm transition-colors hover:border-primary disabled:opacity-60"
           >
             <span className={cn("inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md", SUGGESTION_TONE[s.icon])}>
               <Icon className="h-4 w-4" aria-hidden />
@@ -72,7 +51,7 @@ export function Composer({
   onSend,
   busy,
   autoFocus,
-  placeholder = "Pregúntale a Beto sobre tu negocio…",
+  placeholder = `Pregúntale a ${BETO_NAME} sobre tu negocio…`,
 }: {
   access: PromptAccess;
   onSend: (text: string) => void;
@@ -101,7 +80,7 @@ export function Composer({
   };
 
   return (
-    <div className="rounded-surface border bg-card p-3 shadow-sm focus-within:border-violet-400">
+    <div className="rounded-surface border bg-card p-3 shadow-sm focus-within:border-primary">
       <textarea
         ref={input}
         value={text}
@@ -111,14 +90,14 @@ export function Composer({
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
         placeholder={speech.listening ? "Te escucho…" : placeholder}
-        aria-label="Pregunta para Beto"
+        aria-label={`Pregunta para ${BETO_NAME}`}
         className="block max-h-40 min-h-[3rem] w-full resize-none bg-transparent px-1 text-sm outline-none placeholder:text-muted-foreground"
       />
       <div className="mt-2 flex items-center gap-2 border-t pt-2">
         {library.length > 0 && (
           <Popover open={libraryOpen} onOpenChange={setLibraryOpen}>
             <PopoverTrigger asChild>
-              <Button type="button" size="sm" variant="ghost" className="h-8 gap-1.5 rounded-full bg-violet-50 px-3 text-violet-700 hover:bg-violet-100">
+              <Button type="button" size="sm" variant="ghost" className={cn("h-8 gap-1.5 rounded-full px-3 hover:bg-betoIndigo300/40", INDIGO_TINT)}>
                 <ListChecks className="h-4 w-4" aria-hidden /> Prompts
               </Button>
             </PopoverTrigger>
@@ -151,7 +130,7 @@ export function Composer({
               type="button"
               size="icon"
               variant="ghost"
-              className={cn("h-8 w-8 rounded-full", speech.listening && "bg-violet-100 text-violet-700")}
+              className={cn("h-8 w-8 rounded-full", speech.listening && INDIGO_TINT)}
               aria-label={speech.listening ? "Dejar de dictar" : "Dictar con el micrófono"}
               aria-pressed={speech.listening}
               title={speech.listening ? "Dejar de dictar" : "Dictar con el micrófono"}
@@ -213,7 +192,7 @@ export function Thinking() {
   return (
     <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
       <BetoAvatar size="sm" />
-      <span className="motion-safe:animate-pulse">Beto está pensando…</span>
+      <span className="motion-safe:animate-pulse">{BETO_NAME} está pensando…</span>
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { cn } from "@/lib/utils";
 import { useBetoConversations, useBetoUsage, useDeleteBetoConversation, type BetoConversation } from "./api";
 import BetoChat from "./BetoChat";
-import { BetoWordmark } from "./BetoParts";
+import { BetoWordmark } from "./brand";
 
 const dayFormat = new Intl.DateTimeFormat("es-VE", { day: "numeric", month: "short", timeZone: "America/Caracas" });
 

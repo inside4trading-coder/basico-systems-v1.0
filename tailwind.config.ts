@@ -53,6 +53,10 @@ export default {
         blue500: "hsl(var(--blue-500))",
         blue700: "hsl(var(--blue-700))",
         blue900: "hsl(var(--blue-900))",
+        betoIndigo: "hsl(var(--beto-indigo))",
+        betoIndigo100: "hsl(var(--beto-indigo-100))",
+        betoIndigo300: "hsl(var(--beto-indigo-300))",
+        betoIndigo700: "hsl(var(--beto-indigo-700))",
       },
       borderRadius: {
         lg: "var(--radius)",

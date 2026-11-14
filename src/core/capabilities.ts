@@ -55,7 +55,7 @@ export const CAPABILITIES = {
   "fichaje.enlace": { label: "Fichaje: cambiar el enlace", area: "configuracion", defaults: A },
   "estudio.usar": { label: "Usar el Estudio de IA", area: "configuracion", defaults: AM },
   "estudio.configurar": { label: "Configurar el Estudio de IA", area: "configuracion", defaults: A },
-  "beto.usar": { label: "Preguntarle a Beto, el asistente de IA", area: "administracion", defaults: AM },
+  "beto.usar": { label: "Preguntarle a [B]eto, el asistente de IA", area: "administracion", defaults: AM },
 } as const satisfies Record<string, CapabilityDef>;
 
 export type Capability = keyof typeof CAPABILITIES;
