@@ -20,7 +20,10 @@ export const BETO_TEXT_GRADIENT = "bg-[linear-gradient(90deg,#0b37ff,#6a4bff)] b
 
 const BRACKET = { fontWeight: 500 } as const;
 // Mismas métricas que BrandMark: centran ópticamente la B entre los corchetes.
-const LETTER_B = { fontSize: "0.85em", position: "relative", top: "-0.061em" } as const;
+// Se sube con vertical-align y no con position: Safari (iPhone) no pinta el
+// texto de un hijo posicionado dentro de un background-clip:text y la B se
+// volvía invisible.
+const LETTER_B = { fontSize: "0.85em", verticalAlign: "0.061em" } as const;
 
 /**
  * Wordmark «[B]eto» en Chakra Petch. Nunca se transforma a mayúsculas, aunque
@@ -37,7 +40,7 @@ export function BetoWordmark({ tone = "light", className }: { tone?: "light" | "
       aria-label={BETO_NAME}
       role="img"
     >
-      <span className={cn("inline-flex items-baseline", accent)} aria-hidden>
+      <span className={accent} aria-hidden>
         <span style={BRACKET}>[</span>
         <span style={LETTER_B}>B</span>
         <span style={BRACKET}>]</span>
