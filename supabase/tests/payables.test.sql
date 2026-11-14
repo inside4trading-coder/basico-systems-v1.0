@@ -212,7 +212,8 @@ select lives_ok(
 );
 select results_eq(
   $$ select e ->> 'category', (e ->> 'amount')::numeric
-     from jsonb_array_elements(public.report_income((now() at time zone 'America/Caracas')::date, (now() at time zone 'America/Caracas')::date) -> 'expenses') e $$,
+     -- El pago va con current_date (UTC) y el reporte agrupa en hora de Caracas: el rango cubre ambos.
+     from jsonb_array_elements(public.report_income(current_date - 1, current_date) -> 'expenses') e $$,
   $$ values ('Servicios'::text, 40::numeric) $$,
   'en el resultado cuenta el servicio, no la mercancía'
 );
