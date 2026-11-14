@@ -13,9 +13,27 @@ import { useBetoMessages, useBetoPromptAccess, useBetoUsage, useSendBeto } from 
 import { Composer, MessageView, Suggestions, Thinking } from "./BetoParts";
 import { BETO_NAME, BETO_TEXT_GRADIENT, BetoAvatar } from "./brand";
 
-export function BetoGreeting({ compact }: { compact?: boolean }) {
+export function BetoGreeting({ compact, row }: { compact?: boolean; /** En línea con la ficha (tarjeta de Inicio). */ row?: boolean }) {
   const { session } = useAuth();
   const name = firstName(session?.user.user_metadata, session?.user.email);
+  if (row) {
+    return (
+      <div className="flex items-center gap-2.5">
+        <BetoAvatar size="md" />
+        <div className="min-w-0">
+          <p className="truncate font-display text-base font-bold uppercase leading-tight">
+            Hola
+            {name && (
+              <>
+                , <span className={BETO_TEXT_GRADIENT}>{name}</span>
+              </>
+            )}
+          </p>
+          <p className="truncate text-xs text-muted-foreground">¿En qué puedo ayudarte con tu negocio hoy?</p>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={cn("flex flex-col items-center gap-2 text-center", compact ? "py-2" : "py-4")}>
       <BetoAvatar size="lg" />

@@ -19,11 +19,22 @@ const BLUE_TINT = "bg-blue100 text-blue700";
 const INDIGO_TINT = "bg-betoIndigo100 text-betoIndigo700";
 const SUGGESTION_TONE = { box: BLUE_TINT, cart: INDIGO_TINT, wallet: INDIGO_TINT, chart: BLUE_TINT } as const;
 
-export function Suggestions({ access, onPick, disabled }: { access: PromptAccess; onPick: (text: string) => void; disabled?: boolean }) {
+export function Suggestions({
+  access,
+  onPick,
+  disabled,
+  compact,
+}: {
+  access: PromptAccess;
+  onPick: (text: string) => void;
+  disabled?: boolean;
+  /** Versión baja para la tarjeta de Inicio: dos columnas siempre, texto chico. */
+  compact?: boolean;
+}) {
   const items = SUGGESTIONS.filter((s) => allowedPrompt(s, access));
   if (items.length === 0) return null;
   return (
-    <div className="grid gap-2 sm:grid-cols-2">
+    <div className={cn("grid", compact ? "grid-cols-2 gap-1.5" : "gap-2 sm:grid-cols-2")}>
       {items.map((s) => {
         const Icon = SUGGESTION_ICON[s.icon];
         return (
@@ -32,12 +43,18 @@ export function Suggestions({ access, onPick, disabled }: { access: PromptAccess
             type="button"
             disabled={disabled}
             onClick={() => onPick(s.text)}
-            className="flex items-center gap-3 rounded-lg border bg-card p-3 text-left text-sm transition-colors hover:border-primary disabled:opacity-60"
+            title={s.text}
+            className={cn(
+              "flex items-center rounded-lg border bg-card text-left transition-colors hover:border-primary disabled:opacity-60",
+              compact ? "gap-2 p-2 text-xs" : "gap-3 p-3 text-sm",
+            )}
           >
-            <span className={cn("inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md", SUGGESTION_TONE[s.icon])}>
-              <Icon className="h-4 w-4" aria-hidden />
+            <span
+              className={cn("inline-flex shrink-0 items-center justify-center rounded-md", compact ? "h-6 w-6" : "h-8 w-8", SUGGESTION_TONE[s.icon])}
+            >
+              <Icon className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} aria-hidden />
             </span>
-            <span>{s.text}</span>
+            <span className={cn(compact && "line-clamp-3 sm:line-clamp-2")}>{s.text}</span>
           </button>
         );
       })}
@@ -51,12 +68,15 @@ export function Composer({
   onSend,
   busy,
   autoFocus,
+  compact,
   placeholder = `Pregúntale a ${BETO_NAME} sobre tu negocio…`,
 }: {
   access: PromptAccess;
   onSend: (text: string) => void;
   busy?: boolean;
   autoFocus?: boolean;
+  /** Una sola línea con los botones al lado (tarjeta de Inicio). */
+  compact?: boolean;
   placeholder?: string;
 }) {
   const [text, setText] = useState("");
@@ -80,25 +100,41 @@ export function Composer({
   };
 
   return (
-    <div className="rounded-surface border bg-card p-3 shadow-sm focus-within:border-primary">
+    <div
+      className={cn(
+        "border bg-card shadow-sm focus-within:border-primary",
+        compact ? "flex items-center gap-1 rounded-full py-1 pl-3 pr-1" : "rounded-surface p-3",
+      )}
+    >
       <textarea
         ref={input}
         value={text}
         autoFocus={autoFocus}
         maxLength={MAX_QUESTION}
-        rows={2}
+        rows={compact ? 1 : 2}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
-        placeholder={speech.listening ? "Te escucho…" : placeholder}
+        placeholder={speech.listening ? "Te escucho…" : compact ? `Pregúntale a ${BETO_NAME}…` : placeholder}
         aria-label={`Pregunta para ${BETO_NAME}`}
-        className="block max-h-40 min-h-[3rem] w-full resize-none bg-transparent px-1 text-sm outline-none placeholder:text-muted-foreground"
+        className={cn(
+          "block resize-none bg-transparent px-1 text-sm outline-none placeholder:text-muted-foreground",
+          compact ? "max-h-24 min-w-0 flex-1 py-1.5 leading-5" : "max-h-40 min-h-[3rem] w-full",
+        )}
       />
-      <div className="mt-2 flex items-center gap-2 border-t pt-2">
+      <div className={cn("flex items-center", compact ? "shrink-0 gap-1" : "mt-2 gap-2 border-t pt-2")}>
         {library.length > 0 && (
           <Popover open={libraryOpen} onOpenChange={setLibraryOpen}>
             <PopoverTrigger asChild>
-              <Button type="button" size="sm" variant="ghost" className={cn("h-8 gap-1.5 rounded-full px-3 hover:bg-betoIndigo300/40", INDIGO_TINT)}>
-                <ListChecks className="h-4 w-4" aria-hidden /> Prompts
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                aria-label="Prompts"
+                title="Prompts"
+                className={cn("h-8 gap-1.5 rounded-full hover:bg-betoIndigo300/40", compact ? "w-8 px-0" : "px-3", INDIGO_TINT)}
+              >
+                <ListChecks className="h-4 w-4" aria-hidden />
+                {!compact && "Prompts"}
               </Button>
             </PopoverTrigger>
             <PopoverContent align="start" className="max-h-80 w-80 overflow-y-auto p-2">
