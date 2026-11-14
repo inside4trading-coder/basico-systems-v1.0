@@ -1,4 +1,4 @@
-/** Botón flotante: abre a Beto en un panel lateral desde cualquier pantalla. */
+/** Botón flotante: abre a [B]eto en un panel lateral desde cualquier pantalla. */
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Maximize2, Plus } from "lucide-react";
@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { cn } from "@/lib/utils";
 import { useBetoAccess } from "./api";
 import BetoChat from "./BetoChat";
-import { BETO_GRADIENT, BetoAvatar, BetoWordmark } from "./BetoParts";
+import { BETO_GRADIENT, BETO_NAME, BetoWordmark } from "./brand";
 
 export default function BetoLauncher() {
   const allowed = useBetoAccess();
@@ -23,14 +23,14 @@ export default function BetoLauncher() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Preguntarle a Beto"
-        title="Preguntarle a Beto"
+        aria-label={`Preguntarle a ${BETO_NAME}`}
+        title={`Preguntarle a ${BETO_NAME}`}
         className={cn(
-          "fixed bottom-4 right-4 z-40 inline-flex h-12 items-center gap-2 rounded-full pl-2 pr-4 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 motion-reduce:transition-none",
+          "fixed bottom-4 right-4 z-40 inline-flex h-12 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 motion-reduce:transition-none",
           BETO_GRADIENT,
         )}
       >
-        <BetoAvatar size="md" /> Beto
+        <BetoWordmark tone="dark" className="text-base" />
       </button>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" className="flex w-full flex-col gap-3 sm:max-w-md">

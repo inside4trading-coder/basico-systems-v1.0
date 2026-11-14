@@ -1,6 +1,6 @@
 /**
- * Preguntas sugeridas y biblioteca de prompts de Beto. Cada una dice qué
- * permiso necesita para que nadie vea una pregunta que Beto no le puede
+ * Preguntas sugeridas y biblioteca de prompts de [B]eto. Cada una dice qué
+ * permiso necesita para que nadie vea una pregunta que [B]eto no le puede
  * responder (la base igual lo hace cumplir).
  */
 export type PromptNeed = "reportes" | "finanzas";

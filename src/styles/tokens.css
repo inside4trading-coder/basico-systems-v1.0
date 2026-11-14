@@ -14,6 +14,11 @@
   --bsys-blue-300: #b8c6ff;
   --bsys-blue-700: #041a8c;
   --bsys-blue-900: #020c42;
+  /* Secundario exclusivo de [B]eto, el asistente: acompaña al azul en su degradado. */
+  --beto-indigo: #6a4bff;
+  --beto-indigo-100: #efecff;
+  --beto-indigo-300: #a99bff;
+  --beto-indigo-700: #3b25b8;
   /* Solo para estados de alerta, nunca como color de marca. */
   --bsys-alert: #f0509b;
 

@@ -36,7 +36,7 @@ const ADDONS = [
   { key: "fichaje", label: "Fichaje" },
   { key: "estudio", label: "Estudio de IA" },
   { key: "cashea", label: "Cashea" },
-  { key: "beto", label: "Beto (asistente IA)" },
+  { key: "beto", label: "[B]eto (asistente IA)" },
 ] as const;
 
 const QUOTAS = [
@@ -44,7 +44,7 @@ const QUOTAS = [
   { key: "max_registers", label: "Cajas" },
   { key: "max_users", label: "Usuarios" },
   { key: "estudio_images_per_month", label: "Fotos del Estudio al mes" },
-  { key: "beto_messages_per_month", label: "Preguntas a Beto al mes" },
+  { key: "beto_messages_per_month", label: "Preguntas a [B]eto al mes" },
 ] as const;
 
 const PLAN_LABEL: Record<string, string> = Object.fromEntries([...ADDONS, ...QUOTAS].map((item) => [item.key, item.label]));

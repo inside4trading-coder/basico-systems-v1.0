@@ -1,4 +1,4 @@
-// Beto, el asistente de IA: responde preguntas del negocio con datos reales.
+// [B]eto, el asistente de IA: responde preguntas del negocio con datos reales.
 //
 //   1. Con la sesión de quien pregunta, beto_start valida add-on, permiso,
 //      cuota y ritmo, guarda la pregunta y devuelve el contexto e historial.
@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
   if (!UUID_RE.test(tenantId)) return json({ error: "Negocio no indicado" });
 
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
-  if (!apiKey) return json({ error: "Beto no está configurado todavía. Avisa a soporte." });
+  if (!apiKey) return json({ error: "[B]eto no está configurado todavía. Avisa a soporte." });
   const model = Deno.env.get("BETO_MODEL") || DEFAULT_MODEL;
   const apiUrl = Deno.env.get("BETO_API_URL") || "https://openrouter.ai/api/v1/chat/completions";
 
@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
     let answer = "";
     for (let round = 0; round <= MAX_ROUNDS; round++) {
       const reply = await callModel(round < MAX_ROUNDS);
-      if (!reply) return await fail("Beto no pudo responder. Intenta de nuevo.", "Respuesta vacía del modelo");
+      if (!reply) return await fail("[B]eto no pudo responder. Intenta de nuevo.", "Respuesta vacía del modelo");
       const calls = (reply.tool_calls ?? []).slice(0, MAX_CALLS_PER_ROUND);
       if (calls.length === 0 || round === MAX_ROUNDS) {
         answer = (reply.content ?? "").trim();
@@ -163,16 +163,16 @@ Deno.serve(async (req) => {
         messages.push({ role: "tool", tool_call_id: call.id, content: result });
       }
     }
-    if (!answer) return await fail("Beto no pudo armar la respuesta. Intenta con otra pregunta.", "Sin texto final");
+    if (!answer) return await fail("[B]eto no pudo armar la respuesta. Intenta con otra pregunta.", "Sin texto final");
 
     // 3. Guardar y responder.
     await finish(true, answer, null);
     return json({ conversation_id: ctx.conversation_id, message_id: ctx.message_id, text: answer, blocks });
   } catch (err) {
     const status = (err as { status?: number }).status;
-    if (status === 429) return await fail("Beto está ocupado. Intenta en un minuto.", (err as Error).message);
-    if (status === 402) return await fail("Beto no tiene saldo. Avisa a soporte.", (err as Error).message);
-    if ((err as Error).name === "TimeoutError") return await fail("Beto tardó demasiado. Intenta con una pregunta más corta.", "Timeout");
-    return await fail("Beto no pudo responder. Intenta de nuevo.", (err as Error).message);
+    if (status === 429) return await fail("[B]eto está ocupado. Intenta en un minuto.", (err as Error).message);
+    if (status === 402) return await fail("[B]eto no tiene saldo. Avisa a soporte.", (err as Error).message);
+    if ((err as Error).name === "TimeoutError") return await fail("[B]eto tardó demasiado. Intenta con una pregunta más corta.", "Timeout");
+    return await fail("[B]eto no pudo responder. Intenta de nuevo.", (err as Error).message);
   }
 });

@@ -3,10 +3,11 @@
  * Cada submódulo lleva a una página, a una pestaña (`?tab=`) o a una sección
  * (`#id`). Se muestra solo lo que permiten los permisos del rol y el plan.
  */
-import type { LucideIcon } from "lucide-react";
-import { BarChart3, BotMessageSquare, Home, Landmark, Layers, Package, Settings, ShoppingCart, Sparkles, Users } from "lucide-react";
+import type { ComponentType } from "react";
+import { BarChart3, Home, Landmark, Layers, Package, Settings, ShoppingCart, Sparkles, Users } from "lucide-react";
 import type { Capability } from "@/core/capabilities";
 import type { ModuleKey } from "@/core/entitlements";
+import { BetoIcon } from "@/modules/beto/brand";
 
 export interface NavItem {
   label: string;
@@ -27,7 +28,7 @@ export interface NavModule {
   label: string;
   /** Subtítulo en la cabecera del panel. */
   caption: string;
-  icon: LucideIcon;
+  icon: ComponentType<{ className?: string; "aria-hidden"?: boolean | "true" | "false" }>;
   groups: NavGroup[];
 }
 
@@ -175,10 +176,10 @@ export const NAV_MODULES: NavModule[] = [
   },
   {
     key: "beto",
-    label: "Beto",
+    label: "[B]eto",
     caption: "Tu asistente de IA",
-    icon: BotMessageSquare,
-    groups: [{ items: [{ label: "Pregúntale a Beto", to: "/beto", capability: "beto.usar", module: "beto" }] }],
+    icon: BetoIcon,
+    groups: [{ items: [{ label: "Pregúntale a [B]eto", to: "/beto", capability: "beto.usar", module: "beto" }] }],
   },
   {
     key: "configuracion",

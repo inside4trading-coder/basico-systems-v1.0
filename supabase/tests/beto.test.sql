@@ -46,7 +46,7 @@ select set_config('request.headers', '{"x-tenant-id":"aaaaaaaa-1111-1111-1111-11
 
 select throws_ok(
   $$ select public.beto_start(null, '¿Cómo van mis ventas hoy?') $$,
-  '42501', 'Beto no está incluido en el plan de este negocio', 'sin el add-on no responde'
+  '42501', '[B]eto no está incluido en el plan de este negocio', 'sin el add-on no responde'
 );
 select is((public.beto_usage() ->> 'enabled')::boolean, false, 'el uso dice que el add-on está apagado');
 
@@ -74,7 +74,7 @@ select results_eq(
 );
 select throws_ok(
   format($$ select public.beto_start(%L, 'Otra') $$, current_setting('test.r1')::jsonb ->> 'conversation_id'),
-  '23514', 'Beto todavía está respondiendo tu pregunta anterior', 'una pregunta a la vez'
+  '23514', '[B]eto todavía está respondiendo tu pregunta anterior', 'una pregunta a la vez'
 );
 select throws_ok(
   format($$ select public.beto_finish(%L, true, 'Hola', null, null, 'm', 1, 1, 0, null) $$, current_setting('test.r1')::jsonb ->> 'message_id'),
@@ -110,7 +110,7 @@ select public.beto_finish((current_setting('test.r3')::jsonb ->> 'message_id')::
 set local role authenticated;
 select throws_ok(
   $$ select public.beto_start(null, 'Otra pregunta') $$,
-  '23514', 'Ya usaste las 2 preguntas de Beto de este mes. Escríbenos para ampliarlo.', 'respeta la cuota del mes'
+  '23514', 'Ya usaste las 2 preguntas de [B]eto de este mes. Escríbenos para ampliarlo.', 'respeta la cuota del mes'
 );
 
 -- ---------------------------------------------------------------------------
@@ -130,7 +130,7 @@ select throws_ok(
 );
 
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000002","role":"authenticated"}', true);
-select throws_ok($$ select public.beto_start(null, 'Hola') $$, '42501', 'Tu rol no tiene acceso a Beto', 'el cajero no usa Beto por defecto');
+select throws_ok($$ select public.beto_start(null, 'Hola') $$, '42501', 'Tu rol no tiene acceso a [B]eto', 'el cajero no usa Beto por defecto');
 select throws_ok($$ select public.beto_forecast(30) $$, '42501', null, 'ni ve la proyección de ventas');
 select throws_ok($$ select public.beto_cashflow(30) $$, '42501', null, 'ni el flujo de caja');
 select throws_ok($$ select public.beto_purchase_plan(15) $$, '42501', null, 'ni el plan de compra');

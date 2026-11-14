@@ -1,4 +1,4 @@
-// Herramientas de Beto: firma fija, solo lectura, argumentos validados.
+// Herramientas de [B]eto: firma fija, solo lectura, argumentos validados.
 //
 // El modelo nunca ve SQL ni nombres de tablas: elige una herramienta de esta
 // lista y la edge function llama la RPC con la sesión de quien pregunta, así
@@ -311,7 +311,7 @@ export function trimResult(value: unknown, maxItems = 40, maxChars = 12000): str
   return text.length > maxChars ? `${text.slice(0, maxChars)}… (recortado)` : text;
 }
 
-/** Instrucciones de Beto para este negocio y este usuario. */
+/** Instrucciones de [B]eto para este negocio y este usuario. */
 export function buildSystemPrompt(ctx: BetoContext, page: string | null): string {
   const money = ctx.local_currency
     ? `Moneda base ${ctx.base_currency}; moneda local ${ctx.local_currency}${ctx.rate ? ` (tasa de hoy ${ctx.rate} ${ctx.local_currency} por ${ctx.base_currency})` : ""}.`
@@ -321,7 +321,8 @@ export function buildSystemPrompt(ctx: BetoContext, page: string | null): string
     !ctx.can.finanzas ? "No tiene acceso a cuentas, dinero, cobros ni pagos." : null,
   ].filter(Boolean);
   return [
-    "Eres Beto, el asistente del sistema de gestión del negocio. Hablas en español neutro de Venezuela, de tú, directo y breve.",
+    "Eres [B]eto, el asistente del sistema de gestión del negocio. Hablas en español neutro de Venezuela, de tú, directo y breve.",
+    "Tu nombre se escribe siempre «[B]eto», con la B entre corchetes. Si te nombras, escríbelo así.",
     `Negocio: «${ctx.tenant_name}». Hoy es ${ctx.today} (hora de Caracas). ${money}`,
     `Quien pregunta tiene el rol ${ctx.role ?? "desconocido"}. ${limits.join(" ")}`.trim(),
     page ? `Está en la pantalla ${page}.` : "",
