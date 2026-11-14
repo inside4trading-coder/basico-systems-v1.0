@@ -4,7 +4,7 @@
  * (`#id`). Se muestra solo lo que permiten los permisos del rol y el plan.
  */
 import type { LucideIcon } from "lucide-react";
-import { BarChart3, Home, Landmark, Layers, Package, Settings, ShoppingCart, Sparkles, Users } from "lucide-react";
+import { BarChart3, BotMessageSquare, Home, Landmark, Layers, Package, Settings, ShoppingCart, Sparkles, Users } from "lucide-react";
 import type { Capability } from "@/core/capabilities";
 import type { ModuleKey } from "@/core/entitlements";
 
@@ -172,6 +172,13 @@ export const NAV_MODULES: NavModule[] = [
     caption: "Fotos de producto",
     icon: Sparkles,
     groups: [{ items: [{ label: "Estudio de IA", to: "/estudio", capability: "estudio.usar", module: "estudio" }] }],
+  },
+  {
+    key: "beto",
+    label: "Beto",
+    caption: "Tu asistente de IA",
+    icon: BotMessageSquare,
+    groups: [{ items: [{ label: "Pregúntale a Beto", to: "/beto", capability: "beto.usar", module: "beto" }] }],
   },
   {
     key: "configuracion",

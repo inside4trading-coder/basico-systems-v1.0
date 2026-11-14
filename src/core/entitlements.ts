@@ -18,6 +18,7 @@ export const ENTITLEMENT_DEFAULTS = {
   fichaje: false,
   estudio: false,
   cashea: false,
+  beto: false,
   // Funciones
   can_export: true,
   // Cuotas
@@ -25,6 +26,7 @@ export const ENTITLEMENT_DEFAULTS = {
   max_registers: 2,
   max_users: 5,
   estudio_images_per_month: 0,
+  beto_messages_per_month: 300,
 } as const;
 
 export type EntitlementKey = keyof typeof ENTITLEMENT_DEFAULTS;
@@ -55,7 +57,7 @@ export function resolveEntitlements(rows: EntitlementRow[], now: Date = new Date
   return resolved as Entitlements;
 }
 
-export type ModuleKey = "pos" | "inventario" | "administracion" | "reportes" | "fichaje" | "estudio" | "cashea";
+export type ModuleKey = "pos" | "inventario" | "administracion" | "reportes" | "fichaje" | "estudio" | "cashea" | "beto";
 
 /** Nombre de cada módulo para la pantalla (mismos textos que los errores de la base). */
 export const MODULE_LABELS: Record<ModuleKey, string> = {
@@ -66,4 +68,5 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   fichaje: "Fichaje",
   estudio: "Studio",
   cashea: "Cashea",
+  beto: "Beto",
 };

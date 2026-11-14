@@ -47,3 +47,9 @@ export function growers(current: ProductSale[], previous: ProductSale[], n = 5):
     .slice(0, n);
 }
 
+/** Primer nombre para saludar: el del perfil o, sin él, lo que va antes de la @ del correo. */
+export function firstName(meta: Record<string, unknown> | undefined, email: string | undefined): string {
+  const full = typeof meta?.full_name === "string" ? meta.full_name.trim() : "";
+  if (full) return full.split(/\s+/)[0];
+  return email?.split("@")[0] ?? "";
+}

@@ -6,7 +6,7 @@ import { useEntitlements, usePlanUsage } from "@/core/useEntitlements";
 import { cn } from "@/lib/utils";
 
 // Cashea queda fuera hasta que su módulo dependa del plan (hoy funciona en todos).
-const MODULES: ModuleKey[] = ["pos", "inventario", "administracion", "reportes", "fichaje", "estudio"];
+const MODULES: ModuleKey[] = ["pos", "inventario", "administracion", "reportes", "fichaje", "estudio", "beto"];
 
 export default function PlanSection() {
   const entitlements = useEntitlements();

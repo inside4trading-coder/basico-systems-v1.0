@@ -12,6 +12,7 @@ import { useAuth } from "@/core/auth";
 import { useTenant } from "@/core/tenant-context";
 import type { TenantRole } from "@/core/tenant-selection";
 import { cn } from "@/lib/utils";
+import BetoLauncher from "@/modules/beto/BetoLauncher";
 import { useTrackRecent } from "@/modules/home/recent";
 import { useRateAutoSync } from "@/modules/settings/useRateAutoSync";
 import { useIsPlatformAdmin } from "@/modules/onboarding/api";
@@ -124,6 +125,7 @@ export default function AppShell({ children, wide = false }: { children: ReactNo
         <main className={cn("mx-auto w-full space-y-6 p-4", wide === "full" ? "max-w-none" : wide ? "max-w-[1400px]" : "max-w-3xl")}>{children}</main>
       </div>
       <MobileMenu open={mobileOpen} onOpenChange={setMobileOpen} />
+      <BetoLauncher />
     </div>
   );
 }
