@@ -16,8 +16,18 @@ import { useCurrentRate, useTenantSettings } from "@/modules/settings/api";
 import { useCatalog, type FinanceAccount } from "../api";
 import { formatDay } from "../lib";
 import { splitInstallments } from "../receivables/lib";
-import { useCreatePayable, useCreditPayable, usePayPayable, useSaveSupplier, useSuppliers, type Payable, type Supplier } from "./api";
-import { addDays, payableLeft } from "./lib";
+import {
+  useCreatePayable,
+  useCreditPayable,
+  usePayPayable,
+  useSaveSupplier,
+  useSetPayableDocument,
+  useSuppliers,
+  type Payable,
+  type PayableDocumentKind,
+  type Supplier,
+} from "./api";
+import { addDays, DOCUMENT_KIND_LABEL, payableLeft } from "./lib";
 
 const MERCHANDISE = "Proveedores";
 
@@ -50,6 +60,36 @@ function useCurrencies(): string[] {
 
 const errorToast = (title: string) => (err: Error) => toast.error(title, { description: err.message });
 
+/** Factura fiscal o nota de entrega. La nota no lleva IVA. */
+export function DocumentKindField({
+  id,
+  value,
+  onChange,
+  className,
+}: {
+  id: string;
+  value: PayableDocumentKind;
+  onChange: (v: PayableDocumentKind) => void;
+  className?: string;
+}) {
+  return (
+    <Field id={id} label="Tipo de documento" className={className}>
+      <Select value={value} onValueChange={(v) => onChange(v as PayableDocumentKind)}>
+        <SelectTrigger id={id}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {(Object.keys(DOCUMENT_KIND_LABEL) as PayableDocumentKind[]).map((k) => (
+            <SelectItem key={k} value={k}>
+              {DOCUMENT_KIND_LABEL[k]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
+  );
+}
+
 /* ---------------- Factura nueva ---------------- */
 
 export function NewPayableDialog({ onClose }: { onClose: () => void }) {
@@ -66,6 +106,7 @@ export function NewPayableDialog({ onClose }: { onClose: () => void }) {
 
   const [supplierId, setSupplierId] = useState("");
   const [addingSupplier, setAddingSupplier] = useState(false);
+  const [kind, setKind] = useState<PayableDocumentKind>("invoice");
   const [document, setDocument] = useState("");
   const [control, setControl] = useState("");
   const [issued, setIssued] = useState(today);
@@ -82,7 +123,8 @@ export function NewPayableDialog({ onClose }: { onClose: () => void }) {
   const defaultDue = addDays(issued, supplier?.credit_days ?? 0);
   const due = firstDue ?? defaultDue;
   const total = parseAmount(amount);
-  const taxValue = tax.trim() ? parseAmount(tax) : null;
+  const isNote = kind === "delivery_note";
+  const taxValue = !isNote && tax.trim() ? parseAmount(tax) : null;
   const parts = total > 0 ? splitInstallments(total, Number(count) || 1, due, Number(every) || 30) : [];
 
   const submit = (e: FormEvent) => {
@@ -95,6 +137,7 @@ export function NewPayableDialog({ onClose }: { onClose: () => void }) {
       {
         p: {
           supplier_id: supplierId,
+          document_kind: kind,
           document: document.trim() || null,
           control_number: control.trim() || null,
           issued_on: issued,
@@ -108,7 +151,7 @@ export function NewPayableDialog({ onClose }: { onClose: () => void }) {
       },
       {
         onSuccess: () => {
-          toast.success("Factura registrada");
+          toast.success(isNote ? "Nota de entrega registrada" : "Factura registrada");
           onClose();
         },
         onError: errorToast("No se pudo registrar"),
@@ -147,7 +190,16 @@ export function NewPayableDialog({ onClose }: { onClose: () => void }) {
             </Button>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Field id="pp-document" label="N.º de factura">
+            <DocumentKindField
+              id="pp-kind"
+              value={kind}
+              onChange={(v) => {
+                setKind(v);
+                if (v === "delivery_note") setTax("");
+              }}
+              className="col-span-2"
+            />
+            <Field id="pp-document" label={isNote ? "N.º de nota" : "N.º de factura"}>
               <Input id="pp-document" value={document} maxLength={60} onChange={(e) => setDocument(e.target.value)} />
             </Field>
             <Field id="pp-control" label="N.º de control">
@@ -179,12 +231,14 @@ export function NewPayableDialog({ onClose }: { onClose: () => void }) {
                 </SelectContent>
               </Select>
             </Field>
-            <Field id="pp-amount" label="Total de la factura *">
+            <Field id="pp-amount" label={isNote ? "Total de la nota *" : "Total de la factura *"} className={isNote ? "col-span-2" : undefined}>
               <Input id="pp-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="num" />
             </Field>
-            <Field id="pp-tax" label="IVA (opcional)">
-              <Input id="pp-tax" inputMode="decimal" value={tax} onChange={(e) => setTax(e.target.value)} className="num" />
-            </Field>
+            {!isNote && (
+              <Field id="pp-tax" label="IVA (opcional)">
+                <Input id="pp-tax" inputMode="decimal" value={tax} onChange={(e) => setTax(e.target.value)} className="num" />
+              </Field>
+            )}
             <Field id="pp-category" label="Qué se compró" className="col-span-2">
               <Select value={category} onValueChange={setCategory}>
                 <SelectTrigger id="pp-category">
@@ -213,6 +267,7 @@ export function NewPayableDialog({ onClose }: { onClose: () => void }) {
             {category === MERCHANDISE
               ? "Mercancía: al pagarla no cuenta como gasto en el resultado; se cuenta como costo al vender."
               : `Al pagarla cuenta como gasto en «${category}».`}
+            {isNote ? " La nota de entrega no lleva IVA; cuando llegue la factura, ábrela y pulsa «Cambiar a factura»." : ""}
             {supplier && supplier.credit_days > 0 && firstDue === null ? ` Vence a los ${supplier.credit_days} días de crédito del proveedor.` : ""}
           </p>
           {parts.length > 1 && (
@@ -222,7 +277,7 @@ export function NewPayableDialog({ onClose }: { onClose: () => void }) {
             <Input id="pp-note" value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
           </Field>
           <Button type="submit" className="h-11 w-full" disabled={create.isPending}>
-            Registrar factura
+            {isNote ? "Registrar nota de entrega" : "Registrar factura"}
           </Button>
         </form>
       </Shell>
@@ -401,6 +456,77 @@ export function CreditNoteDialog({ payable, onClose }: { payable: Payable; onClo
         </Field>
         <Button type="submit" className="h-11 w-full" disabled={credit.isPending}>
           Registrar nota de crédito
+        </Button>
+      </form>
+    </Shell>
+  );
+}
+
+/* ---------------- Tipo de documento ---------------- */
+
+/** Corrige el documento o cambia la nota de entrega por la factura. Lo que se debe no cambia. */
+export function DocumentDialog({ payable, onClose }: { payable: Payable; onClose: () => void }) {
+  const save = useSetPayableDocument();
+  const wasNote = payable.document_kind === "delivery_note";
+  const [kind, setKind] = useState<PayableDocumentKind>(wasNote ? "invoice" : payable.document_kind);
+  const [document, setDocument] = useState(wasNote ? "" : (payable.document ?? ""));
+  const [control, setControl] = useState(payable.control_number ?? "");
+  const [tax, setTax] = useState(payable.tax_amount != null ? String(payable.tax_amount) : "");
+  const isNote = kind === "delivery_note";
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    const taxValue = !isNote && tax.trim() ? parseAmount(tax) : null;
+    if (taxValue !== null && (Number.isNaN(taxValue) || taxValue < 0 || taxValue > payable.amount)) return toast.error("El IVA no puede superar el total");
+    save.mutate(
+      {
+        p_payable_id: payable.id,
+        p_kind: kind,
+        p_document: document.trim() || null,
+        p_control_number: control.trim() || null,
+        p_tax_amount: taxValue,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Documento guardado");
+          onClose();
+        },
+        onError: errorToast("No se pudo guardar"),
+      },
+    );
+  };
+
+  return (
+    <Shell title={wasNote ? "Cambiar a factura" : "Corregir documento"} onClose={onClose} busy={save.isPending}>
+      <form onSubmit={submit} className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Lo que se debe ({formatMoney(payable.amount, payable.currency)}) y las cuotas no cambian. Si la factura trae otro monto, usa «Nota de crédito»
+          o anula y vuelve a cargar.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <DocumentKindField
+            id="doc-kind"
+            value={kind}
+            onChange={(v) => {
+              setKind(v);
+              if (v === "delivery_note") setTax("");
+            }}
+            className="col-span-2"
+          />
+          <Field id="doc-number" label={isNote ? "N.º de nota" : "N.º de factura"}>
+            <Input id="doc-number" value={document} maxLength={60} onChange={(e) => setDocument(e.target.value)} autoFocus />
+          </Field>
+          <Field id="doc-control" label="N.º de control">
+            <Input id="doc-control" value={control} maxLength={60} onChange={(e) => setControl(e.target.value)} />
+          </Field>
+          {!isNote && (
+            <Field id="doc-tax" label="IVA (opcional)" className="col-span-2">
+              <Input id="doc-tax" inputMode="decimal" value={tax} onChange={(e) => setTax(e.target.value)} className="num" />
+            </Field>
+          )}
+        </div>
+        <Button type="submit" className="h-11 w-full" disabled={save.isPending}>
+          Guardar
         </Button>
       </form>
     </Shell>

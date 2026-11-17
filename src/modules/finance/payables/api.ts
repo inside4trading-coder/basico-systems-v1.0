@@ -29,10 +29,14 @@ export interface PayableInstallment {
 
 export type PayableStatus = "open" | "paid" | "cancelled";
 
+/** invoice: factura fiscal · delivery_note: nota de entrega (sin IVA). */
+export type PayableDocumentKind = "invoice" | "delivery_note";
+
 export interface Payable {
   id: string;
   supplier_id: string;
   supplier: { name: string; tax_id: string | null } | null;
+  document_kind: PayableDocumentKind;
   document: string | null;
   control_number: string | null;
   issued_on: string;
@@ -214,6 +218,7 @@ function useRpc<T extends Record<string, unknown>, R = unknown>(fn: string) {
 
 export interface NewPayable {
   supplier_id: string;
+  document_kind: PayableDocumentKind;
   document: string | null;
   control_number: string | null;
   issued_on: string;
@@ -241,10 +246,20 @@ export const useCreditPayable = () =>
   useRpc<{ p_payable_id: string; p_amount: number; p_occurred_on: string; p_reference: string | null; p_note: string | null }>("credit_payable");
 export const useVoidPayablePayment = () => useRpc<{ p_payment_id: string; p_reason: string }>("void_payable_payment");
 export const useCancelPayable = () => useRpc<{ p_payable_id: string; p_reason: string }>("cancel_payable");
+/** Corrige el tipo, n.º, control o IVA (p. ej. la nota se cambia por la factura). No cambia lo que se debe. */
+export const useSetPayableDocument = () =>
+  useRpc<{
+    p_payable_id: string;
+    p_kind: PayableDocumentKind;
+    p_document: string | null;
+    p_control_number: string | null;
+    p_tax_amount: number | null;
+  }>("set_payable_document");
 
 export interface ReceiveOnCredit {
   location_id: string;
   supplier_id: string;
+  document_kind: PayableDocumentKind;
   document: string | null;
   control_number: string | null;
   issued_on: string;
@@ -260,7 +275,7 @@ export function useReceiveOnCredit() {
     mutationFn: async (p: ReceiveOnCredit) => {
       const { data, error } = await supabase.rpc("receive_on_credit", { p });
       if (error) throw asError(error);
-      return data as { payable_id: string; lines: number; amount: number; currency: string };
+      return data as { payable_id: string; lines: number; amount: number; currency: string; document_kind: PayableDocumentKind };
     },
     // Toca inventario y administración.
     onSettled: () => qc.invalidateQueries(),

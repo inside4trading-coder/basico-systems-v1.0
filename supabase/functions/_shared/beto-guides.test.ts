@@ -31,6 +31,14 @@ describe("guías de [B]eto", () => {
     expect(Object.keys(CAPABILITIES)).toContain(g.capacidad);
   });
 
+  it("ya distinguen factura fiscal y nota de entrega", () => {
+    const text = JSON.stringify(GUIDES);
+    expect(text).not.toContain("Hoy no se distingue");
+    const guide = (id: string) => JSON.stringify(GUIDES.find((g) => g.id === id));
+    expect(guide("compra_a_credito")).toContain("nota de entrega");
+    expect(guide("por_pagar")).toContain("«Cambiar a factura»");
+  });
+
   it.each(GUIDES.map((g) => [g.id, g] as const))("%s: cada «etiqueta» está en la app", (_id, g) => {
     const missing = quotedLabels(g).filter((label) => !allTsx.includes(label));
     expect(missing).toEqual([]);

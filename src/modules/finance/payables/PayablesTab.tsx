@@ -18,15 +18,19 @@ import { formatDay } from "../lib";
 import { usePayables, usePayablesSummary } from "./api";
 import { NewPayableDialog, SuppliersDialog } from "./dialogs";
 import {
+  DOCUMENT_KIND_LABEL,
   dueLabel,
   isPayableOverdue,
   matchesPayableFilter,
+  matchesPayableKind,
   matchesPayableSearch,
   nextPayableDue,
   PAYABLE_FILTER_LABEL,
   PAYABLE_STATUS_LABEL,
+  payableDocumentLabel,
   payableLeft,
   type PayableFilter,
+  type PayableKindFilter,
 } from "./lib";
 import PayableSheet from "./PayableSheet";
 
@@ -52,6 +56,7 @@ export default function PayablesTab() {
   const [filter, setFilter] = useState<PayableFilter>("open");
   const [query, setQuery] = useState("");
   const [supplierId, setSupplierId] = useState("all");
+  const [kind, setKind] = useState<PayableKindFilter>("all");
   const [openId, setOpenId] = useState<string | null>(null);
   const [dialog, setDialog] = useState<"new" | "suppliers" | null>(null);
 
@@ -60,7 +65,7 @@ export default function PayablesTab() {
     payables.forEach((p) => map.set(p.supplier_id, p.supplier?.name ?? "—"));
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [payables]);
-  const bySupplier = payables.filter((p) => supplierId === "all" || p.supplier_id === supplierId);
+  const bySupplier = payables.filter((p) => (supplierId === "all" || p.supplier_id === supplierId) && matchesPayableKind(p, kind));
   const counts = useMemo(() => {
     const c = {} as Record<PayableFilter, number>;
     (Object.keys(PAYABLE_FILTER_LABEL) as PayableFilter[]).forEach((f) => (c[f] = bySupplier.filter((p) => matchesPayableFilter(p, f, today)).length));
@@ -73,10 +78,11 @@ export default function PayablesTab() {
   const exportRows = () =>
     downloadXlsx(
       `por_pagar_${today}.xlsx`,
-      ["Proveedor", "RIF", "Factura", "Control", "Emisión", "Vence", "Categoría", "Moneda", "Base", "IVA", "Total", "Pagado", "Pendiente", "Estado"],
+      ["Proveedor", "RIF", "Tipo", "Documento", "Control", "Emisión", "Vence", "Categoría", "Moneda", "Base", "IVA", "Total", "Pagado", "Pendiente", "Estado"],
       shown.map((p) => [
         p.supplier?.name ?? null,
         p.supplier?.tax_id ?? null,
+        DOCUMENT_KIND_LABEL[p.document_kind],
         p.document,
         p.control_number,
         p.issued_on,
@@ -195,6 +201,16 @@ export default function PayablesTab() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={kind} onValueChange={(v) => setKind(v as PayableKindFilter)}>
+          <SelectTrigger className="h-9 w-44" aria-label="Tipo de documento">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Facturas y notas</SelectItem>
+            <SelectItem value="invoice">Solo facturas</SelectItem>
+            <SelectItem value="delivery_note">Solo notas de entrega</SelectItem>
+          </SelectContent>
+        </Select>
         <Input
           type="search"
           aria-label="Buscar por pagar"
@@ -227,7 +243,7 @@ export default function PayablesTab() {
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{p.supplier?.name ?? "Proveedor"}</p>
                   <p className="text-xs text-muted-foreground">
-                    {p.document ? `Factura ${p.document}` : "Sin n.º de factura"} · {formatDay(p.issued_on)}
+                    {payableDocumentLabel(p)} · {formatDay(p.issued_on)}
                     {p.category !== "Proveedores" ? ` · ${p.category}` : ""}
                     {p.installments.length > 1 ? ` · ${p.installments.length} cuotas` : ""}
                   </p>
