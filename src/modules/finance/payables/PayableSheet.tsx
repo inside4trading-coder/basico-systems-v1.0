@@ -13,8 +13,8 @@ import { proofUrl, type FinanceAccount } from "../api";
 import { formatDay } from "../lib";
 import { ACCEPTED_PROOFS, pickProofs } from "../obligations/proofs";
 import { useAttachPayableProofs, useCancelPayable, usePayablePayments, useVoidPayablePayment, type Payable } from "./api";
-import { CreditNoteDialog, PayDialog } from "./dialogs";
-import { dueLabel, PAYABLE_INSTALLMENT_LABEL, PAYABLE_STATUS_LABEL, payableInstallmentLeft, payableInstallmentState, payableLeft } from "./lib";
+import { CreditNoteDialog, DocumentDialog, PayDialog } from "./dialogs";
+import { DOCUMENT_KIND_LABEL, dueLabel, PAYABLE_INSTALLMENT_LABEL, PAYABLE_STATUS_LABEL, payableInstallmentLeft, payableInstallmentState, payableLeft } from "./lib";
 
 const STATE_CLASS = {
   paid: "text-emerald-700 dark:text-emerald-400",
@@ -31,7 +31,7 @@ export default function PayableSheet({ payable, accounts, onClose }: { payable: 
   const cancel = useCancelPayable();
   const attach = useAttachPayableProofs();
   const fileInput = useRef<HTMLInputElement>(null);
-  const [dialog, setDialog] = useState<"pay" | "credit" | null>(null);
+  const [dialog, setDialog] = useState<"pay" | "credit" | "document" | null>(null);
 
   if (!payable) return null;
   const p = payable;
@@ -59,6 +59,7 @@ export default function PayableSheet({ payable, accounts, onClose }: { payable: 
           <div className="mt-4 space-y-4 text-sm">
             <div className="flex flex-wrap gap-2">
               <Badge variant={open ? "default" : "secondary"}>{PAYABLE_STATUS_LABEL[p.status]}</Badge>
+              <Badge variant="outline">{DOCUMENT_KIND_LABEL[p.document_kind]}</Badge>
               <Badge variant="outline">{p.category === "Proveedores" ? "Mercancía" : p.category}</Badge>
               {p.source === "reception" && <Badge variant="outline">Desde Recepción</Badge>}
             </div>
@@ -68,7 +69,7 @@ export default function PayableSheet({ payable, accounts, onClose }: { payable: 
               {p.subtotal !== null && <Item label="Base" value={formatMoney(p.subtotal, p.currency)} />}
               {p.tax_amount !== null && <Item label="IVA" value={formatMoney(p.tax_amount, p.currency)} />}
               <Item label="Emisión" value={formatDay(p.issued_on)} />
-              {p.document && <Item label="Factura" value={p.document} />}
+              {p.document && <Item label={p.document_kind === "delivery_note" ? "Nota" : "Factura"} value={p.document} />}
               {p.control_number && <Item label="Control" value={p.control_number} />}
               {p.supplier?.tax_id && <Item label="RIF" value={p.supplier.tax_id} />}
             </dl>
@@ -98,6 +99,11 @@ export default function PayableSheet({ payable, accounts, onClose }: { payable: 
                   </Button>
                 )}
               </div>
+            )}
+            {operator && p.status !== "cancelled" && (
+              <Button size="sm" variant="outline" onClick={() => setDialog("document")}>
+                {p.document_kind === "delivery_note" ? "Cambiar a factura" : "Corregir documento"}
+              </Button>
             )}
             {open && accounts.length === 0 && <p className="text-xs text-muted-foreground">Crea una cuenta en «Cuentas» para registrar pagos.</p>}
 
@@ -208,6 +214,7 @@ export default function PayableSheet({ payable, accounts, onClose }: { payable: 
       </Sheet>
       {dialog === "pay" && <PayDialog payable={p} accounts={accounts} onClose={() => setDialog(null)} />}
       {dialog === "credit" && <CreditNoteDialog payable={p} onClose={() => setDialog(null)} />}
+      {dialog === "document" && <DocumentDialog payable={p} onClose={() => setDialog(null)} />}
     </>
   );
 }

@@ -1,5 +1,5 @@
 /** Estados y filtros de cuentas por pagar para la UI (sin red, para probarlos). */
-import type { Payable } from "./api";
+import type { Payable, PayableDocumentKind } from "./api";
 
 export interface PayableInstallmentLike {
   due_date: string;
@@ -17,6 +17,20 @@ export const PAYABLE_INSTALLMENT_LABEL: Record<PayableInstallmentState, string> 
 };
 
 export const PAYABLE_STATUS_LABEL: Record<Payable["status"], string> = { open: "Abierta", paid: "Pagada", cancelled: "Anulada" };
+
+export const DOCUMENT_KIND_LABEL: Record<PayableDocumentKind, string> = { invoice: "Factura fiscal", delivery_note: "Nota de entrega" };
+
+/** «Factura 123», «Nota de entrega 45» o «Nota de entrega sin n.º». */
+export function payableDocumentLabel(p: Pick<Payable, "document_kind" | "document">): string {
+  const kind = p.document_kind === "delivery_note" ? "Nota de entrega" : "Factura";
+  return p.document ? `${kind} ${p.document}` : `${kind} sin n.º`;
+}
+
+export type PayableKindFilter = "all" | PayableDocumentKind;
+
+export function matchesPayableKind(p: Pick<Payable, "document_kind">, kind: PayableKindFilter): boolean {
+  return kind === "all" || p.document_kind === kind;
+}
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 

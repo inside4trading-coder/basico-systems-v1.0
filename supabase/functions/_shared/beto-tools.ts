@@ -308,7 +308,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: "detalle_por_pagar",
     description:
-      "A quién le debe el negocio: saldo por proveedor (vencido y próximo vencimiento) y las cuotas pendientes ordenadas por fecha de vencimiento.",
+      "A quién le debe el negocio: saldo por proveedor (vencido, próximo vencimiento y cuántas facturas y notas de entrega) y las cuotas pendientes ordenadas por fecha de vencimiento, con el tipo de documento (invoice = factura fiscal, delivery_note = nota de entrega).",
     parameters: obj({ solo_vencidas: { type: "boolean", description: "Solo lo vencido. Por defecto false." } }),
     needs: ["finanzas"],
     build: (a) => ({ kind: "rpc", fn: "beto_payables_detail", params: { p_only_overdue: a.solo_vencidas === true } }),

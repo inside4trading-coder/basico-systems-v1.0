@@ -6,8 +6,10 @@ import {
   isPayableDueSoon,
   isPayableOverdue,
   matchesPayableFilter,
+  matchesPayableKind,
   matchesPayableSearch,
   nextPayableDue,
+  payableDocumentLabel,
   payableInstallmentState,
   payableLeft,
 } from "./lib";
@@ -19,6 +21,7 @@ function payable(over: Partial<Payable> = {}): Payable {
     id: "p1",
     supplier_id: "s1",
     supplier: { name: "Proveedor X", tax_id: "J-12345678-9" },
+    document_kind: "invoice",
     document: "F-100",
     control_number: null,
     issued_on: "2026-11-01",
@@ -95,5 +98,22 @@ describe("textos de vencimiento", () => {
     expect(dueLabel("2026-11-13", today)).toBe("Vence hoy");
     expect(dueLabel("2026-11-14", today)).toBe("Vence en 1 día");
     expect(addDays("2026-11-25", 15)).toBe("2026-12-10");
+  });
+});
+
+describe("tipo de documento", () => {
+  it("etiqueta factura y nota de entrega", () => {
+    expect(payableDocumentLabel(payable())).toBe("Factura F-100");
+    expect(payableDocumentLabel(payable({ document_kind: "delivery_note", document: "45" }))).toBe("Nota de entrega 45");
+    expect(payableDocumentLabel(payable({ document_kind: "delivery_note", document: null }))).toBe("Nota de entrega sin n.º");
+    expect(payableDocumentLabel(payable({ document: null }))).toBe("Factura sin n.º");
+  });
+
+  it("filtra por tipo", () => {
+    const note = payable({ document_kind: "delivery_note", tax_amount: null });
+    expect(matchesPayableKind(note, "all")).toBe(true);
+    expect(matchesPayableKind(note, "delivery_note")).toBe(true);
+    expect(matchesPayableKind(note, "invoice")).toBe(false);
+    expect(matchesPayableKind(payable(), "invoice")).toBe(true);
   });
 });

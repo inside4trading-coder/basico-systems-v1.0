@@ -26,8 +26,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/core/auth";
 import { useTenant } from "@/core/tenant-context";
 import { useTabParam } from "@/lib/useTabParam";
-import { useReceiveOnCredit, useSuppliers } from "@/modules/finance/payables/api";
-import { SupplierFormDialog } from "@/modules/finance/payables/dialogs";
+import { useReceiveOnCredit, useSuppliers, type PayableDocumentKind } from "@/modules/finance/payables/api";
+import { DocumentKindField, SupplierFormDialog } from "@/modules/finance/payables/dialogs";
 import { caracasToday } from "@/modules/reports/dates";
 import { registerEntry, useAdjust, useInvalidateInventory, useMovements, useSign, useStockOf, useTransfer } from "./api";
 import { LocationSelect, useDefaultLocation, VariantCard, VariantFinder } from "./components";
@@ -194,7 +194,8 @@ function Reception() {
   const [credit, setCredit] = useState(false);
   const [supplierId, setSupplierId] = useState("");
   const [addingSupplier, setAddingSupplier] = useState(false);
-  const [invoice, setInvoice] = useState({ document: "", control: "", issued: caracasToday(), tax: "" });
+  const [invoice, setInvoice] = useState({ kind: "invoice" as PayableDocumentKind, document: "", control: "", issued: caracasToday(), tax: "" });
+  const isNote = invoice.kind === "delivery_note";
   const { data: suppliers = [] } = useSuppliers(canCredit);
   const receiveOnCredit = useReceiveOnCredit();
 
@@ -207,7 +208,7 @@ function Reception() {
 
   const valid = lines.filter((l) => toQty(l.received) > 0);
   const subtotal = valid.reduce((a, l) => a + Math.round(toQty(l.received) * (toQty(l.cost) || 0) * 100) / 100, 0);
-  const tax = invoice.tax.trim() ? toQty(invoice.tax) : 0;
+  const tax = !isNote && invoice.tax.trim() ? toQty(invoice.tax) : 0;
   const chosen = suppliers.find((x) => x.id === supplierId);
 
   const confirmOnCredit = async () => {
@@ -219,10 +220,11 @@ function Reception() {
       const r = await receiveOnCredit.mutateAsync({
         location_id: loc,
         supplier_id: supplierId,
+        document_kind: invoice.kind,
         document: invoice.document.trim() || null,
         control_number: invoice.control.trim() || null,
         issued_on: invoice.issued,
-        tax_amount: invoice.tax.trim() ? tax : null,
+        tax_amount: !isNote && invoice.tax.trim() ? tax : null,
         note: note.trim() || null,
         lines: valid.map((l) => ({
           variant_id: l.item.variant_id,
@@ -232,13 +234,13 @@ function Reception() {
         })),
       });
       toast.success(`Recepción registrada: ${r.lines} producto(s)`, {
-        description: `Factura por pagar a ${chosen?.name ?? "el proveedor"}: ${formatMoney(Number(r.amount), r.currency)}. Está en Administración → Por pagar.`,
+        description: `${isNote ? "Nota de entrega" : "Factura"} por pagar a ${chosen?.name ?? "el proveedor"}: ${formatMoney(Number(r.amount), r.currency)}. Está en Administración → Por pagar.`,
       });
       setLines([]);
       setNote("");
       setInvoice((v) => ({ ...v, document: "", control: "", tax: "" }));
     } catch (err) {
-      toast.error("No se registró la recepción", { description: `${(err as Error).message}. No entró mercancía ni se creó la factura.` });
+      toast.error("No se registró la recepción", { description: `${(err as Error).message}. No entró mercancía ni se creó la cuenta por pagar.` });
     } finally {
       invalidate();
       setBusy(false);
@@ -285,7 +287,7 @@ function Reception() {
         <Card className="flex items-start justify-between gap-3 p-3">
           <div className="space-y-0.5">
             <Label htmlFor="rc-credit">A crédito</Label>
-            <p className="text-xs text-muted-foreground">Crea la factura del proveedor en Administración → Por pagar con el total de la recepción.</p>
+            <p className="text-xs text-muted-foreground">Crea la factura o nota de entrega del proveedor en Administración → Por pagar con el total de la recepción.</p>
           </div>
           <Switch id="rc-credit" checked={credit} onCheckedChange={setCredit} />
         </Card>
@@ -316,8 +318,14 @@ function Reception() {
             </Button>
           </div>
           <div className="grid grid-cols-2 gap-2">
+            <DocumentKindField
+              id="rc-kind"
+              value={invoice.kind}
+              onChange={(kind) => setInvoice((v) => ({ ...v, kind, tax: kind === "delivery_note" ? "" : v.tax }))}
+              className="col-span-2"
+            />
             <div className="space-y-1">
-              <Label htmlFor="rc-doc">N.º de factura</Label>
+              <Label htmlFor="rc-doc">{isNote ? "N.º de nota" : "N.º de factura"}</Label>
               <Input id="rc-doc" value={invoice.document} maxLength={60} onChange={(e) => setInvoice((v) => ({ ...v, document: e.target.value }))} />
             </div>
             <div className="space-y-1">
@@ -328,14 +336,16 @@ function Reception() {
               <Label htmlFor="rc-issued">Emisión</Label>
               <Input id="rc-issued" type="date" value={invoice.issued} max={caracasToday()} onChange={(e) => setInvoice((v) => ({ ...v, issued: e.target.value }))} />
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="rc-tax">IVA ({currency})</Label>
-              <Input id="rc-tax" inputMode="decimal" value={invoice.tax} placeholder="Opcional" onChange={(e) => setInvoice((v) => ({ ...v, tax: e.target.value }))} />
-            </div>
+            {!isNote && (
+              <div className="space-y-1">
+                <Label htmlFor="rc-tax">IVA ({currency})</Label>
+                <Input id="rc-tax" inputMode="decimal" value={invoice.tax} placeholder="Opcional" onChange={(e) => setInvoice((v) => ({ ...v, tax: e.target.value }))} />
+              </div>
+            )}
           </div>
           <p className="text-xs text-muted-foreground">
             {chosen ? (chosen.credit_days > 0 ? `Vence a los ${chosen.credit_days} días de la emisión.` : "Vence el día de la emisión (el proveedor no tiene días de crédito).") : ""}
-            {valid.length > 0 ? ` Total de la factura: ${formatMoney(subtotal + (Number.isNaN(tax) ? 0 : tax), currency)}.` : ""}
+            {valid.length > 0 ? ` Total de la ${isNote ? "nota" : "factura"}: ${formatMoney(subtotal + (Number.isNaN(tax) ? 0 : tax), currency)}.` : ""}
           </p>
         </Card>
       ) : (
