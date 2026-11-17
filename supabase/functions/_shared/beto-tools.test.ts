@@ -1,4 +1,4 @@
-import { buildSystemPrompt, dateRange, intArg, parseKpis, resolveTool, toolSchemas, trimResult, type BetoContext } from "./beto-tools";
+import { buildSystemPrompt, dateRange, guideLink, guideResult, intArg, parseKpis, resolveTool, setupPending, toolSchemas, trimResult, type BetoContext } from "./beto-tools";
 
 const ctx: BetoContext = {
   today: "2026-11-14",
@@ -41,7 +41,41 @@ it("resuelve una herramienta con argumentos validados", () => {
 it("herramienta desconocida o sin permiso: nada", () => {
   expect(resolveTool("borrar_todo", "{}", ctx)).toEqual(null);
   expect(resolveTool("dinero_disponible", "{}", cajero)).toEqual(null);
-  expect(toolSchemas(cajero).map((t) => t.function.name)).toEqual(["sedes", "mostrar_indicadores"]);
+  expect(toolSchemas(cajero).map((t) => t.function.name)).toEqual([
+    "tasa_actual",
+    "estado_configuracion",
+    "guia",
+    "mostrar_boton",
+    "sedes",
+    "mostrar_indicadores",
+  ]);
+});
+
+it("guías: solo da pasos y botón si la persona puede hacerlo", () => {
+  const owner = { ...ctx, capabilities: ["finanzas.operar", "inventario.mover"], modules: ["administracion", "inventario"] };
+  const sinFinanzas = { ...ctx, capabilities: ["pos.vender"], modules: ["administracion", "inventario", "pos"] };
+  expect(guideResult("por_pagar", owner)).toMatchObject({ puede_hacerlo: true, pantalla: "Por pagar" });
+  expect(guideLink("por_pagar", owner)).toEqual({ type: "link", label: "Ir a Por pagar", to: "/administracion?tab=payables" });
+  expect(guideResult("por_pagar", sinFinanzas)).toMatchObject({ puede_hacerlo: false });
+  expect(guideResult("por_pagar", sinFinanzas)).not.toHaveProperty("pasos");
+  expect(guideLink("por_pagar", sinFinanzas)).toBeNull();
+  expect(guideResult("no_existe", owner)).toEqual({ error: "No hay una guía con ese tema" });
+  const sinPlan = { ...owner, modules: ["inventario"] };
+  expect(String(guideResult("por_pagar", sinPlan).motivo)).toContain("plan");
+});
+
+it("el botón nunca sale de texto del modelo", () => {
+  const owner = { ...ctx, capabilities: ["finanzas.operar"], modules: ["administracion"] };
+  expect(resolveTool("mostrar_boton", JSON.stringify({ tema: "https://malo.example" }), owner)).toEqual({ kind: "link", link: null });
+});
+
+it("arranque: lo que falta, en orden", () => {
+  const nuevo = { ...ctx, modules: ["pos", "inventario", "administracion"], setup: { locations: 1, registers: 1, products: 0, finance_accounts: 0, payment_methods: 3, team_members: 1 } };
+  const pending = setupPending(nuevo);
+  expect(pending[0]).toContain("cargar los productos");
+  expect(pending.some((p) => p.includes("Cuentas"))).toBe(true);
+  expect(buildSystemPrompt(nuevo, null)).toContain("Al negocio todavía le falta");
+  expect(setupPending({ ...nuevo, setup: { locations: 1, registers: 1, products: 5, products_with_stock: 5, finance_accounts: 1, payment_methods: 3, team_members: 3 } })).toEqual([]);
 });
 
 it("indicadores: máximo 4 y sin vacíos", () => {

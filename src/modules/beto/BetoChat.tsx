@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/core/auth";
 import { cn } from "@/lib/utils";
 import { firstName } from "@/modules/home/lib";
-import { useBetoMessages, useBetoPromptAccess, useBetoUsage, useSendBeto } from "./api";
+import { useBetoMessages, useBetoOnboarding, useBetoPromptAccess, useBetoUsage, useSendBeto } from "./api";
 import { Composer, MessageView, Suggestions, Thinking } from "./BetoParts";
 import { BETO_NAME, BETO_TEXT_GRADIENT, BetoAvatar } from "./brand";
 
@@ -56,7 +56,10 @@ export default function BetoChat({
   onConversationChange,
   initialAsk,
   compact,
+  onNavigate,
 }: {
+  /** Al ir a otra pantalla desde un botón de [B]eto. */
+  onNavigate?: () => void;
   conversationId: string | null;
   onConversationChange: (id: string | null) => void;
   /** Pregunta que llega desde la tarjeta de Inicio: se envía una vez al abrir. */
@@ -64,6 +67,7 @@ export default function BetoChat({
   compact?: boolean;
 }) {
   const access = useBetoPromptAccess();
+  const onboarding = useBetoOnboarding();
   const location = useLocation();
   const { data: messages = [], isLoading } = useBetoMessages(conversationId);
   const { data: usage } = useBetoUsage();
@@ -115,14 +119,14 @@ export default function BetoChat({
         <div className="space-y-4">
           <BetoGreeting compact={compact} />
           <Composer access={access} onSend={ask} busy={send.isPending} autoFocus={!compact} />
-          <Suggestions access={access} onPick={ask} disabled={send.isPending} />
+          <Suggestions access={access} onPick={ask} disabled={send.isPending} onboarding={onboarding} />
         </div>
       ) : (
         <>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1" aria-live="polite">
             {isLoading && <p className="mono-cap text-xs text-muted-foreground">Cargando…</p>}
             {messages.map((m) => (
-              <MessageView key={m.id} message={m} />
+              <MessageView key={m.id} message={m} onNavigate={onNavigate} />
             ))}
             {shownPending && (
               <>

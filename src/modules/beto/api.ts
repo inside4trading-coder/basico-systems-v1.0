@@ -12,12 +12,21 @@ export interface BetoKpi {
   hint?: string;
 }
 
+/** Botón «Ir a…» que arma la edge function desde una guía del sistema. */
+export interface BetoLink {
+  type: "link";
+  label: string;
+  to: string;
+}
+
+export type BetoBlock = BetoKpi | BetoLink;
+
 export interface BetoMessage {
   id: string;
   conversation_id: string;
   role: "user" | "assistant";
   content: string;
-  blocks: BetoKpi[] | null;
+  blocks: BetoBlock[] | null;
   status: "pendiente" | "listo" | "fallido";
   error: string | null;
   created_at: string;
@@ -39,7 +48,7 @@ export interface BetoAnswer {
   conversation_id: string;
   message_id: string;
   text: string;
-  blocks: BetoKpi[];
+  blocks: BetoBlock[];
 }
 
 const asError = (error: { message?: string }) => new Error(error.message ?? "Error inesperado");
@@ -56,6 +65,24 @@ export function useBetoPromptAccess(): PromptAccess {
   const { can } = useTenant();
   const entitlements = useEntitlements();
   return { reportes: can("reportes.ver") && entitlements.reportes, finanzas: can("finanzas.operar") };
+}
+
+/** ¿Al negocio le falta configurar lo básico? (para sugerir preguntas de arranque). */
+export function useBetoOnboarding(enabled = true): boolean {
+  const { active } = useTenant();
+  const tenantId = active?.tenant.id;
+  const { data } = useQuery({
+    queryKey: ["beto", tenantId, "setup"],
+    enabled: enabled && Boolean(tenantId),
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("beto_setup_status");
+      if (error) throw error;
+      return data as Record<string, number> | null;
+    },
+  });
+  if (!data) return false;
+  return !data.products || !data.products_with_stock || !data.locations || !data.registers;
 }
 
 export function useBetoConversations(enabled = true) {

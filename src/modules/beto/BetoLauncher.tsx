@@ -60,7 +60,7 @@ export default function BetoLauncher() {
             </div>
           </SheetHeader>
           <div className="min-h-0 flex-1">
-            <BetoChat key={chatKey} compact conversationId={conversationId} onConversationChange={setConversationId} />
+            <BetoChat key={chatKey} compact conversationId={conversationId} onConversationChange={setConversationId} onNavigate={() => setOpen(false)} />
           </div>
         </SheetContent>
       </Sheet>
