@@ -1,42 +1,49 @@
 /** Piezas de [B]eto: caja de pregunta, sugerencias y mensajes. La marca vive en brand.tsx. */
 import { useRef, useState, type KeyboardEvent } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
+import { Link } from "react-router-dom";
 import remarkGfm from "remark-gfm";
-import { ArrowUp, BarChart3, ListChecks, Mic, MicOff, Package, ShoppingCart, Wallet } from "lucide-react";
+import { ArrowRight, ArrowUp, BarChart3, Flag, ListChecks, Mic, MicOff, Package, ShoppingCart, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import type { BetoKpi, BetoMessage } from "./api";
+import type { BetoKpi, BetoLink, BetoMessage } from "./api";
+import { safeLinks } from "./guides";
 import { BETO_GRADIENT, BETO_NAME, BetoAvatar } from "./brand";
-import { allowedPrompt, promptLibrary, SUGGESTIONS, type PromptAccess } from "./prompts";
+import { allowedPrompt, ONBOARDING_SUGGESTIONS, promptLibrary, SUGGESTIONS, type PromptAccess } from "./prompts";
 import { useSpeech } from "./useSpeech";
 
 export const MAX_QUESTION = 2000;
 
-const SUGGESTION_ICON = { box: Package, cart: ShoppingCart, wallet: Wallet, chart: BarChart3 } as const;
+const SUGGESTION_ICON = { box: Package, cart: ShoppingCart, wallet: Wallet, chart: BarChart3, flag: Flag } as const;
 // Dos tintas que se alternan: azul de marca e índigo de [B]eto.
 const BLUE_TINT = "bg-blue100 text-blue700";
 const INDIGO_TINT = "bg-betoIndigo100 text-betoIndigo700";
-const SUGGESTION_TONE = { box: BLUE_TINT, cart: INDIGO_TINT, wallet: INDIGO_TINT, chart: BLUE_TINT } as const;
+// En damero sobre la grilla de 2 columnas.
+const TONE_BY_INDEX = [BLUE_TINT, INDIGO_TINT, INDIGO_TINT, BLUE_TINT];
 
 export function Suggestions({
   access,
   onPick,
   disabled,
   compact,
+  onboarding,
 }: {
   access: PromptAccess;
   onPick: (text: string) => void;
   disabled?: boolean;
+  /** Al negocio le falta configurar algo: preguntas de cómo usar el sistema. */
+  onboarding?: boolean;
   /** Versión baja para la tarjeta de Inicio: dos columnas siempre, texto chico. */
   compact?: boolean;
 }) {
-  const items = SUGGESTIONS.filter((s) => allowedPrompt(s, access));
+  const items = (onboarding ? ONBOARDING_SUGGESTIONS : SUGGESTIONS).filter((s) => allowedPrompt(s, access));
   if (items.length === 0) return null;
   return (
     <div className={cn("grid", compact ? "grid-cols-2 gap-1.5" : "gap-2 sm:grid-cols-2")}>
-      {items.map((s) => {
+      {items.map((s, i) => {
         const Icon = SUGGESTION_ICON[s.icon];
+        const tone = TONE_BY_INDEX[i % TONE_BY_INDEX.length];
         return (
           <button
             key={s.text}
@@ -50,7 +57,7 @@ export function Suggestions({
             )}
           >
             <span
-              className={cn("inline-flex shrink-0 items-center justify-center rounded-md", compact ? "h-6 w-6" : "h-8 w-8", SUGGESTION_TONE[s.icon])}
+              className={cn("inline-flex shrink-0 items-center justify-center rounded-md", compact ? "h-6 w-6" : "h-8 w-8", tone)}
             >
               <Icon className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} aria-hidden />
             </span>
@@ -233,7 +240,28 @@ export function Thinking() {
   );
 }
 
-export function MessageView({ message }: { message: Pick<BetoMessage, "role" | "content" | "blocks" | "status"> }) {
+function LinkButtons({ links, onNavigate }: { links: BetoLink[]; onNavigate?: () => void }) {
+  return (
+    <div className="flex flex-wrap gap-2 pt-1">
+      {links.map((l) => (
+        <Button key={l.to} asChild size="sm" className={cn("h-8 gap-1.5 rounded-full text-white", BETO_GRADIENT)}>
+          <Link to={l.to} onClick={onNavigate}>
+            {l.label} <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+export function MessageView({
+  message,
+  onNavigate,
+}: {
+  message: Pick<BetoMessage, "role" | "content" | "blocks" | "status">;
+  /** Al pulsar un botón «Ir a…» (el panel flotante se cierra). */
+  onNavigate?: () => void;
+}) {
   if (message.role === "user") {
     return (
       <div className="flex justify-end">
@@ -244,6 +272,8 @@ export function MessageView({ message }: { message: Pick<BetoMessage, "role" | "
     );
   }
   if (message.status === "pendiente") return <Thinking />;
+  const kpis = (message.blocks ?? []).filter((b): b is BetoKpi => b.type === "kpi");
+  const links = safeLinks(message.blocks);
   return (
     <div className="flex gap-2">
       <BetoAvatar size="sm" />
@@ -252,11 +282,12 @@ export function MessageView({ message }: { message: Pick<BetoMessage, "role" | "
           <p className="text-muted-foreground">No pude responder esta pregunta. Vuelve a intentarlo.</p>
         ) : (
           <>
-            {message.blocks && message.blocks.length > 0 && <KpiCards kpis={message.blocks} />}
+            {kpis.length > 0 && <KpiCards kpis={kpis} />}
             {/* Sin HTML crudo: react-markdown no lo interpreta. */}
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdown}>
               {message.content}
             </ReactMarkdown>
+            {links.length > 0 && <LinkButtons links={links} onNavigate={onNavigate} />}
           </>
         )}
       </div>

@@ -11,7 +11,7 @@
 // (la misma del Estudio) y, opcional, BETO_MODEL.
 
 import { createClient } from "npm:@supabase/supabase-js@2.99.3";
-import { buildSystemPrompt, resolveTool, toolSchemas, trimResult, type BetoContext, type Kpi } from "../_shared/beto-tools.ts";
+import { buildSystemPrompt, resolveTool, toolSchemas, trimResult, type BetoContext, type Kpi, type LinkBlock } from "../_shared/beto-tools.ts";
 
 const DEFAULT_MODEL = "google/gemini-2.5-flash";
 const MAX_ROUNDS = 5;
@@ -74,6 +74,8 @@ Deno.serve(async (req) => {
 
   const tools: string[] = [];
   let blocks: Kpi[] = [];
+  // Botones «Ir a…» (máximo 2), armados desde las guías.
+  const links: LinkBlock[] = [];
   let tokensIn = 0;
   let tokensOut = 0;
   let cost: number | null = null;
@@ -83,7 +85,7 @@ Deno.serve(async (req) => {
       p_message_id: ctx.message_id,
       p_ok: ok,
       p_content: text,
-      p_blocks: blocks.length ? blocks : null,
+      p_blocks: blocks.length || links.length ? [...blocks, ...links] : null,
       p_tools: [...new Set(tools)],
       p_model: model,
       p_tokens_in: tokensIn || null,
@@ -151,6 +153,13 @@ Deno.serve(async (req) => {
           blocks = action.kpis;
           tools.push(call.function.name);
           result = JSON.stringify({ ok: true });
+        } else if (action.kind === "guide") {
+          tools.push(call.function.name);
+          result = JSON.stringify(action.result);
+        } else if (action.kind === "link") {
+          tools.push(call.function.name);
+          if (action.link && links.length < 2 && !links.some((l) => l.to === action.link!.to)) links.push(action.link);
+          result = JSON.stringify(action.link ? { ok: true } : { ok: false, motivo: "Sin permiso para esa pantalla" });
         } else if (action.kind === "locations") {
           tools.push(call.function.name);
           const { data, error } = await asCaller.from("locations").select("id, name, type").is("deleted_at", null).order("name");
@@ -167,7 +176,7 @@ Deno.serve(async (req) => {
 
     // 3. Guardar y responder.
     await finish(true, answer, null);
-    return json({ conversation_id: ctx.conversation_id, message_id: ctx.message_id, text: answer, blocks });
+    return json({ conversation_id: ctx.conversation_id, message_id: ctx.message_id, text: answer, blocks: [...blocks, ...links] });
   } catch (err) {
     const status = (err as { status?: number }).status;
     if (status === 429) return await fail("[B]eto está ocupado. Intenta en un minuto.", (err as Error).message);

@@ -85,10 +85,12 @@ insert into public.rate_fetch_log (created_at, mode, ok, source, rate, effective
   (now() - interval '1 hour', 'cron', false, null, null, null, 'BCV HTTP 503; DolarAPI USD HTTP 500'),
   (now() - interval '10 minutes', 'test', true, 'bcv', 910, '2026-11-14', null);
 
--- Emergencia vigente hoy para probar la RPC.
-insert into public.exchange_rates (source, base_currency, quote_currency, rate, effective_date) values
-  ('bcv', 'USD', 'VES', 920, (now() at time zone 'America/Caracas')::date - 1)
-on conflict (source, base_currency, quote_currency, effective_date) do update set rate = excluded.rate;
+-- Emergencia vigente hoy para probar la RPC. La oficial se trajo hace un
+-- minuto: con fetched_at = now() empataba con la tasa de emergencia (misma
+-- transacción) y el orden del historial salía al azar.
+insert into public.exchange_rates (source, base_currency, quote_currency, rate, effective_date, fetched_at) values
+  ('bcv', 'USD', 'VES', 920, (now() at time zone 'America/Caracas')::date - 1, now() - interval '1 minute')
+on conflict (source, base_currency, quote_currency, effective_date) do update set rate = excluded.rate, fetched_at = excluded.fetched_at;
 delete from public.exchange_rates where effective_date >= (now() at time zone 'America/Caracas')::date;
 
 -- Owner de A

@@ -4,7 +4,7 @@
  * Al preguntar, abre /beto con la pregunta.
  */
 import { useNavigate } from "react-router-dom";
-import { useBetoAccess, useBetoPromptAccess } from "./api";
+import { useBetoAccess, useBetoOnboarding, useBetoPromptAccess } from "./api";
 import { BetoGreeting } from "./BetoChat";
 import { Composer, Suggestions } from "./BetoParts";
 import { BETO_NAME, BetoIcon, BetoWordmark } from "./brand";
@@ -14,6 +14,7 @@ const FEATURES = ["Proyecciones de ventas", "Recomendaciones de compra", "Análi
 export default function BetoHomeCard() {
   const allowed = useBetoAccess();
   const access = useBetoPromptAccess();
+  const onboarding = useBetoOnboarding(allowed);
   const navigate = useNavigate();
   if (!allowed) return null;
 
@@ -37,7 +38,7 @@ export default function BetoHomeCard() {
       <div className="space-y-2.5 rounded-surface bg-[linear-gradient(135deg,#e8edff_0%,#efecff_55%,#ffffff_100%)] p-3 text-foreground shadow-lg">
         <BetoGreeting row />
         <Composer access={access} onSend={ask} compact />
-        <Suggestions access={access} onPick={ask} compact />
+        <Suggestions access={access} onPick={ask} compact onboarding={onboarding} />
       </div>
     </section>
   );
