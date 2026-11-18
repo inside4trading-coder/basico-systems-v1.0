@@ -12,6 +12,7 @@ const sale: SaleReceipt = {
   local_currency: "VES",
   rate: 40.5,
   prices_include_tax: true,
+  document_kind: "invoice",
   subtotal: 20,
   discount_total: 2,
   tax_total: 2.48,
@@ -43,6 +44,16 @@ describe("nota de entrega", () => {
     expect(receiptHtml(sale, { businessName: "X" }, 58)).toContain("size: 58mm auto");
     expect(receiptHtml(sale, { businessName: "X" }, 80)).toContain("size: 80mm auto");
     expect(receiptHtml(sale, { businessName: "X" }, 80)).toContain("Documento no fiscal");
+  });
+
+  it("con factura muestra el IVA y con nota de entrega no", () => {
+    const invoice = receiptHtml(sale, { businessName: "X" }, 80);
+    expect(invoice).toContain("COMPROBANTE DE VENTA");
+    expect(invoice).toContain("Impuesto incluido");
+    const note = receiptHtml({ ...sale, document_kind: "delivery_note", tax_total: 0 }, { businessName: "X" }, 80);
+    expect(note).toContain("NOTA DE ENTREGA");
+    expect(note).toContain("No aplica");
+    expect(note).not.toContain("Impuesto incluido");
   });
 });
 

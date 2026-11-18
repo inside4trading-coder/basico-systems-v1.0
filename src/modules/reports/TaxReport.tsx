@@ -1,6 +1,7 @@
 /**
  * IVA del periodo: base imponible e IVA de lo vendido por tasa, menos
- * devoluciones. Es el débito fiscal que se declara; el IGTF va aparte.
+ * devoluciones. Es el débito fiscal que se declara; el IGTF va aparte. Las
+ * ventas con nota de entrega no llevan IVA y se muestran aparte.
  */
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/core/supabase";
@@ -46,7 +47,7 @@ export default function TaxReport({ range, locationId, currency }: { range: Date
         <Kpi label="IVA del periodo" value={money(totals.tax)} hint="Débito fiscal: vendido menos devuelto" />
         <Kpi label="Base gravada" value={money(totals.taxable)} />
         <Kpi label="Ventas exentas" value={money(totals.exempt)} />
-        <Kpi label="IGTF percibido" value={money(Number(data.igtf))} hint={`${data.tickets} venta(s) cobradas`} />
+        <Kpi label="IGTF percibido" value={money(Number(data.igtf))} hint={`${data.tickets} factura(s)`} />
       </div>
       <Panel title="IVA por tasa" right={<ExportButton fileName={`iva-${range.from}-${range.to}`} rows={rows} columns={columns} />}>
         <DataTable rows={rows} columns={columns} rowKey={(r) => String(r.rate)} empty="Sin ventas en el periodo" />
@@ -54,6 +55,12 @@ export default function TaxReport({ range, locationId, currency }: { range: Date
           Sale de cada venta cobrada (las anuladas no cuentan). Las devoluciones restan en el periodo en que se hicieron. Compara con tu
           contador antes de declarar: no incluye el IVA de las compras (crédito fiscal).
         </p>
+        {Number(data.delivery_notes?.tickets ?? 0) > 0 && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Notas de entrega sin IVA: {data.delivery_notes!.tickets} venta(s) por {money(Number(data.delivery_notes!.total))}. No suman al
+            IVA de este reporte.
+          </p>
+        )}
       </Panel>
     </div>
   );

@@ -87,6 +87,8 @@ export interface RegisterSaleInput {
   units?: { variant_id: string; label_ids: string[] }[];
   /** Cupón aplicado: su descuento va incluido en cartDiscount. Necesita conexión. */
   coupon?: { code: string; discount: number } | null;
+  /** Factura (por defecto) o nota de entrega sin IVA. */
+  documentKind?: "invoice" | "delivery_note";
 }
 
 export interface RegisterSaleResult {
@@ -276,6 +278,7 @@ async function registerSaleOnly(input: RegisterSaleInput): Promise<RegisterSaleR
       p_cashier_id: input.cashierId ?? null,
       p_fulfillment: input.fulfillment ?? null,
       p_delivery: input.fulfillment === "envio" ? (input.delivery ?? null) : null,
+      p_document_kind: input.documentKind ?? "invoice",
     });
     if (error) throw asError(error);
     return data as RegisterSaleResult;
@@ -294,6 +297,7 @@ async function registerSaleOnly(input: RegisterSaleInput): Promise<RegisterSaleR
     ...(input.cashierId ? { p_cashier_id: input.cashierId } : {}),
     ...(input.fulfillment ? { p_fulfillment: input.fulfillment } : {}),
     ...(input.fulfillment === "envio" && input.delivery ? { p_delivery: input.delivery } : {}),
+    ...(input.documentKind === "delivery_note" ? { p_document_kind: "delivery_note" } : {}),
   });
   if (error) throw asError(error);
   return data as RegisterSaleResult;
@@ -438,6 +442,8 @@ export interface SaleReceipt {
   local_currency: string | null;
   rate: number | null;
   prices_include_tax: boolean;
+  /** Factura o nota de entrega (sin IVA). */
+  document_kind: "invoice" | "delivery_note";
   subtotal: number;
   discount_total: number;
   tax_total: number;
@@ -459,7 +465,7 @@ export async function fetchSaleReceipt(saleId: string): Promise<SaleReceipt> {
   const { data, error } = await supabase
     .from("sales")
     .select(
-      "id, number, status, sold_at, base_currency, local_currency, rate, prices_include_tax, subtotal, discount_total, tax_total, total, igtf_total, paid_total, change_total, customer_name, customer_doc, note, sale_items(line, description, sku, qty, unit_price, discount, tax_rate, line_total), sale_payments(method_name, currency, amount, amount_base, igtf_base, reference, bank)",
+      "id, number, status, sold_at, base_currency, local_currency, rate, prices_include_tax, document_kind, subtotal, discount_total, tax_total, total, igtf_total, paid_total, change_total, customer_name, customer_doc, note, sale_items(line, description, sku, qty, unit_price, discount, tax_rate, line_total), sale_payments(method_name, currency, amount, amount_base, igtf_base, reference, bank)",
     )
     .eq("id", saleId)
     .single();

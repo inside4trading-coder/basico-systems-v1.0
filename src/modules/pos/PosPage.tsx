@@ -37,6 +37,8 @@ import {
   cartDiscountAmount,
   currencySymbol,
   cartTotals,
+  linesForDocument,
+  type DocumentKind,
   shelfPrice,
   formatMoney,
   formatQty,
@@ -139,13 +141,15 @@ interface CartDraft {
   checkout?: CheckoutDraft | null;
   /** Origen, modalidad y datos de envío; se eligen antes de vender. */
   sale?: SaleContext | null;
+  /** Factura (con IVA) o nota de entrega (sin IVA). */
+  documentKind?: DocumentKind;
 }
 
 const EMPTY_DRAFT: CartDraft = { lines: [], discountMode: "amount", discountValue: "", note: "" };
 
 function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => void }) {
   const { active } = useTenant();
-  const { money, stale, currencies, pricesIncludeTax } = usePosMoney();
+  const { money, stale, currencies, pricesIncludeTax, allowDeliveryNotes } = usePosMoney();
   const { data: tenantSettings } = useTenantSettings();
   const { data: channels = [] } = useSalesChannels();
   const { data: allCashiers = [] } = useCashiers();
@@ -203,7 +207,10 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
   const couponShort = Boolean(draft.coupon) && couponOff === 0;
   const manualDiscount = cartDiscountAmount(draft.discountMode, parseAmount(draft.discountValue), round2(afterLineDiscounts - couponOff));
   const cartDiscount = round2(couponOff + manualDiscount);
-  const totals = cartTotals(draft.lines, cartDiscount, pricesIncludeTax);
+  // Con nota de entrega no se cobra IVA (si el negocio la habilitó).
+  const documentKind: DocumentKind = allowDeliveryNotes && draft.documentKind === "delivery_note" ? "delivery_note" : "invoice";
+  const pricedLines = linesForDocument(draft.lines, documentKind);
+  const totals = cartTotals(pricedLines, cartDiscount, pricesIncludeTax);
 
   // Sin existencia en la sede pero sí en un aliado: se vende por encargo.
   const viaPartner = (hit: PosHit) => hit.available <= 0 && (hit.partner?.available ?? 0) > 0;
@@ -335,6 +342,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
       lines: draft.lines,
       cartDiscount: totals.cartDiscount,
       pricesIncludeTax,
+      documentKind: input.documentKind,
       payments: result.payments,
       methods,
       money: money!,
@@ -375,6 +383,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
       cashierId: cashier?.id ?? null,
       coupon: draft.coupon && couponOff > 0 ? { code: draft.coupon.code, discount: couponOff } : null,
       units: saleUnits(draft.lines),
+      documentKind,
     };
     const soldAt = new Date().toISOString();
     if (!navigator.onLine) {
@@ -616,7 +625,7 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
           <div className="min-h-[120px] flex-1 overflow-y-auto p-3">
             {!hasLines && <p className="py-8 text-center text-sm text-muted-foreground">Escanea o elige un producto del catálogo.</p>}
             <ul className="space-y-2">
-              {draft.lines.map((l) => (
+              {pricedLines.map((l) => (
                 <CartRow
                   key={l.variantId}
                   line={l}
@@ -674,6 +683,22 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
                 </button>
               </div>
             )}
+            {allowDeliveryNotes && (
+              <div role="radiogroup" aria-label="Documento" className="grid grid-cols-2 gap-1 rounded-lg border p-1 text-sm">
+                {([["invoice", "Factura"], ["delivery_note", "Nota de entrega"]] as const).map(([kind, label]) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    role="radio"
+                    aria-checked={documentKind === kind}
+                    onClick={() => setDraft((d) => ({ ...d, documentKind: kind }))}
+                    className={cn("rounded-md px-2 py-1.5 font-medium", documentKind === kind ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
             <dl className="space-y-1 text-sm">
               <Row label="Subtotal" value={<DualInline amount={totals.subtotal} base={base} money={money} />} />
               {totals.discount > 0 && (
@@ -686,7 +711,11 @@ function Terminal({ session, onLeave }: { session: CashSession; onLeave: () => v
                   }
                 />
               )}
-              <Row label={pricesIncludeTax ? "Impuesto incluido" : "IVA"} value={<DualInline amount={totals.tax} base={base} money={money} />} />
+              {documentKind === "delivery_note" ? (
+                <Row label="IVA" value={<span className="text-muted-foreground">Sin IVA (nota de entrega)</span>} />
+              ) : (
+                <Row label={pricesIncludeTax ? "Impuesto incluido" : "IVA"} value={<DualInline amount={totals.tax} base={base} money={money} />} />
+              )}
               <div className="flex items-start justify-between pt-1">
                 <dt className="font-bold">Total</dt>
                 <dd className="text-right">

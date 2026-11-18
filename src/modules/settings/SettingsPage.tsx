@@ -124,6 +124,19 @@ function TaxSection() {
           </span>
           <Switch checked={settings.is_special_taxpayer} onCheckedChange={(v) => update.mutate({ is_special_taxpayer: v }, { onError: errorToast("No se pudo guardar") })} />
         </label>
+        <label className="flex items-center justify-between gap-3 text-sm">
+          <span>
+            Vender con nota de entrega
+            <span className="block text-xs text-muted-foreground">
+              El POS deja elegir «Factura» (con IVA) o «Nota de entrega» (sin IVA). Esas ventas salen aparte del reporte de IVA.
+              Revísalo con tu contador: el tratamiento fiscal es responsabilidad del negocio.
+            </span>
+          </span>
+          <Switch
+            checked={settings.allow_delivery_notes}
+            onCheckedChange={(v) => update.mutate({ allow_delivery_notes: v }, { onError: errorToast("No se pudo guardar") })}
+          />
+        </label>
         {settings.is_special_taxpayer && (
           <div className="flex items-end gap-2">
             <div className="space-y-1">

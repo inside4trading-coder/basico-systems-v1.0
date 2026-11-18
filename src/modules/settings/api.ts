@@ -30,6 +30,8 @@ export interface TenantSettings {
   closing_reminder_time: string | null;
   /** El POS no cobra sin origen de la venta. */
   channel_required: boolean;
+  /** El POS deja elegir nota de entrega (sin IVA) además de factura. */
+  allow_delivery_notes: boolean;
 }
 
 /** Personal de caja: quien atiende, sin usuario propio. location_id null = todas las sedes. */
@@ -204,11 +206,11 @@ export function useTenantSettings() {
     queryFn: withOfflineCache(`tenant:${tenant}`, async () => {
       const { data, error } = await supabase
         .from("tenants")
-        .select("id, name, base_currency, local_currency, rate_source, is_special_taxpayer, prices_include_tax, igtf_rate, legal_name, tax_id, address, phone, receipt_footer, closing_reminder_time, channel_required")
+        .select("id, name, base_currency, local_currency, rate_source, is_special_taxpayer, prices_include_tax, igtf_rate, legal_name, tax_id, address, phone, receipt_footer, closing_reminder_time, channel_required, allow_delivery_notes")
         .eq("id", tenant)
         .single();
       if (error) throw error;
-      return { ...data, igtf_rate: Number(data.igtf_rate) } as TenantSettings;
+      return { ...data, igtf_rate: Number(data.igtf_rate), allow_delivery_notes: Boolean(data.allow_delivery_notes) } as TenantSettings;
     }),
   });
 }

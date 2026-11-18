@@ -6,7 +6,7 @@
  */
 import type { SaleCustomer } from "@/modules/customers/api";
 import type { SaleReceipt } from "../api";
-import { cartTotals, igtfOf, round2, toBase, type CartLine, type MoneySettings, type PaymentDraft, type PaymentMethodLike } from "../cart";
+import { cartTotals, igtfOf, linesForDocument, round2, toBase, type CartLine, type DocumentKind, type MoneySettings, type PaymentDraft, type PaymentMethodLike } from "../cart";
 import { provisionalNumber } from "./queue";
 
 export interface LocalReceiptInput {
@@ -15,6 +15,8 @@ export interface LocalReceiptInput {
   lines: CartLine[];
   cartDiscount: number;
   pricesIncludeTax: boolean;
+  /** Sin dato: factura (ventas guardadas antes de existir la nota). */
+  documentKind?: DocumentKind;
   payments: PaymentDraft[];
   methods: (PaymentMethodLike & { name: string })[];
   money: MoneySettings;
@@ -25,7 +27,9 @@ export interface LocalReceiptInput {
 
 export function buildLocalReceipt(input: LocalReceiptInput): SaleReceipt {
   const { money } = input;
-  const totals = cartTotals(input.lines, input.cartDiscount, input.pricesIncludeTax);
+  const documentKind = input.documentKind ?? "invoice";
+  const lines = linesForDocument(input.lines, documentKind);
+  const totals = cartTotals(lines, input.cartDiscount, input.pricesIncludeTax);
   const payments = input.payments.map((p) => {
     const m = input.methods.find((x) => x.id === p.methodId);
     const base = m ? (toBase(p.amount, m.currency, money) ?? 0) : 0;
@@ -50,6 +54,7 @@ export function buildLocalReceipt(input: LocalReceiptInput): SaleReceipt {
     local_currency: money.localCurrency,
     rate: money.rate,
     prices_include_tax: input.pricesIncludeTax,
+    document_kind: documentKind,
     subtotal: totals.subtotal,
     discount_total: totals.discount,
     tax_total: totals.tax,
@@ -60,7 +65,7 @@ export function buildLocalReceipt(input: LocalReceiptInput): SaleReceipt {
     customer_name: input.customer?.name || null,
     customer_doc: input.customer?.doc || null,
     note: input.note,
-    items: input.lines.map((l, i) => {
+    items: lines.map((l, i) => {
       const options = Object.values(l.options).join(" · ");
       const t = totals.lines[i];
       return {

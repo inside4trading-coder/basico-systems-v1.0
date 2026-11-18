@@ -73,6 +73,10 @@ export default function TermsPage() {
           libros y declaraciones) es responsabilidad del Cliente.
         </p>
         <p>
+          Si el Cliente activa la venta con nota de entrega sin IVA, decide cuándo usarla y responde por su tratamiento fiscal.
+          El Servicio solo registra la elección y la muestra aparte en los reportes.
+        </p>
+        <p>
           Los reportes de impuestos son una ayuda para tu contador y no reemplazan su revisión. La tasa de cambio se toma de
           la fuente que elijas (el Banco Central de Venezuela o una tasa propia). Revisa que sea la correcta antes de cobrar.
         </p>

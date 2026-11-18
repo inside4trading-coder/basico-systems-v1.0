@@ -14,6 +14,14 @@
 
 export type ManualKind = "producto" | "servicio" | "extra";
 
+/** Documento de la venta: factura (con IVA) o nota de entrega (sin IVA). */
+export type DocumentKind = "invoice" | "delivery_note";
+
+/** Con nota de entrega no se cobra IVA: las líneas se calculan con tasa 0 (igual que el servidor). */
+export function linesForDocument<T extends { taxRate: number }>(lines: T[], kind: DocumentKind): T[] {
+  return kind === "delivery_note" ? lines.map((l) => ({ ...l, taxRate: 0 })) : lines;
+}
+
 export interface CartLine {
   /** Variante del catálogo, o "manual-…" para un concepto que no viene del inventario. */
   variantId: string;
