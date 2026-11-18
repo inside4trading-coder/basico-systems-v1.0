@@ -79,6 +79,11 @@ Deno.serve(async (req) => {
   let tokensIn = 0;
   let tokensOut = 0;
   let cost: number | null = null;
+  // Gemini a veces escribe el texto junto con la llamada a una herramienta y
+  // después devuelve vacío: se guarda el último texto como respaldo.
+  let draft = "";
+  let lastFinish: string | null = null;
+  const guidesSent = new Set<string>();
 
   const finish = async (ok: boolean, text: string, error: string | null) => {
     await admin.rpc("beto_finish", {
@@ -129,6 +134,7 @@ Deno.serve(async (req) => {
     tokensIn += data?.usage?.prompt_tokens ?? 0;
     tokensOut += data?.usage?.completion_tokens ?? 0;
     if (typeof data?.usage?.cost === "number") cost = (cost ?? 0) + data.usage.cost;
+    lastFinish = data?.choices?.[0]?.finish_reason ?? null;
     return data?.choices?.[0]?.message as ChatMessage | undefined;
   };
 
@@ -139,6 +145,7 @@ Deno.serve(async (req) => {
       const reply = await callModel(round < MAX_ROUNDS);
       if (!reply) return await fail("[B]eto no pudo responder. Intenta de nuevo.", "Respuesta vacía del modelo");
       const calls = (reply.tool_calls ?? []).slice(0, MAX_CALLS_PER_ROUND);
+      if (reply.content?.trim()) draft = reply.content.trim();
       if (calls.length === 0 || round === MAX_ROUNDS) {
         answer = (reply.content ?? "").trim();
         break;
@@ -155,11 +162,20 @@ Deno.serve(async (req) => {
           result = JSON.stringify({ ok: true });
         } else if (action.kind === "guide") {
           tools.push(call.function.name);
+          if (typeof action.result.tema === "string") guidesSent.add(action.result.tema);
           result = JSON.stringify(action.result);
         } else if (action.kind === "link") {
           tools.push(call.function.name);
           if (action.link && links.length < 2 && !links.some((l) => l.to === action.link!.to)) links.push(action.link);
-          result = JSON.stringify(action.link ? { ok: true } : { ok: false, motivo: "Sin permiso para esa pantalla" });
+          // Si pidió el botón sin leer la guía, se la damos aquí para que explique los pasos.
+          const tema = typeof action.guide.tema === "string" ? action.guide.tema : "";
+          const guia = tema && !guidesSent.has(tema) ? action.guide : undefined;
+          if (tema) guidesSent.add(tema);
+          result = JSON.stringify(
+            action.link
+              ? { ok: true, boton: action.link.label, guia, siguiente: "Escribe ahora la respuesta para la persona con los pasos, en texto." }
+              : { ok: false, motivo: "Sin permiso para esa pantalla", guia },
+          );
         } else if (action.kind === "locations") {
           tools.push(call.function.name);
           const { data, error } = await asCaller.from("locations").select("id, name, type").is("deleted_at", null).order("name");
@@ -172,7 +188,15 @@ Deno.serve(async (req) => {
         messages.push({ role: "tool", tool_call_id: call.id, content: result });
       }
     }
-    if (!answer) return await fail("[B]eto no pudo armar la respuesta. Intenta con otra pregunta.", "Sin texto final");
+    // Respaldo: si el modelo terminó en vacío después de usar herramientas,
+    // se le pide una vez más la respuesta en texto, sin herramientas.
+    if (!answer && tools.length) {
+      messages.push({ role: "user", content: "Escribe ahora tu respuesta final para mí, en texto, usando lo que obtuviste. No llames más herramientas." });
+      const last = await callModel(false);
+      answer = (last?.content ?? "").trim();
+    }
+    if (!answer) answer = draft;
+    if (!answer) return await fail("[B]eto no pudo armar la respuesta. Intenta con otra pregunta.", `Sin texto final (finish: ${lastFinish ?? "?"})`);
 
     // 3. Guardar y responder.
     await finish(true, answer, null);

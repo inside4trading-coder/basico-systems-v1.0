@@ -66,7 +66,7 @@ it("guías: solo da pasos y botón si la persona puede hacerlo", () => {
 
 it("el botón nunca sale de texto del modelo", () => {
   const owner = { ...ctx, capabilities: ["finanzas.operar"], modules: ["administracion"] };
-  expect(resolveTool("mostrar_boton", JSON.stringify({ tema: "https://malo.example" }), owner)).toEqual({ kind: "link", link: null });
+  expect(resolveTool("mostrar_boton", JSON.stringify({ tema: "https://malo.example" }), owner)).toMatchObject({ kind: "link", link: null });
 });
 
 it("arranque: lo que falta, en orden", () => {

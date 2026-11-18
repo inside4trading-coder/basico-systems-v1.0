@@ -56,7 +56,7 @@ export type ToolAction =
   | { kind: "locations" }
   | { kind: "kpis"; kpis: Kpi[] }
   | { kind: "guide"; result: Record<string, unknown> }
-  | { kind: "link"; link: LinkBlock | null };
+  | { kind: "link"; link: LinkBlock | null; guide: Record<string, unknown> };
 
 interface ToolDef {
   name: string;
@@ -354,10 +354,10 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "mostrar_boton",
-    description: "Muestra bajo tu respuesta un botón «Ir a…» que lleva a la pantalla de una guía. Úsalo después de explicar una guía (máximo 2 por respuesta).",
+    description: "Muestra bajo tu respuesta un botón «Ir a…» que lleva a la pantalla de una guía (máximo 2 por respuesta). Llama primero a guia con el mismo tema; después de usarla, escribe tu respuesta en texto.",
     parameters: { ...obj(GUIDE_PARAM), required: ["tema"] },
     needs: [],
-    build: (a, ctx) => ({ kind: "link", link: guideLink(String(a.tema ?? ""), ctx) }),
+    build: (a, ctx) => ({ kind: "link", link: guideLink(String(a.tema ?? ""), ctx), guide: guideResult(String(a.tema ?? ""), ctx) }),
   },
   {
     name: "sedes",
