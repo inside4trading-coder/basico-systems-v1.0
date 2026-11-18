@@ -7,7 +7,10 @@ export interface TaxReportData {
   sales: { rate: number; base: number; tax: number; lines: number }[];
   returns: { rate: number; base: number; tax: number }[];
   igtf: number;
+  /** Facturas del periodo (las notas de entrega van aparte). */
   tickets: number;
+  /** Ventas con nota de entrega, sin IVA. Falta en datos anteriores. */
+  delivery_notes?: { total: number; tickets: number };
 }
 
 export interface TaxRow {

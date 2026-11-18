@@ -9,6 +9,7 @@ import {
   lineDiscountAmount,
   shelfPrice,
   cartTotals,
+  linesForDocument,
   changeIn,
   igtfOf,
   paymentSummary,
@@ -251,5 +252,21 @@ describe("piezas con etiqueta por unidad", () => {
     let lines = addUnitToCart([], item, { id: "u1", code: "TEL-00001" });
     lines = addUnitToCart(lines, item, { id: "u2", code: "TEL-00002" });
     expect(setQty(lines, "v1", 1)[0].units).toEqual([{ id: "u1", code: "TEL-00001" }]);
+  });
+});
+
+describe("documento de la venta", () => {
+  it("con factura suma el IVA y con nota de entrega no", () => {
+    const lines = [line({ price: 40, taxRate: 16 })];
+    expect(cartTotals(linesForDocument(lines, "invoice"), 0, false).total).toBe(46.4);
+    const note = cartTotals(linesForDocument(lines, "delivery_note"), 0, false);
+    expect(note.tax).toBe(0);
+    expect(note.total).toBe(40);
+  });
+
+  it("no cambia las líneas originales", () => {
+    const lines = [line({ taxRate: 16 })];
+    linesForDocument(lines, "delivery_note");
+    expect(lines[0].taxRate).toBe(16);
   });
 });

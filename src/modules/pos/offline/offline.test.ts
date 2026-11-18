@@ -155,4 +155,26 @@ describe("nota provisional", () => {
     expect(html).toContain("PEND-ABCDEF");
     expect(html).toContain("SIN CONEXIÓN");
   });
+
+  it("con nota de entrega no lleva IVA", () => {
+    const money = { baseCurrency: "USD", localCurrency: null, rate: null, isSpecialTaxpayer: false, igtfRate: 3 };
+    const receipt = buildLocalReceipt({
+      key: "abcdef12-0001",
+      soldAt: "2026-10-19T14:00:00Z",
+      lines: [{ variantId: "v1", productId: "p1", name: "Filtro", options: {}, sku: "F", unit: "unidad", price: 40, taxRate: 16, qty: 1, discount: 0, available: 4 }],
+      cartDiscount: 0,
+      pricesIncludeTax: false,
+      documentKind: "delivery_note",
+      payments: [{ key: "p", methodId: "cash", amount: 40 }],
+      methods: [{ id: "cash", name: "Efectivo", currency: "USD", kind: "cash", applies_igtf: false }],
+      money,
+      change: null,
+      customer: null,
+      note: null,
+    });
+    expect(receipt.document_kind).toBe("delivery_note");
+    expect(receipt.tax_total).toBe(0);
+    expect(receipt.total).toBe(40);
+    expect(receiptHtml(receipt, { businessName: "Demo" }, 80)).toContain("NOTA DE ENTREGA");
+  });
 });

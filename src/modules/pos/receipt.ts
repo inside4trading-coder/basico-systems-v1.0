@@ -73,6 +73,7 @@ export function receiptHtml(sale: SaleReceipt, header: ReceiptHeader, width: Pap
     })
     .join("");
   const local = localTotal(sale);
+  const isNote = sale.document_kind === "delivery_note";
 
   return `<!doctype html><html><head><meta charset="utf-8"><title>${e(sale.number)}</title><style>
 @page { size: ${width}mm auto; margin: 0; }
@@ -88,7 +89,7 @@ h1 { font-size: 1.25em; margin: 0; text-align: center; }
 hr { border: 0; border-top: 1px dashed #000; margin: 6px 0; }
 small { font-size: 0.85em; }
 </style></head><body>
-<p class="center"><strong>NOTA DE ENTREGA</strong></p>
+<p class="center"><strong>${isNote ? "NOTA DE ENTREGA" : "COMPROBANTE DE VENTA"}</strong></p>
 <h1>${e(header.businessName)}</h1>
 ${header.legalName || header.taxId ? `<p class="center">${[header.legalName, header.taxId ? `RIF ${header.taxId}` : null].filter(Boolean).map((v) => e(v!)).join("<br>")}</p>` : ""}
 ${header.locationName ? `<p class="center">${e(header.locationName)}${header.registerName ? ` · ${e(header.registerName)}` : ""}</p>` : ""}
@@ -104,7 +105,7 @@ ${items}
 <hr>
 ${row("Subtotal", formatMoney(sale.subtotal, base))}
 ${sale.discount_total > 0 ? row("Descuento", "−" + formatMoney(sale.discount_total, base)) : ""}
-${row(sale.prices_include_tax ? "Impuesto incluido" : "Impuesto", formatMoney(sale.tax_total, base))}
+${isNote ? row("IVA", "No aplica", "muted") : row(sale.prices_include_tax ? "Impuesto incluido" : "Impuesto", formatMoney(sale.tax_total, base))}
 ${row("TOTAL", formatMoney(sale.total, base), "total")}
 ${local !== null && sale.local_currency ? row("Equivale", formatMoney(local, sale.local_currency)) : ""}
 ${sale.rate && sale.local_currency ? row("Tasa", `${formatMoney(sale.rate, sale.local_currency)} / ${base}`, "muted") : ""}

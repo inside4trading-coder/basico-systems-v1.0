@@ -96,10 +96,13 @@ export const GUIDES: Guide[] = [
       "Para uno nuevo escribe el nombre y el % y pulsa «Agregar». Marca cuál es el de por defecto.",
       "El IGTF se ajusta en «IGTF %».",
       "A cada producto se le puede asignar su impuesto (si no, usa el de por defecto).",
+      "Para vender también con nota de entrega (sin IVA), activa «Vender con nota de entrega». En el POS, arriba del total, elige «Factura» o «Nota de entrega».",
     ],
     notas: [
       "Los precios se cargan SIN IVA y el POS suma el IVA del producto al cobrar. Ej.: 40 sin IVA con 16 % → el cliente paga 46,40.",
-      "Hoy no existe vender con nota de entrega sin IVA y con factura con IVA a elección, ni conexión a máquina fiscal. Si lo piden, di que está anotado como mejora.",
+      "Con «Nota de entrega» el POS no suma el IVA (40 → paga 40); con «Factura» lo suma (40 → 46,40). Esas ventas no entran al reporte de IVA: salen aparte. El IGTF sigue igual porque depende del pago.",
+      "Vender sin IVA es decisión y responsabilidad del negocio: recomienda revisarlo con su contador.",
+      "Todavía no hay conexión a máquina fiscal ni imprenta digital: la factura fiscal se emite aparte y su número se anota en la venta. Si lo piden, di que está anotado como mejora.",
     ],
   },
   {
