@@ -25,9 +25,12 @@ insert into public.stocks (tenant_id, variant_id, location_id, on_hand) values
   ('aaaaaaaa-1111-1111-1111-111111111111', 'aaaaaaaa-5555-5555-5555-555555555551', 'aaaaaaaa-2222-2222-2222-222222222222', 10);
 
 select is(
-  (select allow_delivery_notes from public.tenants where id = 'aaaaaaaa-1111-1111-1111-111111111111'), false,
-  'la nota de entrega viene apagada'
+  (select allow_delivery_notes from public.tenants where id = 'aaaaaaaa-1111-1111-1111-111111111111'), true,
+  'la nota de entrega viene encendida'
 );
+
+-- Se apaga para probar el bloqueo.
+update public.tenants set allow_delivery_notes = false where id = 'aaaaaaaa-1111-1111-1111-111111111111';
 
 set local role authenticated;
 select set_config('request.headers', '{"x-tenant-id":"aaaaaaaa-1111-1111-1111-111111111111"}', true);
